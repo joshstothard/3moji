@@ -34,7 +34,7 @@ flowchart LR
     F --> G["/wrap-up"]
 ```
 
-1. `pr` verifies, pushes, opens the PR from the template with `Closes #42`, moves the issue to **In Review**, and posts the `## AI Review` comment against the 8 lenses.
+1. `pr` verifies, pushes, opens the PR from the template with `Closes #42`, moves the issue to **In Review**, and posts the `## AI Pre-Review` comment against the 8 lenses.
 2. `pr-action-review` triages every finding and comment — auto-fix, discuss, or informational — pushes the fixes, and squash-merges once CI is green and no 🔴 finding is unresolved. The issue closes and moves to **Done**.
 3. `wrap-up` switches back to `main`, pulls, and deletes the finished branch.
 
@@ -50,7 +50,7 @@ watch and you say yes — the flag just skips the question.
 flowchart LR
     A["3 PRs open, reviews sitting on all of them"] --> B["/pr-action-review-mine-loop"]
     B --> C["each PR actioned + merged in turn"]
-    C --> D["board statuses updated as each issue closes"]
+    C --> D["issues closed, board set to Done, epics synced"]
 ```
 
 Use `pr-action-review-mine-loop` when you've stacked up several PRs and want them all landed — typically first thing

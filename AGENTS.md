@@ -319,7 +319,7 @@ gh pr review <pr-number> --request-changes --body '<one-line verdict summary>'
 
 The body should be a single sentence summarising the verdict (e.g. `"No 🔴 findings — approving. One 🟡 noted in the review comment above."` or `"🔴 must-fix: <brief description> — see review comment above."`). This is what shows up in GitHub's review status and counts toward branch protection approval requirements.
 
-**Your own PRs are the exception.** GitHub rejects an approval or change request from the PR's author, and on a solo repo the agent acts as the author. For those PRs the `## AI Review` comment is the review gate: per the solo merge rule (CONTRIBUTING.md § Pull Requests), a PR may merge when CI is green and the comment's 🔴 findings are resolved or pushed back on. Do not work around the restriction with a second account.
+**Your own PRs are the exception.** GitHub rejects an approval or change request from the PR's author, and on a solo repo the agent acts as the author. For those PRs the self-review comment raised by `pr` (`## AI Pre-Review`, plus any later `## AI Review` follow-up) is the review gate: per the solo merge rule (CONTRIBUTING.md § Pull Requests), a PR may merge when CI is green and the comment's 🔴 findings are resolved or pushed back on. Do not work around the restriction with a second account.
 
 ## Commands for Validation
 

@@ -95,6 +95,12 @@ Then confirm the status actually landed (a successful command only means the req
 node scripts/gh-workflow.mjs issue <ISSUE_NUMBER>
 ```
 
+If the issue has a parent epic (Step 2a), move the epic out of Backlog now that work on it has started. The command is a no-op when the epic is already in progress or the issue has no epic:
+
+```bash
+node scripts/gh-workflow.mjs epic-sync <ISSUE_NUMBER>
+```
+
 ## Step 6 — Fetch all sub-issues
 
 For each entry in `subIssues`, fetch the full issue:

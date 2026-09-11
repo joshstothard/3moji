@@ -1,6 +1,6 @@
 ---
 name: assign-epic
-description: Use this skill when a new GitHub issue has just been created (for example `gh issue create` just printed an issue URL). Automatically links the issue as a sub-issue of the most relevant open `epic`-labelled issue, or asks the user to choose when ambiguous. Also invoked when the user says "assign epic", "link to epic", or "which epic does this belong to".
+description: Use this skill when a new GitHub issue has just been created (for example `gh issue create` just printed an issue URL). Automatically links the issue as a sub-issue of the most relevant open `epic`-labelled issue, or asks the user to choose when ambiguous. Also invoked when the user says "assign epic", "link to epic", or "which epic does this belong to". Do not use it for issues the plan-work skill creates, which it links to their epic itself.
 ---
 
 # Link a GitHub issue to the right epic

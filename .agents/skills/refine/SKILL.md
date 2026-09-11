@@ -100,9 +100,10 @@ If the issue or its epic links a planning document — a workstream under `docs/
 Based on the issue's domain (frontend, backend, infrastructure, shared), read the relevant documentation and source files to understand the current state before forming opinions:
 
 - Always: `CONTRIBUTING.md`, `docs/development/engineering-standards.md`
-- Architecture changes: `docs/architecture/context.md`, `docs/architecture/containers.md`, `docs/adr/`
-- Frontend work: `docs/development/react-conventions.md`, `apps/web/`
-- Backend work: `docs/development/backend-patterns.md`, `apps/api/`
+- Architecture changes: `docs/architecture/` (start with `README.md` and `system-overview.md`), and specific ADRs in `docs/adr/` only when those docs cite them
+- Planned work: the workstream in `docs/workstreams/` and any report in `docs/reports/` the issue or its epic links
+- Frontend work: `docs/development/engineering-standards.md` § Frontend, `apps/web/`
+- Backend work: `docs/development/engineering-standards.md` § Architecture and § Data Patterns, `apps/api/`
 - Quality/testing: `docs/development/quality-strategy.md`
 
 ## Step 6 — Analyse the issue

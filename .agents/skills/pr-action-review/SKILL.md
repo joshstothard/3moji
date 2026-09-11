@@ -19,7 +19,7 @@ If the PR does not exist, tell the user and stop.
 
 **Ownership check — do this before anything else:**
 
-Compare the PR author's login against the authenticated GitHub CLI user. Use `gh pr view <pr-number> --jq .author.login` for the PR author and `gh api user --jq .login` for the current user — both return GitHub logins, ensuring a reliable comparison.
+Compare the PR author's login against the authenticated GitHub CLI user. Use `gh pr view <pr-number> --json author --jq .author.login` for the PR author and `gh api user --jq .login` for the current user — both return GitHub logins, ensuring a reliable comparison.
 
 - If the PR author is **not** the current user (for example a Dependabot PR, or one opened by a coding-agent bot), stop immediately and ask:
 
@@ -230,7 +230,7 @@ Then output a summary and re-request review:
 - [list]
 ```
 
-Then re-request review — but **only from reviewers who have not yet approved** (in practice, review bots such as Copilot; you cannot request a review from yourself):
+Then re-request review — but **only from reviewers who have not yet approved**, never from yourself, and **never from Copilot** (re-requesting Copilot triggers a fresh Copilot review, which loops indefinitely). In practice this means other review bots, or an outside contributor:
 
 ```bash
 # Fetch all reviews for the PR
@@ -334,6 +334,12 @@ Find the issue(s) this PR closes: `closingIssuesReferences` from the PR (populat
    ```
 
    If the helper fails, warn the user, suggest `node scripts/gh-workflow.mjs doctor` to diagnose, and continue.
+
+4. Sync the parent epic: once every sub-issue is closed this closes the epic and marks it Done; otherwise it makes sure the epic is no longer in Backlog. It is a no-op for an issue with no epic:
+
+   ```bash
+   node scripts/gh-workflow.mjs epic-sync <issue-number>
+   ```
 
 ### If the PR is not mergeable
 

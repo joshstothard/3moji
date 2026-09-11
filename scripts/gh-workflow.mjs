@@ -14,12 +14,15 @@
 //   node scripts/gh-workflow.mjs issue <number>
 //   node scripts/gh-workflow.mjs status <issue-or-pr-number> "<Backlog|In Progress|In Review|Done>"
 //   node scripts/gh-workflow.mjs sub-issue <parent-number> <child-number>
+//   node scripts/gh-workflow.mjs epic-sync <issue-number>
 //
 // The board is discovered automatically: the open GitHub Project linked to this
-// repository. Set GH_PROJECT_OWNER and GH_PROJECT_NUMBER to override.
+// repository. Set GH_PROJECT_OWNER and GH_PROJECT_NUMBER (in the environment or
+// in .env) to override.
 
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
 export const STATUSES = ["Backlog", "In Progress", "In Review", "Done"];
 
@@ -84,16 +87,24 @@ function gh(args, { input, allowFailure = false } = {}) {
 }
 
 function graphql(query, variables = {}) {
-  const { stdout } = gh(
+  // gh exits non-zero when the response carries GraphQL errors, but still
+  // prints the body, so parse it first to surface GitHub's own message.
+  const { stdout, stderr, status } = gh(
     ["api", "graphql", "-H", "GraphQL-Features: sub_issues", "--input", "-"],
-    { input: JSON.stringify({ query, variables }) },
+    { input: JSON.stringify({ query, variables }), allowFailure: true },
   );
-  const body = JSON.parse(stdout);
+  let body;
+  try {
+    body = JSON.parse(stdout);
+  } catch {
+    fail(`gh api graphql failed:\n${stderr.trim() || stdout.trim()}`);
+  }
   if (body.errors?.length) {
     fail(
-      `GraphQL error: ${body.errors.map((error) => error.message).join("; ")}`,
+      `GitHub API error: ${body.errors.map((error) => error.message).join("; ")}`,
     );
   }
+  if (status !== 0) fail(`gh api graphql failed:\n${stderr.trim()}`);
   return body.data;
 }
 
@@ -231,15 +242,41 @@ export function plannedOptions(existing) {
 function contentFor(number) {
   const { owner, name } = repo();
   const data = graphql(
-    `query($owner: String!, $name: String!, $number: Int!) {
-      repository(owner: $owner, name: $name) {
-        issueOrPullRequest(number: $number) {
-          __typename
-          ... on Issue { id url title projectItems(first: 20) { nodes { id project { id } } } }
-          ... on PullRequest { id url title projectItems(first: 20) { nodes { id project { id } } } }
+    `
+      query ($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+          issueOrPullRequest(number: $number) {
+            __typename
+            ... on Issue {
+              id
+              url
+              title
+              projectItems(first: 20) {
+                nodes {
+                  id
+                  project {
+                    id
+                  }
+                }
+              }
+            }
+            ... on PullRequest {
+              id
+              url
+              title
+              projectItems(first: 20) {
+                nodes {
+                  id
+                  project {
+                    id
+                  }
+                }
+              }
+            }
+          }
         }
       }
-    }`,
+    `,
     { owner, name, number },
   );
   const content = data.repository.issueOrPullRequest;
@@ -248,9 +285,10 @@ function contentFor(number) {
 }
 
 function commandStatus([numberArg, statusArg]) {
-  const number = toNumber(numberArg, "status");
-  const status = canonicalStatus(statusArg);
-  const project = requireProject();
+  setStatus(toNumber(numberArg, "status"), canonicalStatus(statusArg));
+}
+
+function setStatus(number, status, project = requireProject()) {
   const option = resolveOption(project.field.options, status);
   if (!option) {
     fail(
@@ -263,19 +301,42 @@ function commandStatus([numberArg, statusArg]) {
   );
   if (!item) {
     item = graphql(
-      `mutation($projectId: ID!, $contentId: ID!) {
-        addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) { item { id } }
-      }`,
+      `
+        mutation ($projectId: ID!, $contentId: ID!) {
+          addProjectV2ItemById(
+            input: { projectId: $projectId, contentId: $contentId }
+          ) {
+            item {
+              id
+            }
+          }
+        }
+      `,
       { projectId: project.id, contentId: content.id },
     ).addProjectV2ItemById.item;
   }
   graphql(
-    `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-      updateProjectV2ItemFieldValue(input: {
-        projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-        value: { singleSelectOptionId: $optionId }
-      }) { projectV2Item { id } }
-    }`,
+    `
+      mutation (
+        $projectId: ID!
+        $itemId: ID!
+        $fieldId: ID!
+        $optionId: String!
+      ) {
+        updateProjectV2ItemFieldValue(
+          input: {
+            projectId: $projectId
+            itemId: $itemId
+            fieldId: $fieldId
+            value: { singleSelectOptionId: $optionId }
+          }
+        ) {
+          projectV2Item {
+            id
+          }
+        }
+      }
+    `,
     {
       projectId: project.id,
       itemId: item.id,
@@ -294,28 +355,96 @@ function commandIssue([numberArg]) {
   const number = toNumber(numberArg, "issue");
   const { owner, name } = repo();
   const data = graphql(
-    `query($owner: String!, $name: String!, $number: Int!) {
-      viewer { login }
-      repository(owner: $owner, name: $name) {
-        issue(number: $number) {
-          number title url state stateReason body createdAt
-          author { login }
-          assignees(first: 10) { nodes { login } }
-          labels(first: 20) { nodes { name } }
-          milestone { title }
-          parent { number title url state parent { number title url state } }
-          subIssues(first: 50) { nodes { number title url state assignees(first: 5) { nodes { login } } } }
-          comments(last: 50) { nodes { author { login } body createdAt url } }
-          closedByPullRequestsReferences(first: 20, includeClosedPrs: true) { nodes { number title url state } }
-          projectItems(first: 10) {
-            nodes {
-              project { title number }
-              fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+    `
+      query ($owner: String!, $name: String!, $number: Int!) {
+        viewer {
+          login
+        }
+        repository(owner: $owner, name: $name) {
+          issue(number: $number) {
+            number
+            title
+            url
+            state
+            stateReason
+            body
+            createdAt
+            author {
+              login
+            }
+            assignees(first: 10) {
+              nodes {
+                login
+              }
+            }
+            labels(first: 20) {
+              nodes {
+                name
+              }
+            }
+            milestone {
+              title
+            }
+            parent {
+              number
+              title
+              url
+              state
+              parent {
+                number
+                title
+                url
+                state
+              }
+            }
+            subIssues(first: 50) {
+              nodes {
+                number
+                title
+                url
+                state
+                assignees(first: 5) {
+                  nodes {
+                    login
+                  }
+                }
+              }
+            }
+            comments(last: 50) {
+              nodes {
+                author {
+                  login
+                }
+                body
+                createdAt
+                url
+              }
+            }
+            closedByPullRequestsReferences(first: 20, includeClosedPrs: true) {
+              nodes {
+                number
+                title
+                url
+                state
+              }
+            }
+            projectItems(first: 10) {
+              nodes {
+                project {
+                  title
+                  number
+                }
+                fieldValueByName(name: "Status") {
+                  ... on ProjectV2ItemFieldSingleSelectValue {
+                    name
+                  }
+                }
+              }
             }
           }
         }
       }
-    }`,
+    `,
     { owner, name, number },
   );
   const issue = data.repository.issue;
@@ -365,12 +494,23 @@ function commandSubIssue([parentArg, childArg]) {
   const child = toNumber(childArg, "child");
   const { owner, name } = repo();
   const ids = graphql(
-    `query($owner: String!, $name: String!, $parent: Int!, $child: Int!) {
-      repository(owner: $owner, name: $name) {
-        parent: issue(number: $parent) { id title }
-        child: issue(number: $child) { id title parent { number } }
+    `
+      query ($owner: String!, $name: String!, $parent: Int!, $child: Int!) {
+        repository(owner: $owner, name: $name) {
+          parent: issue(number: $parent) {
+            id
+            title
+          }
+          child: issue(number: $child) {
+            id
+            title
+            parent {
+              number
+            }
+          }
+        }
       }
-    }`,
+    `,
     { owner, name, parent, child },
   ).repository;
   if (!ids.parent) fail(`#${parent} is not an issue`);
@@ -385,12 +525,157 @@ function commandSubIssue([parentArg, childArg]) {
     );
   }
   graphql(
-    `mutation($issueId: ID!, $subIssueId: ID!) {
-      addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId }) { issue { number } }
-    }`,
+    `
+      mutation ($issueId: ID!, $subIssueId: ID!) {
+        addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId }) {
+          issue {
+            number
+          }
+        }
+      }
+    `,
     { issueId: ids.parent.id, subIssueId: ids.child.id },
   );
-  console.log(`#${child} is now a sub-issue of #${parent} (${ids.parent.title})`);
+  console.log(
+    `#${child} is now a sub-issue of #${parent} (${ids.parent.title})`,
+  );
+}
+
+// Keep an epic's board card in step with its sub-issues: once any work starts it
+// moves out of Backlog, and when every sub-issue is closed the epic is closed
+// and marked Done. Safe to run repeatedly.
+function commandEpicSync([numberArg]) {
+  const number = toNumber(numberArg, "epic-sync");
+  const { owner, name } = repo();
+  const data = graphql(
+    `
+      query ($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+          issue(number: $number) {
+            number
+            labels(first: 20) {
+              nodes {
+                name
+              }
+            }
+            parent {
+              number
+              title
+              state
+              labels(first: 20) {
+                nodes {
+                  name
+                }
+              }
+              subIssues(first: 100) {
+                totalCount
+                nodes {
+                  number
+                  state
+                }
+              }
+              projectItems(first: 10) {
+                nodes {
+                  project {
+                    id
+                  }
+                  fieldValueByName(name: "Status") {
+                    ... on ProjectV2ItemFieldSingleSelectValue {
+                      name
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `,
+    { owner, name, number },
+  );
+  const issue = data.repository.issue;
+  if (!issue) fail(`#${number} is not an issue`);
+  const isEpic = (node) => node.labels.nodes.some((l) => l.name === "epic");
+  // Accept the epic itself as well as one of its sub-issues.
+  let epic = issue.parent;
+  if (isEpic(issue)) {
+    epic = graphql(
+      `
+        query ($owner: String!, $name: String!, $number: Int!) {
+          repository(owner: $owner, name: $name) {
+            issue(number: $number) {
+              number
+              title
+              state
+              labels(first: 20) {
+                nodes {
+                  name
+                }
+              }
+              subIssues(first: 100) {
+                totalCount
+                nodes {
+                  number
+                  state
+                }
+              }
+              projectItems(first: 10) {
+                nodes {
+                  project {
+                    id
+                  }
+                  fieldValueByName(name: "Status") {
+                    ... on ProjectV2ItemFieldSingleSelectValue {
+                      name
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `,
+      { owner, name, number },
+    ).repository.issue;
+  }
+  if (!epic || !isEpic(epic)) {
+    console.log(`#${number} has no parent epic; nothing to sync`);
+    return;
+  }
+  const project = requireProject();
+  const current =
+    epic.projectItems.nodes.find((node) => node.project.id === project.id)
+      ?.fieldValueByName?.name ?? null;
+  const subs = epic.subIssues.nodes;
+  const closed = subs.filter((sub) => sub.state === "CLOSED").length;
+  const allClosed =
+    subs.length > 0 &&
+    closed === subs.length &&
+    epic.subIssues.totalCount === subs.length;
+
+  if (allClosed) {
+    if (epic.state === "OPEN") {
+      gh([
+        "issue",
+        "close",
+        String(epic.number),
+        "--comment",
+        `All ${subs.length} sub-issues are closed.`,
+      ]);
+      console.log(`Closed epic #${epic.number} (${epic.title})`);
+    }
+    setStatus(epic.number, "Done", project);
+    return;
+  }
+  const inBacklog =
+    current === null || ["backlog", "todo"].includes(normalise(current));
+  if (inBacklog && epic.state === "OPEN") {
+    setStatus(epic.number, "In Progress", project);
+  } else {
+    console.log(
+      `Epic #${epic.number}: ${closed}/${subs.length} sub-issues closed; status "${current}" unchanged`,
+    );
+  }
 }
 
 function commandProject() {
@@ -418,7 +703,9 @@ function scopes() {
   const line = text.split("\n").find((l) => /Token scopes:/i.test(l)) ?? "";
   return {
     loggedIn: /Logged in to github\.com/i.test(text),
-    scopes: [...line.matchAll(/'([^']+)'/g)].map((m) => m[1]),
+    // null when gh does not list scopes (GH_TOKEN or a fine-grained token):
+    // the scope is then unknown rather than missing.
+    scopes: line ? [...line.matchAll(/'([^']+)'/g)].map((m) => m[1]) : null,
   };
 }
 
@@ -428,7 +715,7 @@ function commandSetup(args) {
   const title = titleIndex !== -1 ? args[titleIndex + 1] : name;
   if (!title) fail("--title needs a value");
   const auth = scopes();
-  if (auth.scopes.length && !auth.scopes.includes("project")) {
+  if (auth.scopes && !auth.scopes.includes("project")) {
     fail("gh is missing the `project` scope. Run: gh auth refresh -s project");
   }
 
@@ -471,14 +758,29 @@ function commandSetup(args) {
     console.log(`Status columns already set: ${STATUSES.join(" → ")}`);
   } else {
     graphql(
-      `mutation($fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) {
-        updateProjectV2Field(input: { fieldId: $fieldId, singleSelectOptions: $options }) {
-          projectV2Field { ... on ProjectV2SingleSelectField { options { name } } }
+      `
+        mutation (
+          $fieldId: ID!
+          $options: [ProjectV2SingleSelectFieldOptionInput!]
+        ) {
+          updateProjectV2Field(
+            input: { fieldId: $fieldId, singleSelectOptions: $options }
+          ) {
+            projectV2Field {
+              ... on ProjectV2SingleSelectField {
+                options {
+                  name
+                }
+              }
+            }
+          }
         }
-      }`,
+      `,
       { fieldId: project.field.id, options },
     );
-    console.log(`Status columns set: ${options.map((o) => o.name).join(" → ")}`);
+    console.log(
+      `Status columns set: ${options.map((o) => o.name).join(" → ")}`,
+    );
   }
 
   for (const [label, color, description] of LABELS) {
@@ -509,12 +811,21 @@ function commandDoctor() {
   ]);
   if (version.error) return report(checks);
   const auth = scopes();
-  checks.push(["Logged in", auth.loggedIn, auth.loggedIn ? "" : "gh auth login"]);
-  const hasProjectScope = auth.scopes.includes("project");
+  checks.push([
+    "Logged in",
+    auth.loggedIn,
+    auth.loggedIn ? "" : "gh auth login",
+  ]);
+  const hasProjectScope =
+    auth.scopes === null || auth.scopes.includes("project");
   checks.push([
     "project scope",
     hasProjectScope,
-    hasProjectScope ? "" : "gh auth refresh -s project",
+    auth.scopes === null
+      ? "not listed by gh for this token; board calls will confirm it"
+      : hasProjectScope
+        ? ""
+        : "gh auth refresh -s project",
   ]);
   if (!auth.loggedIn) return report(checks);
   const repoView = gh(["repo", "view", "--json", "nameWithOwner"], {
@@ -527,7 +838,7 @@ function commandDoctor() {
       ? JSON.parse(repoView.stdout).nameWithOwner
       : "gh repo create <name> --private --source=. --remote=origin --push",
   ]);
-  if (repoView.status !== 0 || !auth.scopes.includes("project")) {
+  if (repoView.status !== 0 || !hasProjectScope) {
     return report(checks);
   }
   const project = findProject({ quiet: true });
@@ -537,8 +848,12 @@ function commandDoctor() {
     project ? project.url : "node scripts/gh-workflow.mjs setup",
   ]);
   if (project?.field) {
+    // Exact names only: the aliases let `status` cope with a default board,
+    // but a board still on Todo/In Progress/Done silently files "In Review"
+    // under In Progress, so doctor treats it as not set up.
+    const names = project.field.options.map((o) => normalise(o.name));
     const missing = STATUSES.filter(
-      (status) => !resolveOption(project.field.options, status),
+      (status) => !names.includes(normalise(status)),
     );
     checks.push([
       "Status columns",
@@ -565,11 +880,35 @@ const commands = {
   issue: commandIssue,
   status: commandStatus,
   "sub-issue": commandSubIssue,
+  "epic-sync": commandEpicSync,
 };
 
-const isMain =
-  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+function loadDotEnv() {
+  // Optional GH_PROJECT_* overrides may live in the repo's gitignored .env.
+  // process.loadEnvFile needs Node 20.12+; older Nodes just skip it.
+  const file = new URL("../.env", import.meta.url);
+  if (fs.existsSync(file) && typeof process.loadEnvFile === "function") {
+    try {
+      process.loadEnvFile(fileURLToPath(file));
+    } catch {
+      /* a malformed .env should not stop tracker calls */
+    }
+  }
+}
+
+const isMain = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return (
+      fs.realpathSync(process.argv[1]) ===
+      fs.realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+})();
 if (isMain) {
+  loadDotEnv();
   const [command, ...rest] = process.argv.slice(2);
   const handler = commands[command];
   if (!handler) {

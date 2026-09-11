@@ -181,19 +181,14 @@ gh issue create --title "<epic title>" --label epic --body-file "$PLAN_DIR/epic.
 
 `gh issue create` prints the new issue's URL; the number is its last path segment. Store it as `EPIC`.
 
-**7b. Each new issue, in order.** Write its `Blocked by #<n>` lines for dependencies that already have numbers (issues are created in dependency order, so usually all of them):
+**7b and 7c. Each new issue, in order: create it, then link it to the epic straight away.** Write its `Blocked by #<n>` lines for dependencies that already have numbers (issues are created in dependency order, so usually all of them):
 
 ```bash
 gh issue create --title "<title>" --label <enhancement|bug|task> --body-file "$PLAN_DIR/<order>.md"
-```
-
-Record the number for each order position.
-
-**7c. Link each issue to the epic:**
-
-```bash
 node scripts/gh-workflow.mjs sub-issue <EPIC> <issue-number>
 ```
+
+Record the number for each order position. Link each issue before creating the next one, and **do not run the `assign-epic` skill** for issues created here: this skill already knows their epic, and an issue that `assign-epic` links elsewhere first cannot then be linked to `EPIC`.
 
 **7d. Put everything on the board in Backlog** (each new issue, then the epic):
 

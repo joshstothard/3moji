@@ -27,13 +27,13 @@ research   decide   scope +       issues on    branch +    gates           Close
                     phases        the board    PROGRESS.md
 ```
 
-| Document               | Lives in                           | Created by   | Mutable?                                               |
-| ---------------------- | ---------------------------------- | ------------ | ------------------------------------------------------ |
-| Report                 | `docs/reports/YYYY-MM-DD-<slug>.md` | `report`     | Frozen once its conclusions are acted on               |
-| ADR                    | `docs/adr/NNNN-<slug>.md`          | `adr`        | **Immutable** once Accepted (status line only)         |
-| Workstream             | `docs/workstreams/<slug>.md`       | `workstream` | Living: status, phases, and issue links are kept current |
-| Architecture (current) | `docs/architecture/*.md`           | `adr`, any PR | Living: always describes what is true now               |
-| Issue                  | GitHub                             | `plan-work`, `capture` | Closed by the PR that implements it           |
+| Document               | Lives in                            | Created by             | Mutable?                                                 |
+| ---------------------- | ----------------------------------- | ---------------------- | -------------------------------------------------------- |
+| Report                 | `docs/reports/YYYY-MM-DD-<slug>.md` | `report`               | Frozen once its conclusions are acted on                 |
+| ADR                    | `docs/adr/NNNN-<slug>.md`           | `adr`                  | **Immutable** once Accepted (status line only)           |
+| Workstream             | `docs/workstreams/<slug>.md`        | `workstream`           | Living: status, phases, and issue links are kept current |
+| Architecture (current) | `docs/architecture/*.md`            | `adr`, any PR          | Living: always describes what is true now                |
+| Issue                  | GitHub                              | `plan-work`, `capture` | Closed by the PR that implements it                      |
 
 Templates for the three planning documents are in [`docs/templates/`](../templates/).
 
@@ -44,14 +44,14 @@ Templates for the three planning documents are in [`docs/templates/`](../templat
 
 ## Issues
 
-| Concept           | Convention                                                                    |
-| ----------------- | ----------------------------------------------------------------------------- |
-| Unit of work      | An issue, referenced as `#42`                                                 |
-| Type              | Label: `bug`, `enhancement` (feature), or `task`                              |
-| Epic              | An issue labelled `epic`; its work items are **sub-issues**                   |
-| Owner             | Assignee (`gh issue edit 42 --add-assignee @me`)                             |
-| Acceptance criteria | A `## Acceptance criteria` checklist in the issue body                      |
-| Discussion        | Issue comments (`gh issue comment 42 --body-file <file>`)                      |
+| Concept             | Convention                                                  |
+| ------------------- | ----------------------------------------------------------- |
+| Unit of work        | An issue, referenced as `#42`                               |
+| Type                | Label: `bug`, `enhancement` (feature), or `task`            |
+| Epic                | An issue labelled `epic`; its work items are **sub-issues** |
+| Owner               | Assignee (`gh issue edit 42 --add-assignee @me`)            |
+| Acceptance criteria | A `## Acceptance criteria` checklist in the issue body      |
+| Discussion          | Issue comments (`gh issue comment 42 --body-file <file>`)   |
 
 Issue body shape (used by `capture` and `plan-work`):
 
@@ -71,11 +71,11 @@ Issue body shape (used by `capture` and `plan-work`):
 
 ## Board statuses
 
-| Status          | Meaning                        | Set by                                                        |
-| --------------- | ------------------------------ | ------------------------------------------------------------- |
-| **Backlog**     | Filed, not started             | `plan-work`, `capture` (for work not yet done)                |
-| **In Progress** | Assigned and being built       | `pickup`                                                      |
-| **In Review**   | PR open, CI and review running | `pr`                                                          |
+| Status          | Meaning                        | Set by                                                                             |
+| --------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| **Backlog**     | Filed, not started             | `plan-work`, `capture` (for work not yet done)                                     |
+| **In Progress** | Assigned and being built       | `pickup`                                                                           |
+| **In Review**   | PR open, CI and review running | `pr`                                                                               |
 | **Done**        | PR merged, issue closed        | `pr-action-review` after merge (GitHub's built-in board automation also does this) |
 
 Set a status with:
@@ -94,6 +94,12 @@ Link a sub-issue to its epic with:
 
 ```bash
 node scripts/gh-workflow.mjs sub-issue <epic-number> <issue-number>
+```
+
+Keep an epic's card in step with its sub-issues (moves it out of Backlog once work starts; closes it and marks it Done when every sub-issue is closed). `pickup` and `pr-action-review` run this for you:
+
+```bash
+node scripts/gh-workflow.mjs epic-sync <issue-number>
 ```
 
 ## Branches, commits, and PRs

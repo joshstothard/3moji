@@ -6,7 +6,13 @@ disable-model-invocation: true
 
 Run the full ship workflow: verify, commit, push, and open a PR.
 
-**Issue number:** extract it from the branch name, which follows `<issue-number>-<short-description>` (e.g. `42-add-shell-app` → `#42`). A `chore/<short-description>` branch has no issue — skip every issue-specific part below (the `Closes` line, the issue status, the issue comment) and use an unscoped commit type such as `chore: ...`. See [the GitHub Issues workflow](../../../docs/development/github-workflow.md) for the conventions this skill follows.
+**Issue numbers:** start from the branch name, which follows `<issue-number>-<short-description>` (e.g. `42-add-shell-app` → `#42`). Then add every issue scoped in this branch's commits — issues stacked onto the branch with `pickup --stay` commit under their own number:
+
+```bash
+git log origin/main..HEAD --format=%s | grep -oE '\(#[0-9]+\)' | tr -d '()#' | sort -un
+```
+
+The branch's issue plus that list is the set of issues this PR closes; wherever a step below says `<issue-number>`, do it for each issue in the set. A `chore/<short-description>` branch with no scoped commits has no issue — skip every issue-specific part below (the `Closes` lines, the issue status, the issue comment) and use an unscoped commit type such as `chore: ...`. See [the GitHub Issues workflow](../../../docs/development/github-workflow.md) for the conventions this skill follows.
 
 1. Clean up ephemeral session artifacts from the repo root:
    - If `PROGRESS.md` exists, read it back to identify any docs that need updating, then delete it. Stage the deletion with `git rm PROGRESS.md` (or `git add PROGRESS.md` if already deleted). The pre-push hook blocks when `PROGRESS.md` is present, so it must be gone before step 5.
@@ -29,7 +35,7 @@ Run the full ship workflow: verify, commit, push, and open a PR.
      ---
      ```
 
-   - Fill in the `Closes #<issue-number>` line, summary, test evidence, review checklist, and risk/rollback sections. `Closes #N` is what closes the issue on merge — GitHub only honours it when the PR merges into `main`, which is another reason a stacked PR must be retargeted before it merges.
+   - Fill in one `Closes #<issue-number>` line per issue in the set, summary, test evidence, review checklist, and risk/rollback sections. `Closes #N` is what closes the issue on merge — GitHub only honours it when the PR merges into `main`, which is another reason a stacked PR must be retargeted before it merges.
    - Never raise stacked PRs as drafts — raise them ready for review immediately so CI and the self-review run on every PR in the chain in parallel.
 
 7. Output the PR URL. Then:
@@ -43,7 +49,7 @@ Run the full ship workflow: verify, commit, push, and open a PR.
      - **Security (OWASP)**: Injection, XSS, broken auth, exposed secrets, insecure defaults.
      - **Accessibility (WCAG AA)**: Missing ARIA, keyboard nav gaps, contrast issues, focus management.
      - **Test coverage**: Untested paths, missing edge cases, assertions that don't actually verify behaviour.
-     - **Conventions**: Naming, file structure, import order, i18n keys — alignment with `docs/development/conventions.md`.
+     - **Conventions**: Naming, file structure, import order, i18n keys — alignment with `docs/development/engineering-standards.md` and `CONTRIBUTING.md`.
      - **Docs sync**: Do any architecture docs, ADRs, or runbooks need updating to reflect this change?
      - **Performance**: Unnecessary re-renders, N+1 queries, unindexed lookups, large bundle additions.
    - For each finding, classify it as: 🔴 **Must fix** (bug, security, accessibility) | 🟡 **Should fix** (quality, coverage) | 🔵 **Consider** (nit, optional improvement). 🔴 findings are **blocking**: the PR must not merge while one is unresolved.
@@ -68,7 +74,7 @@ Run the full ship workflow: verify, commit, push, and open a PR.
    - If there are 🔴 Must fix findings: fix them before the comment is posted, include them in a follow-up commit, then note them as "Fixed prior to this comment" in the findings list. If a 🔴 finding cannot be fixed in this PR, list it as "Unresolved — blocks merge" so `pr-action-review` does not merge past it.
    - If there are only 🟡/🔵 findings: post the comment as-is — `pr-action-review` triages them alongside any other review comments, and you decide which to act on.
 
-9. Move the issue to **In Review** on the board:
+9. Move each issue in the set to **In Review** on the board:
 
    ```bash
    node scripts/gh-workflow.mjs status <issue-number> "In Review"

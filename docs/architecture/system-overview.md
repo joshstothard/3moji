@@ -4,14 +4,14 @@
 
 A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
-| Path                    | What it is                                                                   | Port |
-| ----------------------- | ---------------------------------------------------------------------------- | ---- |
-| `apps/web`              | Next.js (App Router) frontend: home, dashboard, and OKR objective pages      | 3000 |
-| `apps/api`              | NestJS backend: `health` module and an `okr` module (objectives, key results, check-ins) backed by an in-memory store with seed data | 3001 |
-| `packages/shared`       | Types, Zod schemas, and constants shared by web and api                      | —    |
-| `packages/ui`           | Shared React component library (stub)                                        | —    |
-| `packages/test-utils`   | Shared test helpers                                                          | —    |
-| `packages/tsconfig`, `eslint-config`, `jest-config` | Shared tooling presets                          | —    |
+| Path                                                | What it is                                                                                                                           | Port |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---- |
+| `apps/web`                                          | Next.js (App Router) frontend: home, dashboard, and OKR objective pages                                                              | 3000 |
+| `apps/api`                                          | NestJS backend: `health` module and an `okr` module (objectives, key results, check-ins) backed by an in-memory store with seed data | 3001 |
+| `packages/shared`                                   | Types, Zod schemas, and constants shared by web and api                                                                              | —    |
+| `packages/ui`                                       | Shared React component library (stub)                                                                                                | —    |
+| `packages/test-utils`                               | Shared test helpers                                                                                                                  | —    |
+| `packages/tsconfig`, `eslint-config`, `jest-config` | Shared tooling presets                                                                                                               | —    |
 
 ## Communication
 

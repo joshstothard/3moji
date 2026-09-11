@@ -347,6 +347,12 @@ For each issue in each `{ pr, issues, title }` entry:
 
    If the helper fails, note it for the final summary, suggest `node scripts/gh-workflow.mjs doctor`, and carry on with the queue.
 
+4. **Sync its parent epic** — closes the epic and marks it Done once every sub-issue is closed, and is a no-op for an issue with no epic:
+
+   ```bash
+   node scripts/gh-workflow.mjs epic-sync <issue-number>
+   ```
+
 Work through the whole queue before printing the final summary — don't interleave issue confirmations with anything else at this point; it's the last thing this workflow does.
 
 ### Final summary
