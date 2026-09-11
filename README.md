@@ -193,7 +193,7 @@ These skills use the **GitHub CLI** (`gh`) directly — no MCP server and no `.e
 ## Quickstart
 
 1. **Clone and install** — `git clone <your-repo-url> && cd <repo> && npm install`. The `prepare` script installs the git hooks and repairs the `.claude/skills` link.
-2. **Authenticate the GitHub CLI** — `gh auth login`, then `gh auth refresh -s project` so `gh` can manage Project boards.
+2. **Authenticate the GitHub CLI** — `gh auth login`, then `gh auth refresh -s project` so `gh` can manage Project boards. If the clone also has an `upstream` remote, run `gh repo set-default` and choose your own repository, or every `gh` command stops to ask.
 3. **Create the board** — `node scripts/gh-workflow.mjs setup` creates and links a GitHub Project with the Backlog → In Progress → In Review → Done columns and the `epic`/`task`/`bug`/`enhancement` labels. Run `node scripts/gh-workflow.mjs doctor` to confirm, then open the board once and switch its layout to **Board**.
 4. Confirm the `playwright` MCP server is connected in your chosen runtime.
 5. **Plan the work** — invoke `report` to research a question, `adr` to record a decision, or `workstream` to scope a body of work into phases. Small, well-understood changes can skip straight to `capture`.

@@ -9,6 +9,7 @@ Every skill that touches the tracker goes through one helper, `scripts/gh-workfl
 ```bash
 gh auth login                           # sign in to GitHub
 gh auth refresh -s project              # allow gh to manage Project boards
+gh repo set-default                     # pick your repo (origin) when an upstream remote exists
 node scripts/gh-workflow.mjs setup      # create + link the board, set columns, create labels
 node scripts/gh-workflow.mjs doctor     # confirm everything is ready
 ```

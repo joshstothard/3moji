@@ -831,12 +831,18 @@ function commandDoctor() {
   const repoView = gh(["repo", "view", "--json", "nameWithOwner"], {
     allowFailure: true,
   });
+  // With both `origin` and `upstream` remotes, gh refuses to guess which repo
+  // to use until a default is set — the usual first-run failure after
+  // renaming the template remote to upstream.
+  const noDefault = /gh repo set-default/.test(repoView.stderr);
   checks.push([
     "Repository on GitHub",
     repoView.status === 0,
     repoView.status === 0
       ? JSON.parse(repoView.stdout).nameWithOwner
-      : "gh repo create <name> --private --source=. --remote=origin --push",
+      : noDefault
+        ? "several remotes and no default: gh repo set-default <your-login>/<repo>"
+        : "gh repo create <name> --private --source=. --remote=origin --push",
   ]);
   if (repoView.status !== 0 || !hasProjectScope) {
     return report(checks);

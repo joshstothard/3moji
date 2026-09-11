@@ -173,6 +173,7 @@ Work is tracked in GitHub Issues on a GitHub Project board, and every skill that
 ```bash
 gh auth login                           # sign in to GitHub
 gh auth refresh -s project              # allow gh to manage Project boards
+gh repo set-default                     # pick your repo (origin) when an upstream remote exists
 node scripts/gh-workflow.mjs setup      # create + link the board, set columns, create labels (idempotent)
 node scripts/gh-workflow.mjs doctor     # confirm everything is ready
 ```
