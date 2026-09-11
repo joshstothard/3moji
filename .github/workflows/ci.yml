@@ -317,9 +317,12 @@ jobs:
           format: sarif
           output: trivy-api.sarif
           severity: CRITICAL,HIGH
+      # Code scanning uploads need GitHub Code Security on a private repo, so
+      # they run on public repos only. The blocking Trivy scan above still
+      # gates every image. See docs/development/ci-cd.md § Security pipeline.
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        if: always() && !github.event.repository.private
         with:
           sarif_file: trivy-api.sarif
       # ─────────────────────────────────────────────────────────────────────
@@ -371,9 +374,12 @@ jobs:
           format: sarif
           output: trivy-web.sarif
           severity: CRITICAL,HIGH
+      # Code scanning uploads need GitHub Code Security on a private repo, so
+      # they run on public repos only. The blocking Trivy scan above still
+      # gates every image. See docs/development/ci-cd.md § Security pipeline.
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        if: always() && !github.event.repository.private
         with:
           sarif_file: trivy-web.sarif
       # ─────────────────────────────────────────────────────────────────────

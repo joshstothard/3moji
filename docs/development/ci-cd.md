@@ -129,6 +129,8 @@ Transitive dependencies that Dependabot cannot bump directly are pinned via the 
 
 Trivy runs separately per image in Stage 5 with two passes: blocking on fixable CRITICAL, SARIF report for CRITICAL+HIGH.
 
+**Private repositories:** uploading SARIF to GitHub code scanning (the Security tab) requires GitHub Code Security on a private repo; without it the upload step fails with `Resource not accessible by integration`. The Trivy and Semgrep upload steps therefore run only when the repository is public (`!github.event.repository.private`). The blocking Trivy pass and the Semgrep scan itself still run on every PR, so the security gate is unchanged; only the Security-tab report is skipped. If the repo becomes public or gains Code Security, the uploads resume automatically.
+
 ## ADR sync check
 
 `adr-sync` (Stage 1) runs `scripts/check-adr-sync.sh`, which fails the build if a diff touches

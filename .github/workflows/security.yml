@@ -51,7 +51,8 @@ jobs:
 
       - name: Upload Semgrep SARIF
         uses: github/codeql-action/upload-sarif@v4
-        if: always() && hashFiles('semgrep.sarif') != ''
+        # Public repos only: code scanning needs GitHub Code Security on a private repo.
+        if: always() && !github.event.repository.private && hashFiles('semgrep.sarif') != ''
         with:
           sarif_file: semgrep.sarif
         continue-on-error: true
