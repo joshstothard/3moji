@@ -35,3 +35,4 @@ The index's **Follow-ups** column records the ADRs, workstreams, and issues that
 
 | Date | Report | Type | Status | Follow-ups |
 | ---- | ------ | ---- | ------ | ---------- |
+| 2026-09-11 | [Free-tier Postgres and transactional email for 3moji on Vercel Hobby](2026-09-11-hosting-and-email.md) | Research | Draft | #11 |
