@@ -1,0 +1,987 @@
+<!--
+  3moji — home page + sign-up picker PROTOTYPE. THROWAWAY CODE, issue #13.
+
+  Core idea being prototyped: the home page and an UNCLAIMED Handle page are the
+  SAME component in two states.
+    - `3moji.me/`          -> the builder with three empty slots
+    - `3moji.me/<3 emoji>` -> the same builder, slots pre-filled from the path
+  Both show the live URL preview, the availability verdict, and one big claim
+  button. Use the "Arrive as a visitor at" strip at the top to flip between them.
+
+  Plan (prototype skill, UI branch):
+    Three variants of the landing moment + picker LAYOUT, via `#variant=A|B|C`
+    and the floating bottom bar.
+      A — Search-first: one column, URL preview and slots pinned above a flat grid.
+      B — Group-tabbed: eight group tabs drive the grid, slots in a right rail.
+      C — Slot-driven: the three slots are the page; tap a slot, browse a sheet.
+    Built ONCE and shared (flow steps, not design options): the live URL preview,
+    the availability verdict, the spoken form, the email+password hand-off, the
+    "held for 24 hours" screen, and the claimed-but-unedited Profile.
+
+  No build step, no network. Open this file directly in a browser.
+  Availability is faked from the hardcoded TAKEN / HELD sets below.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3moji — home page and sign-up picker prototype</title>
+
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --faint: #94a3b8;
+    --line: #e2e8f0;
+    --accent: #4f46e5;
+    --accent-ink: #3730a3;
+    --ok: #047857;
+    --ok-bg: #ecfdf5;
+    --bad: #b91c1c;
+    --bad-bg: #fef2f2;
+    --warn: #a16207;
+    --warn-bg: #fffbeb;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding-bottom: 92px;
+  }
+  h1, h2, h3 { line-height: 1.15; margin: 0; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .proto-flag {
+    background: #1e293b; color: #e2e8f0; font-size: 12px;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 6px 14px; text-align: center;
+  }
+  .arrival {
+    background: #0f172a; color: #cbd5e1; padding: 9px 14px;
+    display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap;
+    font-size: 13px; border-bottom: 1px solid #334155;
+  }
+  .arrival button {
+    background: #1e293b; color: #e2e8f0; border: 1px solid #475569;
+    border-radius: 999px; padding: 5px 12px; font-size: 13px;
+  }
+  .arrival button:hover { background: #334155; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 20px 18px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: 0 1px 2px rgb(15 23 42 / .05);
+  }
+
+  /* ---------- landing ---------- */
+  .hero { text-align: center; padding: 28px 16px 20px; }
+  .hero.left { text-align: left; }
+  .hero h1 { font-size: clamp(26px, 4.6vw, 42px); letter-spacing: -.02em; }
+  .hero .glyphs { font-size: clamp(36px, 7.5vw, 58px); letter-spacing: .08em; }
+  .hero p { color: var(--muted); max-width: 46ch; margin: 12px auto 0; font-size: 17px; }
+  .hero.left p { margin-left: 0; }
+  .hero .say {
+    display: inline-block; margin-top: 14px; padding: 7px 14px;
+    background: #eef2ff; color: var(--accent-ink);
+    border-radius: 999px; font-size: 15px;
+  }
+  .rule { margin-top: 12px; font-size: 14px; color: var(--muted); }
+
+  .arrived-banner {
+    background: #eef2ff; border: 1px solid #c7d2fe; color: var(--accent-ink);
+    border-radius: var(--radius); padding: 13px 16px; margin-bottom: 14px;
+    font-size: 15px; text-align: center;
+  }
+
+  /* ---------- live URL preview ---------- */
+  .urlbar {
+    display: flex; align-items: center; justify-content: center; gap: 2px;
+    flex-wrap: wrap; padding: 14px 12px; border-radius: var(--radius);
+    background: #fff; border: 2px solid var(--accent);
+    font-size: clamp(22px, 4.6vw, 36px); font-weight: 600; letter-spacing: -.01em;
+  }
+  .urlbar .host { color: var(--faint); font-weight: 500; }
+  .urlbar .picked { letter-spacing: .06em; }
+  .urlbar .blank {
+    display: inline-block; width: .78em; height: .1em; background: #cbd5e1;
+    border-radius: 2px; margin: 0 .06em .12em;
+  }
+
+  /* ---------- slots ---------- */
+  .slots-panel { padding: 16px; }
+  .slots-row { display: flex; gap: 10px; justify-content: center; align-items: flex-start; }
+  .slot { flex: 0 0 auto; width: 92px; text-align: center; }
+  .slot-btn {
+    width: 92px; height: 92px; border-radius: var(--radius);
+    border: 2px dashed var(--line); background: #fff;
+    font-size: 44px; line-height: 1; display: flex;
+    align-items: center; justify-content: center;
+  }
+  .slot-btn.filled { border-style: solid; border-color: var(--accent); background: #f5f3ff; }
+  .slot-btn.active { border-color: var(--accent); box-shadow: 0 0 0 3px #c7d2fe; }
+  .slot-name {
+    font-size: 12px; color: var(--muted); margin-top: 6px;
+    min-height: 30px; word-break: break-word;
+  }
+  .slot-tools { display: flex; gap: 3px; justify-content: center; margin-top: 4px; }
+  .slot-tools button {
+    border: 1px solid var(--line); background: #fff; border-radius: 7px;
+    width: 26px; height: 26px; font-size: 13px; line-height: 1; padding: 0; color: var(--muted);
+  }
+  .slot-tools button:disabled { opacity: .3; cursor: not-allowed; }
+  .slot-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+  .btn {
+    border: 1px solid var(--line); background: #fff; border-radius: 10px;
+    padding: 9px 15px; font-size: 14px;
+  }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn-primary:disabled { background: var(--faint); border-color: var(--faint); cursor: not-allowed; }
+  .btn-big { font-size: 17px; padding: 14px 26px; }
+
+  /* ---------- spoken form ---------- */
+  .spoken { text-align: center; margin-top: 14px; }
+  .spoken-names { font-size: clamp(18px, 3.2vw, 26px); font-weight: 600; letter-spacing: -.01em; }
+  .spoken-sentence { color: var(--muted); margin-top: 6px; font-size: 15px; }
+  .spoken-sentence q { font-style: italic; color: var(--ink); }
+
+  /* ---------- verdict ---------- */
+  .verdict { margin-top: 14px; padding: 15px 16px; border-radius: var(--radius); border: 1px solid var(--line); }
+  .verdict h3 { font-size: 17px; }
+  .verdict p { margin: 6px 0 0; font-size: 14.5px; }
+  .verdict.available { background: var(--ok-bg); border-color: #a7f3d0; color: var(--ok); }
+  .verdict.taken { background: var(--bad-bg); border-color: #fecaca; color: var(--bad); }
+  .verdict.held { background: var(--warn-bg); border-color: #fde68a; color: var(--warn); }
+  .verdict.reserved { background: #f1f5f9; }
+  .verdict .status-word { text-transform: uppercase; letter-spacing: .07em; font-size: 12px; font-weight: 700; }
+  .suggestions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .suggestion {
+    background: #fff; border: 1px solid currentColor; border-radius: 999px;
+    padding: 7px 13px; font-size: 20px; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .suggestion .sg-why { font-size: 12.5px; }
+
+  /* ---------- search + groups ---------- */
+  .search-row { display: flex; gap: 10px; align-items: center; }
+  .search-row input {
+    flex: 1; font: inherit; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--line); background: #fff; min-width: 0;
+  }
+  .search-row.big input { font-size: 18px; padding: 15px 18px; }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+  .chip {
+    border: 1px solid var(--line); background: #fff; border-radius: 999px;
+    padding: 7px 13px; font-size: 13.5px; color: var(--muted);
+  }
+  .chip[aria-pressed="true"], .tab[aria-selected="true"] {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  .tab {
+    border: 1px solid var(--line); background: #fff; border-radius: 9px 9px 0 0;
+    padding: 9px 13px; font-size: 13.5px; color: var(--muted);
+  }
+  .count { color: var(--faint); font-size: 13px; margin-top: 10px; }
+
+  /* ---------- grid ---------- */
+  .grid-scroll { overflow-y: auto; margin-top: 10px; }
+  .emoji-grid {
+    display: grid; gap: 5px; padding: 4px;
+    grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  }
+  .cell {
+    border: 1px solid transparent; background: transparent; border-radius: 9px;
+    aspect-ratio: 1; font-size: 26px; line-height: 1; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cell:hover { background: #eef2ff; }
+  .cell[aria-pressed="true"] { background: #e0e7ff; border-color: var(--accent); }
+  .cell[hidden] { display: none; }
+
+  /* ---------- variant layouts ---------- */
+  .v-b-cols { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+  .rail { position: sticky; top: 14px; }
+  @media (max-width: 880px) {
+    .v-b-cols { grid-template-columns: 1fr; }
+    .rail { position: static; }
+  }
+  /* Deliberately NOT sticky. A panel this tall (URL bar + slots + spoken form +
+     verdict + claim button) pinned to the top covered the grid and swallowed
+     clicks on the emoji underneath it. The grid has its own internal scroll, so
+     the slots stay near the top without overlaying anything. */
+  .sticky-slots { background: var(--bg); padding-top: 8px; }
+  .sheet { margin-top: 16px; }
+
+  /* ---------- screens ---------- */
+  .screen { max-width: 470px; margin: 0 auto; padding: 24px; }
+  .field { margin-top: 15px; }
+  .field label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .field input { width: 100%; font: inherit; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .held-box { text-align: center; }
+  .held-box .big { font-size: 56px; letter-spacing: .08em; }
+  .countdown {
+    display: inline-block; margin-top: 12px; background: var(--warn-bg);
+    color: var(--warn); border: 1px solid #fde68a; border-radius: 999px;
+    padding: 10px 18px; font-weight: 700; font-size: 16px;
+  }
+  .warn-strong {
+    margin-top: 16px; background: var(--warn-bg); border: 1px solid #fde68a;
+    color: var(--warn); border-radius: var(--radius); padding: 13px 15px;
+    font-size: 14.5px; text-align: left;
+  }
+  .profile-box { text-align: center; }
+  .profile-box .big { font-size: 64px; letter-spacing: .08em; }
+
+  /* ---------- switcher ---------- */
+  .switcher {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 60;
+    display: flex; align-items: center; gap: 4px;
+    background: #0f172a; color: #f8fafc; border-radius: 999px;
+    padding: 6px 8px; box-shadow: 0 8px 26px rgb(15 23 42 / .3);
+  }
+  .switcher button { background: transparent; border: 0; color: #f8fafc; font-size: 17px; padding: 6px 11px; border-radius: 999px; }
+  .switcher button:hover { background: #334155; }
+  .switcher .label { font-size: 13px; padding: 0 6px; white-space: nowrap; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .skip { position: absolute; left: -9999px; background: var(--accent); color: #fff; padding: 10px 16px; border-radius: 0 0 10px 0; z-index: 100; }
+  .skip:focus { left: 0; top: 0; position: fixed; }
+</style>
+
+<a class="skip" href="#picker-main">Skip to the picker</a>
+<div class="proto-flag">Prototype — issue #13 — throwaway, fake availability</div>
+<div class="arrival" role="group" aria-label="Prototype: simulate arriving at a URL">
+  <span>Arrive as a visitor at:</span>
+  <button type="button" data-arrive="">3moji.me/ (home)</button>
+  <button type="button" data-arrive="&#129482;&#129482;&#129482;">/&#129482;&#129482;&#129482; free</button>
+  <button type="button" data-arrive="&#128512;&#128512;&#128512;">/&#128512;&#128512;&#128512; taken</button>
+  <button type="button" data-arrive="&#127829;&#127829;&#127829;">/&#127829;&#127829;&#127829; held</button>
+</div>
+
+<div id="app"></div>
+
+<div class="switcher" role="group" aria-label="Prototype variant switcher">
+  <button type="button" id="v-prev" aria-label="Previous variant">&#8592;</button>
+  <span class="label" id="v-label">A</span>
+  <button type="button" id="v-next" aria-label="Next variant">&#8594;</button>
+</div>
+
+<div class="sr-only" id="live-slots" role="status" aria-live="polite"></div>
+<div class="sr-only" id="live-verdict" role="status" aria-live="polite"></div>
+<div class="sr-only" id="live-filter" role="status" aria-live="polite"></div>
+
+<script>
+/* eslint-disable */
+// Classic (non-module) script on purpose: `type="module"` is blocked by CORS on
+// file:// in Chrome, which would leave the human with a blank page.
+(function () {
+  "use strict";
+
+  // GROUPS[i] indexes the third field of each EMOJI entry: [glyph, spokenName, groupIndex]
+  var GROUPS = ["Smileys & Emotion","People & Body","Animals & Nature","Food & Drink","Travel & Places","Activities","Objects","Symbols"];
+  var EMOJI = [["😀","grinning face",0],["😃","grinning face with big eyes",0],["😄","grinning face with smiling eyes",0],["😁","beaming face with smiling eyes",0],["😆","grinning squinting face",0],["😅","grinning face with sweat",0],["🤣","rolling on the floor laughing",0],["😂","face with tears of joy",0],["🙂","slightly smiling face",0],["🙃","upside-down face",0],["😉","winking face",0],["😊","smiling face with smiling eyes",0],["😇","smiling face with halo",0],["🥰","smiling face with hearts",0],["😍","smiling face with heart-eyes",0],["🤩","star-struck",0],["😘","face blowing a kiss",0],["😗","kissing face",0],["😚","kissing face with closed eyes",0],["😙","kissing face with smiling eyes",0],["😋","face savoring food",0],["😛","face with tongue",0],["😜","winking face with tongue",0],["🤪","zany face",0],["😝","squinting face with tongue",0],["🤑","money-mouth face",0],["🤗","smiling face with open hands",0],["🤭","face with hand over mouth",0],["🤫","shushing face",0],["🤔","thinking face",0],["🤐","zipper-mouth face",0],["🤨","face with raised eyebrow",0],["😐","neutral face",0],["😑","expressionless face",0],["😶","face without mouth",0],["😏","smirking face",0],["😒","unamused face",0],["🙄","face with rolling eyes",0],["😬","grimacing face",0],["🤥","lying face",0],["😌","relieved face",0],["😔","pensive face",0],["😪","sleepy face",0],["🤤","drooling face",0],["😴","sleeping face",0],["😷","face with medical mask",0],["🤒","face with thermometer",0],["🤕","face with head-bandage",0],["🤢","nauseated face",0],["🤮","face vomiting",0],["🤧","sneezing face",0],["🥵","hot face",0],["🥶","cold face",0],["🥴","woozy face",0],["😵","face with crossed-out eyes",0],["🤯","exploding head",0],["🤠","cowboy hat face",0],["🥳","partying face",0],["😎","smiling face with sunglasses",0],["🤓","nerd face",0],["🧐","face with monocle",0],["😕","confused face",0],["😟","worried face",0],["🙁","slightly frowning face",0],["😮","face with open mouth",0],["😯","hushed face",0],["😲","astonished face",0],["😳","flushed face",0],["🥺","pleading face",0],["😦","frowning face with open mouth",0],["😧","anguished face",0],["😨","fearful face",0],["😰","anxious face with sweat",0],["😥","sad but relieved face",0],["😢","crying face",0],["😭","loudly crying face",0],["😱","face screaming in fear",0],["😖","confounded face",0],["😣","persevering face",0],["😞","disappointed face",0],["😓","downcast face with sweat",0],["😩","weary face",0],["😫","tired face",0],["🥱","yawning face",0],["😤","face with steam from nose",0],["😡","enraged face",0],["😠","angry face",0],["🤬","face with symbols on mouth",0],["😈","smiling face with horns",0],["👿","angry face with horns",0],["💀","skull",0],["💩","pile of poo",0],["🤡","clown face",0],["👹","ogre",0],["👺","goblin",0],["👻","ghost",0],["👽","alien",0],["👾","alien monster",0],["🤖","robot",0],["😺","grinning cat",0],["😸","grinning cat with smiling eyes",0],["😹","cat with tears of joy",0],["😻","smiling cat with heart-eyes",0],["😼","cat with wry smile",0],["😽","kissing cat",0],["🙀","weary cat",0],["😿","crying cat",0],["😾","pouting cat",0],["🙈","see-no-evil monkey",0],["🙉","hear-no-evil monkey",0],["🙊","speak-no-evil monkey",0],["💌","love letter",0],["💘","heart with arrow",0],["💝","heart with ribbon",0],["💖","sparkling heart",0],["💗","growing heart",0],["💓","beating heart",0],["💞","revolving hearts",0],["💕","two hearts",0],["💟","heart decoration",0],["💔","broken heart",0],["🧡","orange heart",0],["💛","yellow heart",0],["💚","green heart",0],["💙","blue heart",0],["💜","purple heart",0],["🤎","brown heart",0],["🖤","black heart",0],["🤍","white heart",0],["💋","kiss mark",0],["💯","hundred points",0],["💢","anger symbol",0],["💥","collision",0],["💫","dizzy",0],["💦","sweat droplets",0],["💨","dashing away",0],["💬","speech balloon",0],["💭","thought balloon",0],["💤","ZZZ",0],["👋","waving hand",1],["🤚","raised back of hand",1],["✋","raised hand",1],["🖖","vulcan salute",1],["👌","OK hand",1],["🤏","pinching hand",1],["🤞","crossed fingers",1],["🤟","love-you gesture",1],["🤘","sign of the horns",1],["🤙","call me hand",1],["👈","backhand index pointing left",1],["👉","backhand index pointing right",1],["👆","backhand index pointing up",1],["🖕","middle finger",1],["👇","backhand index pointing down",1],["👍","thumbs up",1],["👎","thumbs down",1],["✊","raised fist",1],["👊","oncoming fist",1],["🤛","left-facing fist",1],["🤜","right-facing fist",1],["👏","clapping hands",1],["🙌","raising hands",1],["👐","open hands",1],["🤲","palms up together",1],["🤝","handshake",1],["🙏","folded hands",1],["💅","nail polish",1],["🤳","selfie",1],["💪","flexed biceps",1],["🦾","mechanical arm",1],["🦿","mechanical leg",1],["🦵","leg",1],["🦶","foot",1],["👂","ear",1],["🦻","ear with hearing aid",1],["👃","nose",1],["🧠","brain",1],["🦷","tooth",1],["🦴","bone",1],["👀","eyes",1],["👅","tongue",1],["👄","mouth",1],["👶","baby",1],["🧒","child",1],["👦","boy",1],["👧","girl",1],["🧑","person",1],["👱","person: blond hair",1],["👨","man",1],["🧔","person: beard",1],["👩","woman",1],["🧓","older person",1],["👴","old man",1],["👵","old woman",1],["🙍","person frowning",1],["🙎","person pouting",1],["🙅","person gesturing NO",1],["🙆","person gesturing OK",1],["💁","person tipping hand",1],["🙋","person raising hand",1],["🧏","deaf person",1],["🙇","person bowing",1],["🤦","person facepalming",1],["🤷","person shrugging",1],["👮","police officer",1],["💂","guard",1],["👷","construction worker",1],["🤴","prince",1],["👸","princess",1],["👳","person wearing turban",1],["👲","person with skullcap",1],["🧕","woman with headscarf",1],["🤵","person in tuxedo",1],["👰","person with veil",1],["🤰","pregnant woman",1],["🤱","breast-feeding",1],["👼","baby angel",1],["🎅","Santa Claus",1],["🤶","Mrs. Claus",1],["🦸","superhero",1],["🦹","supervillain",1],["🧙","mage",1],["🧚","fairy",1],["🧛","vampire",1],["🧜","merperson",1],["🧝","elf",1],["🧞","genie",1],["🧟","zombie",1],["💆","person getting massage",1],["💇","person getting haircut",1],["🚶","person walking",1],["🧍","person standing",1],["🧎","person kneeling",1],["🏃","person running",1],["💃","woman dancing",1],["🕺","man dancing",1],["👯","people with bunny ears",1],["🧖","person in steamy room",1],["🧗","person climbing",1],["🤺","person fencing",1],["🏇","horse racing",1],["🏂","snowboarder",1],["🏄","person surfing",1],["🚣","person rowing boat",1],["🏊","person swimming",1],["🚴","person biking",1],["🚵","person mountain biking",1],["🤸","person cartwheeling",1],["🤼","people wrestling",1],["🤽","person playing water polo",1],["🤾","person playing handball",1],["🤹","person juggling",1],["🧘","person in lotus position",1],["🛀","person taking bath",1],["🛌","person in bed",1],["👭","women holding hands",1],["👫","woman and man holding hands",1],["👬","men holding hands",1],["💏","kiss",1],["💑","couple with heart",1],["👤","bust in silhouette",1],["👥","busts in silhouette",1],["👪","family",1],["👣","footprints",1],["🐵","monkey face",2],["🐒","monkey",2],["🦍","gorilla",2],["🦧","orangutan",2],["🐶","dog face",2],["🐕","dog",2],["🦮","guide dog",2],["🐩","poodle",2],["🐺","wolf",2],["🦊","fox",2],["🦝","raccoon",2],["🐱","cat face",2],["🐈","cat",2],["🦁","lion",2],["🐯","tiger face",2],["🐅","tiger",2],["🐆","leopard",2],["🐴","horse face",2],["🐎","horse",2],["🦄","unicorn",2],["🦓","zebra",2],["🦌","deer",2],["🐮","cow face",2],["🐂","ox",2],["🐃","water buffalo",2],["🐄","cow",2],["🐷","pig face",2],["🐖","pig",2],["🐗","boar",2],["🐽","pig nose",2],["🐏","ram",2],["🐑","ewe",2],["🐐","goat",2],["🐪","camel",2],["🐫","two-hump camel",2],["🦙","llama",2],["🦒","giraffe",2],["🐘","elephant",2],["🦏","rhinoceros",2],["🦛","hippopotamus",2],["🐭","mouse face",2],["🐁","mouse",2],["🐀","rat",2],["🐹","hamster",2],["🐰","rabbit face",2],["🐇","rabbit",2],["🦔","hedgehog",2],["🦇","bat",2],["🐻","bear",2],["🐨","koala",2],["🐼","panda",2],["🦥","sloth",2],["🦦","otter",2],["🦨","skunk",2],["🦘","kangaroo",2],["🦡","badger",2],["🐾","paw prints",2],["🦃","turkey",2],["🐔","chicken",2],["🐓","rooster",2],["🐣","hatching chick",2],["🐤","baby chick",2],["🐥","front-facing baby chick",2],["🐦","bird",2],["🐧","penguin",2],["🦅","eagle",2],["🦆","duck",2],["🦢","swan",2],["🦉","owl",2],["🦩","flamingo",2],["🦚","peacock",2],["🦜","parrot",2],["🐸","frog",2],["🐊","crocodile",2],["🐢","turtle",2],["🦎","lizard",2],["🐍","snake",2],["🐲","dragon face",2],["🐉","dragon",2],["🦕","sauropod",2],["🦖","T-Rex",2],["🐳","spouting whale",2],["🐋","whale",2],["🐬","dolphin",2],["🐟","fish",2],["🐠","tropical fish",2],["🐡","blowfish",2],["🦈","shark",2],["🐙","octopus",2],["🐚","spiral shell",2],["🦀","crab",2],["🦞","lobster",2],["🦐","shrimp",2],["🦑","squid",2],["🦪","oyster",2],["🐌","snail",2],["🦋","butterfly",2],["🐛","bug",2],["🐜","ant",2],["🐝","honeybee",2],["🐞","lady beetle",2],["🦗","cricket",2],["🦂","scorpion",2],["🦟","mosquito",2],["🦠","microbe",2],["💐","bouquet",2],["🌸","cherry blossom",2],["💮","white flower",2],["🌹","rose",2],["🥀","wilted flower",2],["🌺","hibiscus",2],["🌻","sunflower",2],["🌼","blossom",2],["🌷","tulip",2],["🌱","seedling",2],["🌲","evergreen tree",2],["🌳","deciduous tree",2],["🌴","palm tree",2],["🌵","cactus",2],["🌾","sheaf of rice",2],["🌿","herb",2],["🍀","four leaf clover",2],["🍁","maple leaf",2],["🍂","fallen leaf",2],["🍃","leaf fluttering in wind",2],["🍄","mushroom",2],["🍇","grapes",3],["🍈","melon",3],["🍉","watermelon",3],["🍊","tangerine",3],["🍋","lemon",3],["🍌","banana",3],["🍍","pineapple",3],["🥭","mango",3],["🍎","red apple",3],["🍏","green apple",3],["🍐","pear",3],["🍑","peach",3],["🍒","cherries",3],["🍓","strawberry",3],["🥝","kiwi fruit",3],["🍅","tomato",3],["🥥","coconut",3],["🥑","avocado",3],["🍆","eggplant",3],["🥔","potato",3],["🥕","carrot",3],["🌽","ear of corn",3],["🥒","cucumber",3],["🥬","leafy green",3],["🥦","broccoli",3],["🧄","garlic",3],["🧅","onion",3],["🥜","peanuts",3],["🌰","chestnut",3],["🍞","bread",3],["🥐","croissant",3],["🥖","baguette bread",3],["🥨","pretzel",3],["🥯","bagel",3],["🥞","pancakes",3],["🧇","waffle",3],["🧀","cheese wedge",3],["🍖","meat on bone",3],["🍗","poultry leg",3],["🥩","cut of meat",3],["🥓","bacon",3],["🍔","hamburger",3],["🍟","french fries",3],["🍕","pizza",3],["🌭","hot dog",3],["🥪","sandwich",3],["🌮","taco",3],["🌯","burrito",3],["🥙","stuffed flatbread",3],["🧆","falafel",3],["🥚","egg",3],["🍳","cooking",3],["🥘","shallow pan of food",3],["🍲","pot of food",3],["🥣","bowl with spoon",3],["🥗","green salad",3],["🍿","popcorn",3],["🧈","butter",3],["🧂","salt",3],["🥫","canned food",3],["🍱","bento box",3],["🍘","rice cracker",3],["🍙","rice ball",3],["🍚","cooked rice",3],["🍛","curry rice",3],["🍜","steaming bowl",3],["🍝","spaghetti",3],["🍠","roasted sweet potato",3],["🍢","oden",3],["🍣","sushi",3],["🍤","fried shrimp",3],["🍥","fish cake with swirl",3],["🥮","moon cake",3],["🍡","dango",3],["🥟","dumpling",3],["🥠","fortune cookie",3],["🥡","takeout box",3],["🍦","soft ice cream",3],["🍧","shaved ice",3],["🍨","ice cream",3],["🍩","doughnut",3],["🍪","cookie",3],["🎂","birthday cake",3],["🍰","shortcake",3],["🧁","cupcake",3],["🥧","pie",3],["🍫","chocolate bar",3],["🍬","candy",3],["🍭","lollipop",3],["🍮","custard",3],["🍯","honey pot",3],["🍼","baby bottle",3],["🥛","glass of milk",3],["☕","hot beverage",3],["🍵","teacup without handle",3],["🍶","sake",3],["🍾","bottle with popping cork",3],["🍷","wine glass",3],["🍸","cocktail glass",3],["🍹","tropical drink",3],["🍺","beer mug",3],["🍻","clinking beer mugs",3],["🥂","clinking glasses",3],["🥃","tumbler glass",3],["🥤","cup with straw",3],["🧃","beverage box",3],["🧉","mate",3],["🧊","ice",3],["🥢","chopsticks",3],["🍴","fork and knife",3],["🥄","spoon",3],["🔪","kitchen knife",3],["🏺","amphora",3],["🌍","globe showing Europe-Africa",4],["🌎","globe showing Americas",4],["🌏","globe showing Asia-Australia",4],["🌐","globe with meridians",4],["🗾","map of Japan",4],["🧭","compass",4],["🌋","volcano",4],["🗻","mount fuji",4],["🧱","brick",4],["🏠","house",4],["🏡","house with garden",4],["🏢","office building",4],["🏣","Japanese post office",4],["🏤","post office",4],["🏥","hospital",4],["🏦","bank",4],["🏨","hotel",4],["🏩","love hotel",4],["🏪","convenience store",4],["🏫","school",4],["🏬","department store",4],["🏭","factory",4],["🏯","Japanese castle",4],["🏰","castle",4],["💒","wedding",4],["🗼","Tokyo tower",4],["🗽","Statue of Liberty",4],["⛪","church",4],["🕌","mosque",4],["🛕","hindu temple",4],["🕍","synagogue",4],["🕋","kaaba",4],["⛲","fountain",4],["⛺","tent",4],["🌁","foggy",4],["🌃","night with stars",4],["🌄","sunrise over mountains",4],["🌅","sunrise",4],["🌆","cityscape at dusk",4],["🌇","sunset",4],["🌉","bridge at night",4],["🎠","carousel horse",4],["🎡","ferris wheel",4],["🎢","roller coaster",4],["💈","barber pole",4],["🎪","circus tent",4],["🚂","locomotive",4],["🚃","railway car",4],["🚄","high-speed train",4],["🚅","bullet train",4],["🚆","train",4],["🚇","metro",4],["🚈","light rail",4],["🚉","station",4],["🚊","tram",4],["🚝","monorail",4],["🚞","mountain railway",4],["🚋","tram car",4],["🚌","bus",4],["🚍","oncoming bus",4],["🚎","trolleybus",4],["🚐","minibus",4],["🚑","ambulance",4],["🚒","fire engine",4],["🚓","police car",4],["🚔","oncoming police car",4],["🚕","taxi",4],["🚖","oncoming taxi",4],["🚗","automobile",4],["🚘","oncoming automobile",4],["🚙","sport utility vehicle",4],["🚚","delivery truck",4],["🚛","articulated lorry",4],["🚜","tractor",4],["🛵","motor scooter",4],["🦽","manual wheelchair",4],["🦼","motorized wheelchair",4],["🛺","auto rickshaw",4],["🚲","bicycle",4],["🛴","kick scooter",4],["🛹","skateboard",4],["🚏","bus stop",4],["⛽","fuel pump",4],["🚨","police car light",4],["🚥","horizontal traffic light",4],["🚦","vertical traffic light",4],["🛑","stop sign",4],["🚧","construction",4],["⚓","anchor",4],["⛵","sailboat",4],["🛶","canoe",4],["🚤","speedboat",4],["🚢","ship",4],["🛫","airplane departure",4],["🛬","airplane arrival",4],["🪂","parachute",4],["💺","seat",4],["🚁","helicopter",4],["🚟","suspension railway",4],["🚠","mountain cableway",4],["🚡","aerial tramway",4],["🚀","rocket",4],["🛸","flying saucer",4],["🧳","luggage",4],["⌛","hourglass done",4],["⏳","hourglass not done",4],["⌚","watch",4],["⏰","alarm clock",4],["🕛","twelve o’clock",4],["🕧","twelve-thirty",4],["🕐","one o’clock",4],["🕜","one-thirty",4],["🕑","two o’clock",4],["🕝","two-thirty",4],["🕒","three o’clock",4],["🕞","three-thirty",4],["🕓","four o’clock",4],["🕟","four-thirty",4],["🕔","five o’clock",4],["🕠","five-thirty",4],["🕕","six o’clock",4],["🕡","six-thirty",4],["🕖","seven o’clock",4],["🕢","seven-thirty",4],["🕗","eight o’clock",4],["🕣","eight-thirty",4],["🕘","nine o’clock",4],["🕤","nine-thirty",4],["🕙","ten o’clock",4],["🕥","ten-thirty",4],["🕚","eleven o’clock",4],["🕦","eleven-thirty",4],["🌑","new moon",4],["🌒","waxing crescent moon",4],["🌓","first quarter moon",4],["🌔","waxing gibbous moon",4],["🌕","full moon",4],["🌖","waning gibbous moon",4],["🌗","last quarter moon",4],["🌘","waning crescent moon",4],["🌙","crescent moon",4],["🌚","new moon face",4],["🌛","first quarter moon face",4],["🌜","last quarter moon face",4],["🌝","full moon face",4],["🌞","sun with face",4],["🪐","ringed planet",4],["⭐","star",4],["🌟","glowing star",4],["🌠","shooting star",4],["🌌","milky way",4],["⛅","sun behind cloud",4],["🌀","cyclone",4],["🌈","rainbow",4],["🌂","closed umbrella",4],["☔","umbrella with rain drops",4],["⚡","high voltage",4],["⛄","snowman without snow",4],["🔥","fire",4],["💧","droplet",4],["🌊","water wave",4],["🎃","jack-o-lantern",5],["🎄","Christmas tree",5],["🎆","fireworks",5],["🎇","sparkler",5],["🧨","firecracker",5],["✨","sparkles",5],["🎈","balloon",5],["🎉","party popper",5],["🎊","confetti ball",5],["🎋","tanabata tree",5],["🎍","pine decoration",5],["🎎","Japanese dolls",5],["🎏","carp streamer",5],["🎐","wind chime",5],["🎑","moon viewing ceremony",5],["🧧","red envelope",5],["🎀","ribbon",5],["🎁","wrapped gift",5],["🎫","ticket",5],["🏆","trophy",5],["🏅","sports medal",5],["🥇","1st place medal",5],["🥈","2nd place medal",5],["🥉","3rd place medal",5],["⚽","soccer ball",5],["⚾","baseball",5],["🥎","softball",5],["🏀","basketball",5],["🏐","volleyball",5],["🏈","american football",5],["🏉","rugby football",5],["🎾","tennis",5],["🥏","flying disc",5],["🎳","bowling",5],["🏏","cricket game",5],["🏑","field hockey",5],["🏒","ice hockey",5],["🥍","lacrosse",5],["🏓","ping pong",5],["🏸","badminton",5],["🥊","boxing glove",5],["🥋","martial arts uniform",5],["🥅","goal net",5],["⛳","flag in hole",5],["🎣","fishing pole",5],["🤿","diving mask",5],["🎽","running shirt",5],["🎿","skis",5],["🛷","sled",5],["🥌","curling stone",5],["🎯","bullseye",5],["🪀","yo-yo",5],["🪁","kite",5],["🔫","water pistol",5],["🎱","pool 8 ball",5],["🔮","crystal ball",5],["🎮","video game",5],["🎰","slot machine",5],["🎲","game die",5],["🧩","puzzle piece",5],["🧸","teddy bear",5],["🃏","joker",5],["🀄","mahjong red dragon",5],["🎴","flower playing cards",5],["🎭","performing arts",5],["🎨","artist palette",5],["🧵","thread",5],["🧶","yarn",5],["👓","glasses",6],["🥽","goggles",6],["🥼","lab coat",6],["🦺","safety vest",6],["👔","necktie",6],["👕","t-shirt",6],["👖","jeans",6],["🧣","scarf",6],["🧤","gloves",6],["🧥","coat",6],["🧦","socks",6],["👗","dress",6],["👘","kimono",6],["🥻","sari",6],["🩱","one-piece swimsuit",6],["🩲","briefs",6],["🩳","shorts",6],["👙","bikini",6],["👚","woman’s clothes",6],["👛","purse",6],["👜","handbag",6],["👝","clutch bag",6],["🎒","backpack",6],["👞","man’s shoe",6],["👟","running shoe",6],["🥾","hiking boot",6],["🥿","flat shoe",6],["👠","high-heeled shoe",6],["👡","woman’s sandal",6],["🩰","ballet shoes",6],["👢","woman’s boot",6],["👑","crown",6],["👒","woman’s hat",6],["🎩","top hat",6],["🎓","graduation cap",6],["🧢","billed cap",6],["📿","prayer beads",6],["💄","lipstick",6],["💍","ring",6],["💎","gem stone",6],["🔇","muted speaker",6],["🔈","speaker low volume",6],["🔉","speaker medium volume",6],["🔊","speaker high volume",6],["📢","loudspeaker",6],["📣","megaphone",6],["📯","postal horn",6],["🔔","bell",6],["🔕","bell with slash",6],["🎼","musical score",6],["🎵","musical note",6],["🎶","musical notes",6],["🎤","microphone",6],["🎧","headphone",6],["📻","radio",6],["🎷","saxophone",6],["🎺","trumpet",6],["🎸","guitar",6],["🎹","musical keyboard",6],["🎻","violin",6],["🪕","banjo",6],["🥁","drum",6],["📱","mobile phone",6],["📲","mobile phone with arrow",6],["📞","telephone receiver",6],["📟","pager",6],["📠","fax machine",6],["🔋","battery",6],["🔌","electric plug",6],["💻","laptop",6],["💽","computer disk",6],["💾","floppy disk",6],["💿","optical disk",6],["📀","dvd",6],["🧮","abacus",6],["🎥","movie camera",6],["🎬","clapper board",6],["📺","television",6],["📷","camera",6],["📸","camera with flash",6],["📹","video camera",6],["📼","videocassette",6],["🔍","magnifying glass tilted left",6],["🔎","magnifying glass tilted right",6],["💡","light bulb",6],["🔦","flashlight",6],["🏮","red paper lantern",6],["🪔","diya lamp",6],["📔","notebook with decorative cover",6],["📕","closed book",6],["📖","open book",6],["📗","green book",6],["📘","blue book",6],["📙","orange book",6],["📚","books",6],["📓","notebook",6],["📒","ledger",6],["📃","page with curl",6],["📜","scroll",6],["📄","page facing up",6],["📰","newspaper",6],["📑","bookmark tabs",6],["🔖","bookmark",6],["💰","money bag",6],["💴","yen banknote",6],["💵","dollar banknote",6],["💶","euro banknote",6],["💷","pound banknote",6],["💸","money with wings",6],["💳","credit card",6],["🧾","receipt",6],["💹","chart increasing with yen",6],["📧","e-mail",6],["📨","incoming envelope",6],["📩","envelope with arrow",6],["📤","outbox tray",6],["📥","inbox tray",6],["📦","package",6],["📫","closed mailbox with raised flag",6],["📪","closed mailbox with lowered flag",6],["📬","open mailbox with raised flag",6],["📭","open mailbox with lowered flag",6],["📮","postbox",6],["📝","memo",6],["💼","briefcase",6],["📁","file folder",6],["📂","open file folder",6],["📅","calendar",6],["📆","tear-off calendar",6],["📇","card index",6],["📈","chart increasing",6],["📉","chart decreasing",6],["📊","bar chart",6],["📋","clipboard",6],["📌","pushpin",6],["📍","round pushpin",6],["📎","paperclip",6],["📏","straight ruler",6],["📐","triangular ruler",6],["🔒","locked",6],["🔓","unlocked",6],["🔏","locked with pen",6],["🔐","locked with key",6],["🔑","key",6],["🔨","hammer",6],["🪓","axe",6],["💣","bomb",6],["🏹","bow and arrow",6],["🔧","wrench",6],["🔩","nut and bolt",6],["🦯","white cane",6],["🔗","link",6],["🧰","toolbox",6],["🧲","magnet",6],["🧪","test tube",6],["🧫","petri dish",6],["🧬","dna",6],["🔬","microscope",6],["🔭","telescope",6],["📡","satellite antenna",6],["💉","syringe",6],["🩸","drop of blood",6],["💊","pill",6],["🩹","adhesive bandage",6],["🩺","stethoscope",6],["🚪","door",6],["🪑","chair",6],["🚽","toilet",6],["🚿","shower",6],["🛁","bathtub",6],["🪒","razor",6],["🧴","lotion bottle",6],["🧷","safety pin",6],["🧹","broom",6],["🧺","basket",6],["🧻","roll of paper",6],["🧼","soap",6],["🧽","sponge",6],["🧯","fire extinguisher",6],["🛒","shopping cart",6],["🚬","cigarette",6],["🧿","nazar amulet",6],["🗿","moai",6],["🏧","ATM sign",7],["🚮","litter in bin sign",7],["🚰","potable water",7],["♿","wheelchair symbol",7],["🚹","men’s room",7],["🚺","women’s room",7],["🚻","restroom",7],["🚼","baby symbol",7],["🚾","water closet",7],["🛂","passport control",7],["🛃","customs",7],["🛄","baggage claim",7],["🛅","left luggage",7],["🚸","children crossing",7],["⛔","no entry",7],["🚫","prohibited",7],["🚳","no bicycles",7],["🚭","no smoking",7],["🚯","no littering",7],["🚱","non-potable water",7],["🚷","no pedestrians",7],["📵","no mobile phones",7],["🔞","no one under eighteen",7],["🔃","clockwise vertical arrows",7],["🔄","counterclockwise arrows button",7],["🔙","BACK arrow",7],["🔚","END arrow",7],["🔛","ON! arrow",7],["🔜","SOON arrow",7],["🔝","TOP arrow",7],["🛐","place of worship",7],["🕎","menorah",7],["🔯","dotted six-pointed star",7],["♈","Aries",7],["♉","Taurus",7],["♊","Gemini",7],["♋","Cancer",7],["♌","Leo",7],["♍","Virgo",7],["♎","Libra",7],["♏","Scorpio",7],["♐","Sagittarius",7],["♑","Capricorn",7],["♒","Aquarius",7],["♓","Pisces",7],["⛎","Ophiuchus",7],["🔀","shuffle tracks button",7],["🔁","repeat button",7],["🔂","repeat single button",7],["⏩","fast-forward button",7],["⏪","fast reverse button",7],["🔼","upwards button",7],["⏫","fast up button",7],["🔽","downwards button",7],["⏬","fast down button",7],["🎦","cinema",7],["🔅","dim button",7],["🔆","bright button",7],["📶","antenna bars",7],["📳","vibration mode",7],["📴","mobile phone off",7],["➕","plus",7],["➖","minus",7],["➗","divide",7],["❓","red question mark",7],["❔","white question mark",7],["❕","white exclamation mark",7],["❗","red exclamation mark",7],["💱","currency exchange",7],["💲","heavy dollar sign",7],["🔱","trident emblem",7],["📛","name badge",7],["🔰","Japanese symbol for beginner",7],["⭕","hollow red circle",7],["✅","check mark button",7],["❌","cross mark",7],["❎","cross mark button",7],["➰","curly loop",7],["➿","double curly loop",7],["🔠","input latin uppercase",7],["🔡","input latin lowercase",7],["🔢","input numbers",7],["🔣","input symbols",7],["🔤","input latin letters",7],["🆎","AB button (blood type)",7],["🆑","CL button",7],["🆒","COOL button",7],["🆓","FREE button",7],["🆔","ID button",7],["🆕","NEW button",7],["🆖","NG button",7],["🆗","OK button",7],["🆘","SOS button",7],["🆙","UP! button",7],["🆚","VS button",7],["🈁","Japanese “here” button",7],["🈶","Japanese “not free of charge” button",7],["🈯","Japanese “reserved” button",7],["🉐","Japanese “bargain” button",7],["🈹","Japanese “discount” button",7],["🈚","Japanese “free of charge” button",7],["🈲","Japanese “prohibited” button",7],["🉑","Japanese “acceptable” button",7],["🈸","Japanese “application” button",7],["🈴","Japanese “passing grade” button",7],["🈳","Japanese “vacancy” button",7],["🈺","Japanese “open for business” button",7],["🈵","Japanese “no vacancy” button",7],["🔴","red circle",7],["🟠","orange circle",7],["🟡","yellow circle",7],["🟢","green circle",7],["🔵","blue circle",7],["🟣","purple circle",7],["🟤","brown circle",7],["⚫","black circle",7],["⚪","white circle",7],["🟥","red square",7],["🟧","orange square",7],["🟨","yellow square",7],["🟩","green square",7],["🟦","blue square",7],["🟪","purple square",7],["🟫","brown square",7],["⬛","black large square",7],["⬜","white large square",7],["◾","black medium-small square",7],["◽","white medium-small square",7],["🔶","large orange diamond",7],["🔷","large blue diamond",7],["🔸","small orange diamond",7],["🔹","small blue diamond",7],["🔺","red triangle pointed up",7],["🔻","red triangle pointed down",7],["💠","diamond with a dot",7],["🔘","radio button",7],["🔳","white square button",7],["🔲","black square button",7]];
+
+  // ---- faked availability -------------------------------------------------
+  // NOTE: all-same triples are freely claimable by design, so the flagship
+  // example three ice is deliberately AVAILABLE.
+  var TAKEN = ["\u{1F600}\u{1F600}\u{1F600}", "\u{1F525}\u{1F525}\u{1F525}",
+               "\u{1F680}\u{1F680}\u{1F680}", "\u{1F355}\u{1F438}\u{1F9CA}",
+               "\u{1F32E}\u{1F32E}\u{1F32E}"];
+  var HELD  = ["\u{1F355}\u{1F355}\u{1F355}", "\u{1F438}\u{1F438}\u{1F438}",
+               "\u{1F31F}\u{1F31F}\u{1F31F}"];
+
+  var byGlyph = {};
+  for (var i = 0; i < EMOJI.length; i++) byGlyph[EMOJI[i][0]] = EMOJI[i];
+  function nameOf(g) { return byGlyph[g] ? byGlyph[g][1] : g; }
+  function inSet(g) { return !!byGlyph[g]; }
+
+  var state = {
+    variant: "A",
+    slots: [null, null, null],
+    active: 0,
+    query: "",
+    group: "All",
+    screen: "pick",
+    arrivedAt: null // non-null => visitor landed on a Handle URL
+  };
+
+  var VARIANTS = {
+    A: "Search-first, one column",
+    B: "Group tabs + right rail",
+    C: "Slot-driven browse sheet"
+  };
+
+  // ---- spoken form --------------------------------------------------------
+  function plural(n) {
+    if (/(s|x|z|ch|sh)$/.test(n)) return n + "es";
+    if (/[^aeiou]y$/.test(n)) return n.slice(0, -1) + "ies";
+    return n + "s";
+  }
+  var NUMWORD = ["", "one", "two", "three"];
+
+  // Collapses runs so the Handle reads the way a person would say it.
+  // OPEN QUESTION for the human: the CLDR Spoken Name for the ice cube glyph is
+  // "ice", so this renders "three ices" — the product's own line is
+  // "three ice cubes". See the issue comment.
+  function spokenSentence(names) {
+    if (!names.length) return "";
+    var runs = [], k;
+    for (k = 0; k < names.length; k++) {
+      if (runs.length && runs[runs.length - 1].name === names[k]) runs[runs.length - 1].n++;
+      else runs.push({ name: names[k], n: 1 });
+    }
+    var parts = runs.map(function (r) {
+      return r.n === 1 ? "a " + r.name : NUMWORD[r.n] + " " + plural(r.name);
+    });
+    if (parts.length === 1) return parts[0];
+    if (parts.length === 2) return parts[0] + " and " + parts[1];
+    return parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
+  }
+
+  function filledNames() { return state.slots.filter(Boolean).map(nameOf); }
+  function handleString() { return state.slots.filter(Boolean).join(""); }
+
+  // ---- availability -------------------------------------------------------
+  function availabilityOf(h) {
+    if (TAKEN.indexOf(h) !== -1) return "taken";
+    if (HELD.indexOf(h) !== -1) return "held";
+    return "available";
+  }
+  function verdictState() {
+    var filled = state.slots.filter(Boolean).length;
+    if (filled < 3) return { kind: "reserved", filled: filled };
+    return { kind: availabilityOf(handleString()), filled: 3 };
+  }
+
+  function permutations(a) {
+    var out = [];
+    for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) for (var z = 0; z < 3; z++) {
+      if (x === y || y === z || x === z) continue;
+      var p = [a[x], a[y], a[z]].join("");
+      if (p !== a.join("") && out.indexOf(p) === -1) out.push(p);
+    }
+    return out;
+  }
+
+  // Routes onward when the pick is gone: same three reordered first, then
+  // one-slot swaps. Keeps what the visitor already chose.
+  function suggestionsFor(slots) {
+    var res = [], seen = {};
+    permutations(slots).forEach(function (p) {
+      if (availabilityOf(p) === "available" && !seen[p]) { seen[p] = 1; res.push({ h: p, why: "same three, new order" }); }
+    });
+    var pool = ["\u{1F9CA}", "\u{1F355}", "\u{1F438}", "\u{1F680}", "\u{1F31F}", "\u{1F332}",
+                "\u{1F3B8}", "\u{1F42C}", "\u{1F344}", "\u{1F9E9}", "\u{1F3AF}", "\u{1F34B}"];
+    for (var s = 0; s < 3 && res.length < 5; s++) {
+      for (var p2 = 0; p2 < pool.length && res.length < 5; p2++) {
+        if (pool[p2] === slots[s]) continue;
+        var c = slots.slice(); c[s] = pool[p2];
+        var hh = c.join("");
+        if (availabilityOf(hh) === "available" && !seen[hh]) {
+          seen[hh] = 1; res.push({ h: hh, why: "swap slot " + (s + 1) });
+        }
+      }
+    }
+    return res.slice(0, 5);
+  }
+
+  // ---- the grid: built ONCE, reused across variants ------------------------
+  // Rebuilding innerHTML per keystroke would destroy focus and break the
+  // roving-tabindex path, so cells are created once and filtered via `hidden`.
+  var gridEl = document.createElement("div");
+  gridEl.className = "emoji-grid";
+  // A listbox, not a `grid`: an ARIA grid needs explicit `row` wrappers, and one
+  // row per cell forces a single column. A single-select listbox has no row
+  // requirement, so CSS grid is free to wrap the options into real columns.
+  gridEl.setAttribute("role", "listbox");
+  gridEl.setAttribute("aria-label",
+    "Emoji Set, 1053 emoji. Arrow keys move, Enter places the emoji in the current slot.");
+  var cells = [];
+  (function buildGrid() {
+    var frag = document.createDocumentFragment();
+    for (var n = 0; n < EMOJI.length; n++) {
+      var c = document.createElement("button");
+      c.type = "button";
+      c.className = "cell";
+      c.setAttribute("role", "option");
+      c.tabIndex = -1;
+      // Glyph hidden from assistive tech so the vendor's own emoji name is not
+      // announced on top of our canonical Spoken Name.
+      c.innerHTML = '<span aria-hidden="true">' + EMOJI[n][0] + "</span>";
+      c.setAttribute("aria-label", EMOJI[n][1]);
+      c.setAttribute("aria-selected", "false");
+      c.dataset.i = String(n);
+      frag.appendChild(c);
+      cells.push(c);
+    }
+    gridEl.appendChild(frag);
+  })();
+
+  var visible = [];
+  var rover = 0;
+
+  function matches(n) {
+    var e = EMOJI[n];
+    if (state.group !== "All" && GROUPS[e[2]] !== state.group) return false;
+    if (!state.query) return true;
+    return e[1].indexOf(state.query) !== -1;
+  }
+
+  function applyFilter(announce) {
+    visible = [];
+    for (var n = 0; n < EMOJI.length; n++) {
+      var ok = matches(n);
+      cells[n].hidden = !ok;
+      cells[n].tabIndex = -1; // reset ALL, so a hidden cell never keeps tabindex 0
+      if (ok) visible.push(n);
+    }
+    rover = 0;
+    if (visible.length) cells[visible[0]].tabIndex = 0;
+    var cnt = document.getElementById("result-count");
+    if (cnt) cnt.textContent = visible.length + " of " + EMOJI.length + " emoji";
+    if (announce) say("live-filter", visible.length + " emoji match");
+  }
+
+  function columnCount() {
+    if (visible.length < 2) return 1;
+    var top0 = cells[visible[0]].offsetTop, k;
+    for (k = 1; k < visible.length; k++) {
+      if (cells[visible[k]].offsetTop !== top0) return k;
+    }
+    return visible.length;
+  }
+
+  function moveRover(to) {
+    if (!visible.length) return;
+    to = Math.max(0, Math.min(visible.length - 1, to));
+    cells[visible[rover]].tabIndex = -1;
+    rover = to;
+    var c = cells[visible[rover]];
+    c.tabIndex = 0;
+    c.focus();
+  }
+
+  gridEl.addEventListener("keydown", function (ev) {
+    var cols = columnCount(), handled = true;
+    switch (ev.key) {
+      case "ArrowRight": moveRover(rover + 1); break;
+      case "ArrowLeft":  moveRover(rover - 1); break;
+      case "ArrowDown":  moveRover(rover + cols); break;
+      case "ArrowUp":    moveRover(rover - cols); break;
+      case "Home":       moveRover(0); break;
+      case "End":        moveRover(visible.length - 1); break;
+      case "PageDown":   moveRover(rover + cols * 5); break;
+      case "PageUp":     moveRover(rover - cols * 5); break;
+      default: handled = false;
+    }
+    if (handled) { ev.preventDefault(); ev.stopPropagation(); }
+  });
+
+  gridEl.addEventListener("click", function (ev) {
+    var btn = ev.target.closest ? ev.target.closest(".cell") : null;
+    if (!btn) return;
+    var idx = visible.indexOf(Number(btn.dataset.i));
+    if (idx !== -1) { cells[visible[rover]].tabIndex = -1; rover = idx; btn.tabIndex = 0; }
+    place(EMOJI[Number(btn.dataset.i)][0]);
+  });
+
+  // ---- actions ------------------------------------------------------------
+  function place(glyph) {
+    state.slots[state.active] = glyph;
+    var placedIn = state.active + 1;
+    var next = state.slots.indexOf(null);
+    state.active = next === -1 ? Math.min(2, state.active + 1) : next;
+    render();
+    say("live-slots", "Slot " + placedIn + " set to " + nameOf(glyph) + ". " + slotsSummary());
+  }
+  function clearSlot(i) {
+    state.slots[i] = null; state.active = i; render();
+    say("live-slots", "Slot " + (i + 1) + " cleared. " + slotsSummary());
+  }
+  function moveSlot(i, dir) {
+    var j = i + dir;
+    if (j < 0 || j > 2) return;
+    var t = state.slots[i]; state.slots[i] = state.slots[j]; state.slots[j] = t;
+    render(); focusSlot(j);
+    say("live-slots", "Moved to position " + (j + 1) + ". " + slotsSummary());
+  }
+  function clearAll() {
+    state.slots = [null, null, null]; state.active = 0; state.arrivedAt = null;
+    render(); say("live-slots", "All three slots cleared.");
+  }
+  function shuffle() {
+    for (var i = 0; i < 3; i++) state.slots[i] = EMOJI[Math.floor(Math.random() * EMOJI.length)][0];
+    state.active = 0; state.arrivedAt = null; render();
+    say("live-slots", "Shuffled. " + slotsSummary());
+  }
+  function slotsSummary() {
+    var names = filledNames();
+    if (!names.length) return "All three slots are empty.";
+    return "Handle so far: " + names.join(", ") + ". " +
+      (names.length < 3 ? (3 - names.length) + " slot" + (names.length === 2 ? "" : "s") + " left." : "");
+  }
+  function focusSlot(i) {
+    var el = document.querySelector('[data-slot="' + i + '"]');
+    if (el) el.focus();
+  }
+  function say(id, msg) {
+    var el = document.getElementById(id);
+    if (el) { el.textContent = ""; setTimeout(function () { el.textContent = msg; }, 40); }
+  }
+
+  // Arriving at a Handle URL is the SAME component, just pre-filled.
+  function arriveAt(h) {
+    var glyphs = Array.from(h).filter(inSet);
+    state.slots = [glyphs[0] || null, glyphs[1] || null, glyphs[2] || null];
+    state.arrivedAt = glyphs.length === 3 ? glyphs.join("") : null;
+    state.active = state.slots.indexOf(null) === -1 ? 0 : state.slots.indexOf(null);
+    state.screen = "pick";
+    render();
+    say("live-slots", state.arrivedAt
+      ? "Arrived at 3moji.me slash " + filledNames().join(", ") + ". " + verdictAnnouncement()
+      : "3moji home page. All three slots are empty.");
+  }
+
+  // ---- shared flow components --------------------------------------------
+  function urlbarMarkup() {
+    var html = '<div class="urlbar"><span class="host">3moji.me/</span>';
+    var names = [];
+    for (var i = 0; i < 3; i++) {
+      if (state.slots[i]) {
+        html += '<span class="picked" aria-hidden="true">' + state.slots[i] + "</span>";
+        names.push(nameOf(state.slots[i]));
+      } else {
+        html += '<span class="blank" aria-hidden="true"></span>';
+      }
+    }
+    html += '<span class="sr-only">Your address so far: 3moji.me slash ' +
+      (names.length ? esc(names.join(", ")) : "nothing yet, three empty slots") + "</span>";
+    return html + "</div>";
+  }
+
+  function slotsMarkup() {
+    var html = '<div class="slots-row">';
+    for (var i = 0; i < 3; i++) {
+      var g = state.slots[i];
+      var label = g
+        ? "Slot " + (i + 1) + ": " + nameOf(g) + ". Activate to re-pick this slot."
+        : "Slot " + (i + 1) + ": empty. Activate to fill this slot next.";
+      html +=
+        '<div class="slot">' +
+          '<button type="button" data-slot="' + i + '" aria-label="' + esc(label) + '"' +
+            (state.active === i ? ' aria-current="true"' : "") +
+            ' class="slot-btn' + (g ? " filled" : "") + (state.active === i ? " active" : "") + '">' +
+            (g ? '<span aria-hidden="true">' + g + "</span>"
+               : '<span aria-hidden="true" style="color:#cbd5e1">' + (i + 1) + "</span>") +
+          "</button>" +
+          '<div class="slot-name">' + (g ? esc(nameOf(g)) : "") + "</div>" +
+          '<div class="slot-tools">' +
+            '<button type="button" data-move="' + i + '" data-dir="-1" ' + (i === 0 || !g ? "disabled" : "") +
+              ' aria-label="Move ' + esc(g ? nameOf(g) : "slot " + (i + 1)) + ' left">&#8592;</button>' +
+            '<button type="button" data-clear="' + i + '" ' + (!g ? "disabled" : "") +
+              ' aria-label="Clear slot ' + (i + 1) + (g ? ", " + esc(nameOf(g)) : "") + '">&#215;</button>' +
+            '<button type="button" data-move="' + i + '" data-dir="1" ' + (i === 2 || !g ? "disabled" : "") +
+              ' aria-label="Move ' + esc(g ? nameOf(g) : "slot " + (i + 1)) + ' right">&#8594;</button>' +
+          "</div>" +
+        "</div>";
+    }
+    html += "</div>";
+    html +=
+      '<div class="slot-actions">' +
+        '<button type="button" class="btn" id="btn-shuffle">Surprise me</button>' +
+        '<button type="button" class="btn" id="btn-clear-all">Clear all</button>' +
+      "</div>";
+    return html;
+  }
+
+  function spokenMarkup() {
+    var names = filledNames();
+    if (!names.length) {
+      return '<div class="spoken"><div class="spoken-names" style="color:#94a3b8">Pick three to hear it</div></div>';
+    }
+    return (
+      '<div class="spoken">' +
+        '<div class="spoken-names">' + esc(names.join(" · ")) + "</div>" +
+        '<div class="spoken-sentence">Say it out loud: <q>' + esc(spokenSentence(names)) + "</q></div>" +
+      "</div>"
+    );
+  }
+
+  function verdictMarkup() {
+    var v = verdictState(), h = handleString(), body = "", head = "", word = "";
+    if (v.kind === "reserved") {
+      word = v.filled === 0 ? "Three to play" : v.filled + " of 3";
+      head = "Three is the game";
+      body = "Every Handle is exactly three emoji — repeats welcome. One- and two-emoji " +
+             "Handles are Reserved, which is what keeps three fair for everyone.";
+    } else if (v.kind === "available") {
+      word = "Available";
+      head = "You’re in luck — 3moji.me/" + h + " isn’t taken";
+      body = "Nobody has this one. Claim it and we’ll hold it for you for 24 hours while you verify your email.";
+    } else if (v.kind === "taken") {
+      word = "Taken";
+      head = "3moji.me/" + h + " belongs to someone";
+      body = "This Handle is already claimed. You can go and look at it, or change a slot and make one of these yours:";
+    } else {
+      word = "Being claimed";
+      head = "3moji.me/" + h + " is being claimed right now";
+      body = "Someone is partway through claiming this one. If they don’t finish, it comes back — " +
+             "check back later. In the meantime, these are free right now:";
+    }
+    var html =
+      '<div class="verdict ' + v.kind + '">' +
+        '<div class="status-word">' + esc(word) + "</div>" +
+        "<h3>" + esc(head) + "</h3>" +
+        "<p>" + body + "</p>";
+    if (v.kind === "taken") {
+      html += '<div class="slot-actions" style="justify-content:flex-start;margin-top:12px">' +
+        '<button type="button" class="btn" id="btn-view-profile">View 3moji.me/' + h + " →</button></div>";
+    }
+    if (v.kind === "taken" || v.kind === "held") {
+      var sg = suggestionsFor(state.slots);
+      html += '<div class="suggestions">';
+      sg.forEach(function (s) {
+        var nm = Array.from(s.h).map(nameOf).join(", ");
+        html +=
+          '<button type="button" class="suggestion" data-suggest="' + s.h + '"' +
+            ' aria-label="Use ' + esc(nm) + " instead — " + esc(s.why) + ', available">' +
+            '<span aria-hidden="true">' + s.h + "</span>" +
+            '<span class="sg-why" aria-hidden="true">' + esc(s.why) + "</span>" +
+          "</button>";
+      });
+      html += "</div>";
+    }
+    return html + "</div>";
+  }
+
+  function claimButtonMarkup() {
+    var v = verdictState(), ok = v.kind === "available";
+    return (
+      '<div class="slot-actions" style="margin-top:16px">' +
+        '<button type="button" class="btn btn-primary btn-big" id="btn-claim" ' + (ok ? "" : "disabled") + ">" +
+          (ok ? "Sign up and claim 3moji.me/" + handleString() : "Pick three free emoji to claim") +
+        "</button>" +
+      "</div>"
+    );
+  }
+
+  function verdictAnnouncement() {
+    var v = verdictState(), names = filledNames();
+    if (v.kind === "reserved") return names.length ? slotsSummary() : "";
+    var spoken = spokenSentence(names);
+    if (v.kind === "available") return spoken + " is available. Ready to claim.";
+    if (v.kind === "taken") return spoken + " is already taken. " +
+      suggestionsFor(state.slots).length + " nearby Handles are free.";
+    return spoken + " is being claimed by someone right now. Check back later. " +
+      suggestionsFor(state.slots).length + " nearby Handles are free.";
+  }
+
+  function arrivedBanner() {
+    if (!state.arrivedAt) return "";
+    var k = availabilityOf(state.arrivedAt);
+    var msg = k === "available"
+      ? "You landed on <strong>3moji.me/" + state.arrivedAt + "</strong> and nobody owns it. It’s yours if you want it."
+      : k === "taken"
+        ? "You landed on <strong>3moji.me/" + state.arrivedAt + "</strong>, which is already someone’s."
+        : "You landed on <strong>3moji.me/" + state.arrivedAt + "</strong>, which is mid-claim.";
+    return '<div class="arrived-banner">' + msg + " Change any slot to build a different one.</div>";
+  }
+
+  // ---- variant layouts ----------------------------------------------------
+  function searchMarkup(big) {
+    return (
+      '<div class="search-row' + (big ? " big" : "") + '">' +
+        '<label class="sr-only" for="q">Search emoji by spoken name</label>' +
+        '<input id="q" type="search" autocomplete="off" placeholder="Search by name — try &quot;ice&quot;, &quot;frog&quot;, &quot;rocket&quot;" value="' + esc(state.query) + '">' +
+      "</div>"
+    );
+  }
+  function chipsMarkup() {
+    var html = '<div class="chips" role="group" aria-label="Filter by emoji group">';
+    ["All"].concat(GROUPS).forEach(function (g) {
+      html += '<button type="button" class="chip" data-group="' + esc(g) + '" aria-pressed="' +
+        (state.group === g ? "true" : "false") + '">' + esc(g) + "</button>";
+    });
+    return html + "</div>";
+  }
+  function tabsMarkup() {
+    var html = '<div class="tabs" role="tablist" aria-label="Emoji groups">';
+    ["All"].concat(GROUPS).forEach(function (g) {
+      html += '<button type="button" class="tab" role="tab" data-group="' + esc(g) + '" aria-selected="' +
+        (state.group === g ? "true" : "false") + '">' + esc(g) + "</button>";
+    });
+    return html + "</div>";
+  }
+
+  function variantA() {
+    return (
+      '<div class="wrap">' +
+        arrivedBanner() +
+        '<div class="hero">' +
+          (state.arrivedAt ? "" : '<div class="glyphs" aria-hidden="true">\u{1F9CA}\u{1F9CA}\u{1F9CA}</div>') +
+          "<h1>" + (state.arrivedAt ? "Make it yours" : "Three emoji. One you.") + "</h1>" +
+          "<p>3moji gives you a web address made of three emoji — short enough to say out loud, " +
+          "easy enough to remember, and yours alone.</p>" +
+          '<div class="say">“yeah, 3moji, three ice cubes”</div>' +
+          '<div class="rule">Every Handle is exactly three. One and two are Reserved.</div>' +
+        "</div>" +
+        '<div class="sticky-slots">' +
+          '<div id="mount-url"></div>' +
+          '<div class="card slots-panel" style="margin-top:12px" id="mount-slots"></div>' +
+          '<div id="mount-spoken"></div>' +
+          '<div id="mount-verdict"></div>' +
+          '<div id="mount-claim"></div>' +
+        "</div>" +
+        '<main id="picker-main" class="card slots-panel" style="margin-top:18px">' +
+          "<h2 style='font-size:18px;margin-bottom:12px'>Find your three</h2>" +
+          searchMarkup(true) + chipsMarkup() +
+          '<div class="count" id="result-count"></div>' +
+          '<div class="grid-scroll" id="mount-grid" style="max-height:44vh"></div>' +
+        "</main>" +
+      "</div>"
+    );
+  }
+
+  function variantB() {
+    return (
+      '<div class="wrap">' +
+        arrivedBanner() +
+        '<div class="hero left" style="padding-bottom:14px">' +
+          "<h1>" + (state.arrivedAt ? "Make it yours" : "Claim your three emoji") + "</h1>" +
+          "<p style='margin-left:0'>A 3moji Handle is three emoji that point at everything you share. " +
+          "Browse by category, or search by name.</p>" +
+        "</div>" +
+        '<div class="v-b-cols">' +
+          '<main id="picker-main" class="card slots-panel">' +
+            tabsMarkup() +
+            '<div style="margin-top:14px">' + searchMarkup(false) + "</div>" +
+            '<div class="count" id="result-count"></div>' +
+            '<div class="grid-scroll" id="mount-grid" style="max-height:52vh"></div>' +
+          "</main>" +
+          '<div class="rail">' +
+            '<div id="mount-url"></div>' +
+            '<div class="card slots-panel" style="margin-top:12px" id="mount-slots"></div>' +
+            '<div id="mount-spoken"></div>' +
+            '<div id="mount-verdict"></div>' +
+            '<div id="mount-claim"></div>' +
+          "</div>" +
+        "</div>" +
+      "</div>"
+    );
+  }
+
+  function variantC() {
+    var g = state.slots[state.active];
+    return (
+      '<div class="wrap">' +
+        arrivedBanner() +
+        '<div class="hero" style="padding-bottom:10px">' +
+          "<h1>" + (state.arrivedAt ? "Make it yours" : "Fill three slots") + "</h1>" +
+          "<p>Tap a slot, pick its emoji, move on. Repeats are welcome — " +
+          "\u{1F9CA}\u{1F9CA}\u{1F9CA} is a perfectly good Handle.</p>" +
+        "</div>" +
+        '<div id="mount-url"></div>' +
+        '<div class="card slots-panel" style="margin-top:12px" id="mount-slots"></div>' +
+        '<div id="mount-spoken"></div>' +
+        '<div id="mount-verdict"></div>' +
+        '<div id="mount-claim"></div>' +
+        '<main id="picker-main" class="card slots-panel sheet">' +
+          "<h2 style='font-size:17px;margin-bottom:12px'>Filling slot " + (state.active + 1) +
+            (g ? " — currently " + esc(nameOf(g)) : "") + "</h2>" +
+          searchMarkup(false) + chipsMarkup() +
+          '<div class="count" id="result-count"></div>' +
+          '<div class="grid-scroll" id="mount-grid" style="max-height:40vh"></div>' +
+        "</main>" +
+      "</div>"
+    );
+  }
+
+  function signupScreen() {
+    var h = handleString(), names = filledNames();
+    return (
+      '<div class="wrap"><main id="picker-main" class="card screen">' +
+        '<div style="text-align:center">' +
+          '<div style="font-size:30px;color:#94a3b8">3moji.me/<span style="color:#0f172a;letter-spacing:.06em" aria-hidden="true">' + h + "</span></div>" +
+          '<div class="spoken-names" style="margin-top:8px">' + esc(names.join(" · ")) + "</div>" +
+          '<div class="spoken-sentence">You are claiming <q>' + esc(spokenSentence(names)) + "</q></div>" +
+        "</div>" +
+        '<div class="field"><label for="email">Email</label>' +
+          '<input id="email" type="email" autocomplete="email" placeholder="you@example.com">' +
+          '<div class="hint">We send one verification link here. Nothing else.</div></div>' +
+        '<div class="field"><label for="pw">Password</label>' +
+          '<input id="pw" type="password" autocomplete="new-password" aria-describedby="pw-hint">' +
+          '<div class="hint" id="pw-hint">At least 8 characters.</div></div>' +
+        '<div class="warn-strong">We’ll hold <strong>3moji.me/' + h + "</strong> for <strong>24 hours</strong> " +
+          "while you verify your email. Miss that window and the Handle goes back in the pool for anyone to take.</div>" +
+        '<div class="slot-actions" style="margin-top:18px">' +
+          '<button type="button" class="btn" id="btn-back">&#8592; Back to the picker</button>' +
+          '<button type="button" class="btn btn-primary" id="btn-create">Create account</button>' +
+        "</div>" +
+      "</main></div>"
+    );
+  }
+
+  var claimedEmail = "your inbox";
+  function heldScreen() {
+    var h = handleString(), names = filledNames();
+    return (
+      '<div class="wrap"><main id="picker-main" class="card screen held-box">' +
+        '<div style="font-size:40px" aria-hidden="true">✉️</div>' +
+        "<h1 style='font-size:26px;margin-top:10px'>Check your email</h1>" +
+        '<p class="hint" style="font-size:15px">We sent a verification link to <strong>' + esc(claimedEmail) +
+          "</strong>. Click it and 3moji.me/" + h + " is yours for good.</p>" +
+        '<div class="big" style="margin-top:16px" aria-hidden="true">' + h + "</div>" +
+        '<div class="spoken-names" style="margin-top:4px">' + esc(names.join(" · ")) + "</div>" +
+        '<div class="countdown" role="status">Held for you — 23:59:41 left</div>' +
+        '<div class="warn-strong">Nobody else can claim <strong>3moji.me/' + h + "</strong> while the hold lasts. " +
+          "<strong>If the 24 hours run out before you verify, the hold is released and anyone can take it.</strong> " +
+          "Didn’t get the email? Check spam, or resend below.</div>" +
+        '<div class="slot-actions" style="margin-top:18px">' +
+          '<button type="button" class="btn">Resend the email</button>' +
+          '<button type="button" class="btn" id="btn-restart">Start the prototype over</button>' +
+        "</div>" +
+      "</main></div>"
+    );
+  }
+
+  // A claimed Handle whose owner hasn't set anything up yet is never blank.
+  function profileScreen() {
+    var h = handleString(), names = filledNames();
+    return (
+      '<div class="wrap"><main id="picker-main" class="card screen profile-box">' +
+        '<div style="color:#94a3b8;font-size:15px">3moji.me/</div>' +
+        '<div class="big" aria-hidden="true">' + h + "</div>" +
+        '<h1 class="spoken-names" style="margin-top:6px">' + esc(names.join(" · ")) + "</h1>" +
+        '<p class="hint" style="font-size:15px;margin-top:14px">This page is being set up. ' +
+          "Its owner hasn’t added anything yet — check back soon.</p>" +
+        '<div class="slot-actions" style="margin-top:22px">' +
+          '<button type="button" class="btn" id="btn-back">&#8592; Back to the picker</button>' +
+          '<button type="button" class="btn btn-primary" id="btn-restart">Claim one of your own</button>' +
+        "</div>" +
+      "</main></div>"
+    );
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // ---- render -------------------------------------------------------------
+  var lastAnnounced = "";
+  function render() {
+    var app = document.getElementById("app");
+    if (state.screen === "signup")  { app.innerHTML = signupScreen();  wireScreens(); return; }
+    if (state.screen === "held")    { app.innerHTML = heldScreen();    wireScreens(); return; }
+    if (state.screen === "profile") { app.innerHTML = profileScreen(); wireScreens(); return; }
+
+    // Re-rendering the layout detaches the grid, so DOM focus drops to <body>.
+    // After that the document-level arrow handler would cycle the VARIANT
+    // instead of moving in the grid, and a keyboard user could only ever place
+    // one emoji. Remember the focused cell and restore it below.
+    var keepFocus = gridEl.contains(document.activeElement)
+      ? Number(document.activeElement.dataset.i)
+      : -1;
+
+    app.innerHTML = state.variant === "A" ? variantA() : state.variant === "B" ? variantB() : variantC();
+    document.getElementById("mount-url").innerHTML = urlbarMarkup();
+    document.getElementById("mount-slots").innerHTML = slotsMarkup();
+    document.getElementById("mount-spoken").innerHTML = spokenMarkup();
+    document.getElementById("mount-verdict").innerHTML = verdictMarkup();
+    document.getElementById("mount-claim").innerHTML = claimButtonMarkup();
+    document.getElementById("mount-grid").appendChild(gridEl);
+
+    for (var n = 0; n < EMOJI.length; n++) {
+      cells[n].setAttribute("aria-selected", state.slots.indexOf(EMOJI[n][0]) !== -1 ? "true" : "false");
+    }
+    applyFilter(false);
+
+    // Put focus back on the cell the keyboard user was on (applyFilter has just
+    // reset the roving tabindex to the first visible cell). Without this a
+    // keyboard user can only ever place ONE emoji: focus falls to <body> and the
+    // next arrow key cycles the prototype variant instead of moving in the grid.
+    if (keepFocus !== -1) {
+      var vi = visible.indexOf(keepFocus);
+      if (vi !== -1) {
+        cells[visible[rover]].tabIndex = -1;
+        rover = vi;
+        cells[keepFocus].tabIndex = 0;
+        cells[keepFocus].focus();
+      }
+    }
+
+    document.getElementById("v-label").textContent = state.variant + " (" + VARIANTS[state.variant] + ")";
+
+    var ann = verdictAnnouncement();
+    if (ann && ann !== lastAnnounced) { lastAnnounced = ann; say("live-verdict", ann); }
+  }
+
+  // ---- events -------------------------------------------------------------
+  function wireScreens() {
+    var b;
+    if ((b = document.getElementById("btn-back")))    b.onclick = function () { state.screen = "pick"; render(); };
+    if ((b = document.getElementById("btn-create")))  b.onclick = function () {
+      var e = document.getElementById("email");
+      claimedEmail = e && e.value ? e.value : "your inbox";
+      state.screen = "held"; render();
+    };
+    if ((b = document.getElementById("btn-restart"))) b.onclick = function () {
+      state.screen = "pick"; state.slots = [null, null, null]; state.active = 0;
+      state.arrivedAt = null; render();
+    };
+  }
+
+  document.addEventListener("click", function (ev) {
+    var t = ev.target.closest ? ev.target : null;
+    if (!t) return;
+    var el;
+    if ((el = t.closest("[data-arrive]")))  { arriveAt(el.dataset.arrive); return; }
+    if ((el = t.closest("[data-slot]")))    { state.active = Number(el.dataset.slot); render(); focusSlot(state.active); return; }
+    if ((el = t.closest("[data-clear]")))   { clearSlot(Number(el.dataset.clear)); return; }
+    if ((el = t.closest("[data-move]")))    { moveSlot(Number(el.dataset.move), Number(el.dataset.dir)); return; }
+    if ((el = t.closest("[data-group]")))   { state.group = el.dataset.group; render(); say("live-filter", el.dataset.group + " selected, " + visible.length + " emoji"); return; }
+    if ((el = t.closest("[data-suggest]"))) {
+      state.slots = Array.from(el.dataset.suggest); state.active = 0; state.arrivedAt = null; render();
+      say("live-slots", "Switched to " + filledNames().join(", ") + ". Available.");
+      return;
+    }
+    if (t.id === "btn-shuffle")      { shuffle(); return; }
+    if (t.id === "btn-clear-all")    { clearAll(); return; }
+    if (t.id === "btn-claim")        { state.screen = "signup"; render(); return; }
+    if (t.id === "btn-view-profile") { state.screen = "profile"; render(); return; }
+  });
+
+  document.addEventListener("input", function (ev) {
+    if (ev.target.id === "q") { state.query = ev.target.value.trim().toLowerCase(); applyFilter(true); }
+  });
+
+  // Variant cycling. Arrow keys belong to the grid, so only cycle when focus is
+  // outside the grid and outside any text field.
+  function cycle(d) {
+    var keys = ["A", "B", "C"];
+    state.variant = keys[(keys.indexOf(state.variant) + d + 3) % 3];
+    location.hash = "variant=" + state.variant;
+    render();
+  }
+  document.getElementById("v-prev").onclick = function () { cycle(-1); };
+  document.getElementById("v-next").onclick = function () { cycle(1); };
+  document.addEventListener("keydown", function (ev) {
+    var t = ev.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (t && t.closest && t.closest(".emoji-grid")) return;
+    if (ev.key === "ArrowLeft") cycle(-1);
+    if (ev.key === "ArrowRight") cycle(1);
+  });
+
+  var m = /variant=([ABC])/.exec(location.hash);
+  if (m) state.variant = m[1];
+  var at = /at=([^&]+)/.exec(location.hash);
+  if (at) { arriveAt(decodeURIComponent(at[1])); } else { render(); }
+})();
+</script>

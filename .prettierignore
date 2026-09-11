@@ -7,3 +7,7 @@ coverage/
 reports/
 *.tsbuildinfo
 package-lock.json
+
+# Throwaway prototype (issue #13) — a 1,053-entry inline data array;
+# prettier would explode it to one line per emoji. Narrowest possible ignore.
+prototypes/signup-picker.html
