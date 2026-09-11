@@ -1,6 +1,6 @@
 # Which PR review command do I run?
 
-This is a solo repository, so every PR you action is one you raised. Review comes from the AI self-review that `pr` posts, from review bots such as Copilot code review, and occasionally from an outside contributor. The merge gate is the solo merge rule in [CONTRIBUTING.md](../../CONTRIBUTING.md#pull-requests): **CI green, and no unresolved 🔴 findings in the AI self-review.** GitHub does not let you approve your own PR, so no human approval is required.
+This is a solo repository, so every PR you action is one you raised. Review comes from the AI self-review that `pr` posts, from review bots such as Copilot code review, and occasionally from an outside contributor. The merge gate is the solo merge rule in [CONTRIBUTING.md](../../CONTRIBUTING.md#pull-requests): **CI green, and no unresolved 🔴 findings in the AI self-review.** GitHub does not let you approve your own PR, so no human approval is required. Once the self-review is clean the PR carries the `automerge` label and merges itself when CI passes ([ADR-0003](../adr/0003-auto-merge-pull-requests-on-green-ci.md)); the commands below action review comments, and merge by hand when CI is already green.
 
 One decision: **am I finishing the one PR I'm sitting on, or clearing everything I've got open?**
 
@@ -35,7 +35,7 @@ flowchart LR
 ```
 
 1. `pr` verifies, pushes, opens the PR from the template with `Closes #42`, moves the issue to **In Review**, and posts the `## AI Pre-Review` comment against the 8 lenses.
-2. `pr-action-review` triages every finding and comment — auto-fix, discuss, or informational — pushes the fixes, and squash-merges once CI is green and no 🔴 finding is unresolved. The issue closes and moves to **Done**.
+2. `pr-action-review` triages every finding and comment — auto-fix, discuss, or informational — pushes the fixes, and once no 🔴 finding is unresolved either squash-merges (CI already green) or adds the `automerge` label so the auto-merge workflow merges it when CI passes. The issue closes and moves to **Done**.
 3. `wrap-up` switches back to `main`, pulls, and deletes the finished branch.
 
 Work that starts as a conversation goes through `capture` first; planned work arrives on the board from `plan-work`.
@@ -64,7 +64,7 @@ merged with a merge commit rather than a squash.
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/wrap-up` "merges everything in" | It does **not** merge anything. It switches to `main`, pulls, and deletes the finished feature branch. Merging happens in `pr-action-review` (or the loop). That's why the PR looked untouched. |
 | Use the loop to watch one PR      | The loop isn't a watcher. For one PR use `/pr --watch`, or `/pr-action-review <number>` once a review is in.                                                                                    |
-| I need to approve my PR to merge  | You can't — GitHub blocks self-approval. The AI self-review comment is the gate; merge when CI is green and its 🔴 findings are resolved or pushed back on.                                     |
+| I need to approve my PR to merge  | You can't — GitHub blocks self-approval. The AI self-review comment is the gate; once its 🔴 findings are resolved or pushed back on, the `automerge` label merges the PR when CI is green.     |
 
 ## Cheat sheet
 

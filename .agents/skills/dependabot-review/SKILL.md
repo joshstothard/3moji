@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Fetch all open Dependabot PRs for this repo, check their build status, and approve + merge the green ones. Diagnose and action the failing ones.
 
+Minor and patch updates normally merge themselves: the auto-merge workflow merges a Dependabot PR once CI passes when every update in it is a minor or patch bump ([ADR-0003](../../../docs/adr/0003-auto-merge-pull-requests-on-green-ci.md)). A green minor/patch PR still open here was skipped by that workflow, so read its latest **Auto-merge** run in the Actions tab before merging it by hand. For a major bump you decide to take, prefer adding the `automerge` label (`gh pr edit <number> --add-label automerge`) over merging directly: it then merges once CI passes on an up-to-date branch.
+
 ---
 
 ## Step 1 — List open Dependabot PRs

@@ -36,7 +36,7 @@ Proposal (report, ADR) -> Plan (workstream) -> Issues -> Branch -> Code -> Gates
 - CI pipeline and repo hooks act as deterministic guardrails.
 - The active coding agent should browse, test, and verify the running app as part of the build experience (e.g. via the Playwright MCP server), not just write code blindly.
 
-The GitHub Project board mirrors this loop, and keeping it in sync is **required, not optional**. Issues move forward through four statuses — **Backlog** (`plan-work`, `capture`) → **In Progress** (`pickup`) → **In Review** (`pr`) → **Done** (`pr-action-review` on merge). Set a status with `node scripts/gh-workflow.mjs status <number> "<status>"`; never hand-write the GraphQL.
+The GitHub Project board mirrors this loop, and keeping it in sync is **required, not optional**. Issues move forward through four statuses — **Backlog** (`plan-work`, `capture`) → **In Progress** (`pickup`) → **In Review** (`pr`) → **Done** (on merge: the board's built-in automation, or `pr-action-review`). Set a status with `node scripts/gh-workflow.mjs status <number> "<status>"`; never hand-write the GraphQL.
 
 ## Planning Layer
 
@@ -319,7 +319,7 @@ gh pr review <pr-number> --request-changes --body '<one-line verdict summary>'
 
 The body should be a single sentence summarising the verdict (e.g. `"No 🔴 findings — approving. One 🟡 noted in the review comment above."` or `"🔴 must-fix: <brief description> — see review comment above."`). This is what shows up in GitHub's review status and counts toward branch protection approval requirements.
 
-**Your own PRs are the exception.** GitHub rejects an approval or change request from the PR's author, and on a solo repo the agent acts as the author. For those PRs the self-review comment raised by `pr` (`## AI Pre-Review`, plus any later `## AI Review` follow-up) is the review gate: per the solo merge rule (CONTRIBUTING.md § Pull Requests), a PR may merge when CI is green and the comment's 🔴 findings are resolved or pushed back on. Do not work around the restriction with a second account.
+**Your own PRs are the exception.** GitHub rejects an approval or change request from the PR's author, and on a solo repo the agent acts as the author. For those PRs the self-review comment raised by `pr` (`## AI Pre-Review`, plus any later `## AI Review` follow-up) is the review gate: per the solo merge rule (CONTRIBUTING.md § Pull Requests), a PR may merge when CI is green and the comment's 🔴 findings are resolved or pushed back on. Signal that with the `automerge` label, and the auto-merge workflow merges it once CI passes ([ADR-0003](docs/adr/0003-auto-merge-pull-requests-on-green-ci.md)); never add the label while a 🔴 finding is unresolved. Do not work around the restriction with a second account.
 
 ## Commands for Validation
 

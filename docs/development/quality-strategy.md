@@ -18,6 +18,7 @@
 
 - **Coverage floor:** 70% unit coverage. Never reduce it.
 - **Observed red:** every test is seen failing for the right reason before it counts (see `AGENTS.md` § TDD Workflow).
+- **Scripts that make decisions are unit-tested:** `scripts/*.test.mjs` run under Node's built-in test runner (`npm run test:scripts`), in `scripts/verify.sh` and CI. Keep the decision a pure function the tests can call without GitHub or the network, as `scripts/auto-merge.mjs` does with `evaluate()`.
 - **Tests assert behaviour, not implementation** — a test that breaks on refactor without a behaviour change is a bad test.
 - **Mutation testing keeps the tests honest:** coverage proves code was executed; mutants prove the assertions actually constrain it. Surviving mutants are reported by the full Stryker run, dispatched manually from the Actions tab (its nightly schedule is disabled per ADR-0002).
 - **Flakes are defects:** a test that fails non-deterministically more than twice in 7 days gets a GitHub issue (see `nightly-check`).

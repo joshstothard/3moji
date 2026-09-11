@@ -73,6 +73,13 @@ The branch's issue plus that list is the set of issues this PR closes; wherever 
 
    - If there are 🔴 Must fix findings: fix them before the comment is posted, include them in a follow-up commit, then note them as "Fixed prior to this comment" in the findings list. If a 🔴 finding cannot be fixed in this PR, list it as "Unresolved — blocks merge" so `pr-action-review` does not merge past it.
    - If there are only 🟡/🔵 findings: post the comment as-is — `pr-action-review` triages them alongside any other review comments, and you decide which to act on.
+   - Once the comment is posted, opt the PR into auto-merge **only if no 🔴 finding is listed as "Unresolved — blocks merge"**. The auto-merge workflow then merges it when CI passes on an up-to-date head commit ([ADR-0003](../../../docs/adr/0003-auto-merge-pull-requests-on-green-ci.md)); it never merges into a base other than `main`, so a stacked PR waits until it is retargeted:
+
+     ```bash
+     gh pr edit <number> --add-label automerge
+     ```
+
+     If a 🔴 finding is unresolved, do not add the label: `pr-action-review` adds it once the finding is resolved. Tell the user whether the PR is set to merge itself.
 
 9. Move each issue in the set to **In Review** on the board:
 
