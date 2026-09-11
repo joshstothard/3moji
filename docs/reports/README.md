@@ -35,7 +35,7 @@ The index's **Follow-ups** column records the ADRs, workstreams, and issues that
 
 | Date | Report | Type | Status | Follow-ups |
 | ---- | ------ | ---- | ------ | ---------- |
-| 2026-09-11 | [Emoji Set candidate: which emoji render on both iOS and Android](2026-09-11-emoji-set.md) ([candidates JSON](2026-09-11-emoji-set.candidates.json)) | Research | Draft | #9 |
-| 2026-09-11 | [Auth library for owned email-and-password sign-in](2026-09-11-auth-library.md) | Research | Draft | #10 |
-| 2026-09-11 | [Free-tier Postgres and transactional email for 3moji on Vercel Hobby](2026-09-11-hosting-and-email.md) | Research | Draft | #11 |
-| 2026-09-11 | [How emoji survive in URL paths on Vercel and Next.js](2026-09-11-emoji-urls.md) (#12) | Research | Draft | #14 |
+| 2026-09-11 | [Emoji Set candidate: which emoji render on both iOS and Android](2026-09-11-emoji-set.md) ([candidates JSON](2026-09-11-emoji-set.candidates.json)) | Research | Final | #9, [3moji MVP](../workstreams/3moji-mvp.md) |
+| 2026-09-11 | [Auth library for owned email-and-password sign-in](2026-09-11-auth-library.md) | Research | Final | #10, [3moji MVP](../workstreams/3moji-mvp.md) |
+| 2026-09-11 | [Free-tier Postgres and transactional email for 3moji on Vercel Hobby](2026-09-11-hosting-and-email.md) | Research | Final | #11, [3moji MVP](../workstreams/3moji-mvp.md) |
+| 2026-09-11 | [How emoji survive in URL paths on Vercel and Next.js](2026-09-11-emoji-urls.md) | Research | Final | #14, [3moji MVP](../workstreams/3moji-mvp.md) |
