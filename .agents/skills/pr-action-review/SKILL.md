@@ -1,12 +1,16 @@
 ---
 name: pr-action-review
-description: "User-invoked only. Fetch every review comment, triage (auto-fix / discuss / informational), action them, merge when eligible"
+description: "User-invoked only. Fetch every review comment and the AI self-review, triage (auto-fix / discuss / informational), action them, merge when eligible, close the issue"
 disable-model-invocation: true
 ---
 
 Fetch all review comments on the given PR and action them.
 
 Usage: `pr-action-review <pr-number> [--watch]` — pass the PR number as the argument (e.g. `101`). Pass `--watch` to skip the poll/auto-merge confirmation and proceed automatically.
+
+**Issue number:** extract it from the PR's head branch, which follows `<issue-number>-<short-description>` (e.g. `42-add-shell-app` → `#42`). A `chore/` branch (or a Dependabot branch) has no issue — use an unscoped commit type such as `chore: ...` and skip the post-merge issue step.
+
+**Merge rule (solo):** a PR may merge when CI is green, the AI self-review and review comments have no unresolved blocking findings, and GitHub reports no conflicts. GitHub does not allow approving your own PR, so no human approval is required — see [ADR-0002](../../../docs/adr/0002-track-work-in-github-issues.md).
 
 ## Step 1 — Find the PR and check out the branch
 
@@ -17,7 +21,7 @@ If the PR does not exist, tell the user and stop.
 
 Compare the PR author's login against the authenticated GitHub CLI user. Use `gh pr view <pr-number> --jq .author.login` for the PR author and `gh api user --jq .login` for the current user — both return GitHub logins, ensuring a reliable comparison.
 
-- If the PR author is **not** the current user, stop immediately and ask:
+- If the PR author is **not** the current user (for example a Dependabot PR, or one opened by a coding-agent bot), stop immediately and ask:
 
   > "⚠️ PR #<number> was opened by **@<author>**, not you. Actioning this will make commits, push to their branch, and post GitHub comments on their behalf. Are you sure you want to proceed? (yes / no)"
 
@@ -60,7 +64,7 @@ Once the ownership check passes, check out the branch:
      # resolve any conflicts per item 5 of this step, then:
      git push origin <headRefName>
      ```
-     **Do not open a new ticket, and do not try to fix an unrelated-already-fixed-on-main failure inside this PR.** The only correct action is to merge the existing fix in. If the failure **persists** after the sync, it was not actually fixed on the base branch (or it is related after all) — treat it as a NEEDS DISCUSSION item (Step 6) rather than guessing.
+     **Do not open a new issue, and do not try to fix an unrelated-already-fixed-on-main failure inside this PR.** The only correct action is to merge the existing fix in. If the failure **persists** after the sync, it was not actually fixed on the base branch (or it is related after all) — treat it as a NEEDS DISCUSSION item (Step 6) rather than guessing.
    - **Unrelated but NOT yet fixed on `<baseRefName>`** (genuinely broken everywhere, or flaky) → a sync won't help, so don't sync. Note it for the user in the summary (Step 7) and carry on with the review.
    - **Related to this PR** → do not paper over it with a sync. Treat it as a review finding: fix it in the auto-fix pass (Step 5 — Apply AUTO-FIX) or surface it to the user (Step 6 — Present NEEDS DISCUSSION items).
 
@@ -73,17 +77,22 @@ Once the ownership check passes, check out the branch:
    - Once all conflicts are resolved, commit and push:
      ```bash
      git add .
-     git commit -m "<ticket-id>: merge <baseRefName> into <headRefName>"
+     git commit -m "chore(#<issue-number>): merge <baseRefName> into <headRefName>"
      git push origin <headRefName>
      ```
 
 ## Step 3 — Fetch all comments
 
-Fetch two types of comments using the `gh` CLI:
+Fetch every type of comment using the `gh` CLI:
 
 - **Review comments** (line-level): `gh api repos/{owner}/{repo}/pulls/{pr}/comments --paginate`
 - **Issue comments** (general/top-level): `gh api repos/{owner}/{repo}/issues/{pr}/comments --paginate`
 - **Review threads** (to check resolved state): `gh api repos/{owner}/{repo}/pulls/{pr}/reviews --paginate`
+
+The issue comments include the **AI Pre-Review** comment that `pr` posted (heading `## AI Pre-Review`) and any later `## AI Review` follow-up. Treat each finding in it as a review comment to triage:
+
+- 🔴 **Must fix** — blocking. If it is marked "Fixed prior to this comment", or a later `## AI Review` follow-up records it as fixed (or rejected with a reason), it is resolved. Otherwise it is an **unresolved blocking finding**: triage it as AUTO-FIX when the fix is clear, or NEEDS DISCUSSION when it is not. The PR cannot merge while one stands.
+- 🟡 **Should fix** / 🔵 **Consider** — non-blocking. Triage them like any other reviewer comment (🔵 items are usually INFORMATIONAL).
 
 Skip any comments that are:
 
@@ -91,7 +100,7 @@ Skip any comments that are:
 - Posted by a CI/infrastructure bot with no code suggestions (e.g. github-actions[bot], codecov, dependabot)
 - Pure praise / "LGTM" with no action implied
 
-Do NOT skip Copilot comments — Copilot's review suggestions are substantive and must be triaged like any human reviewer comment.
+Do NOT skip Copilot comments, or comments from other review bots such as CodeRabbit — their review suggestions are substantive and must be triaged like any reviewer comment. Do NOT skip review comments you left on the PR yourself either.
 
 ## Step 4 — Triage each comment
 
@@ -122,6 +131,8 @@ For every remaining comment, make a judgement call:
 
 For each informational thread: post a brief acknowledgement reply via `gh api`, then resolve the thread via the GraphQL mutation. Do not wait for user input — these are self-contained and leave nothing open for the reviewer.
 
+AI self-review findings live in a top-level comment, not a review thread, so they have no thread to reply to or resolve. Record their outcome in one follow-up PR comment instead (see Step 7).
+
 ## Step 5 — Apply AUTO-FIX changes
 
 For each auto-fix:
@@ -129,7 +140,7 @@ For each auto-fix:
 1. Make the code change.
 2. Run `scripts/verify.sh` after all fixes are applied (not after each one).
 3. If verify fails, fix the failures before continuing.
-4. Commit with the ticket ID and a message referencing the review (e.g. `PROJ-8: address PR review comments`).
+4. Commit with the issue number as the scope and a message referencing the review (e.g. `fix(#42): address PR review comments`).
 5. Push the branch.
 6. Reply to each resolved comment via `gh api` POST to mark it addressed. Keep replies concise — one sentence describing what was done. Example: `"Fixed — renamed to \`providerKey\` for consistency."`.
 7. Resolve each fixed thread via the GraphQL API:
@@ -183,10 +194,22 @@ After listing all of them, ask the user: "For each item, tell me: accept / rejec
 When the user responds with their decisions:
 
 - **Accept**: Make the change, reply to the comment, commit and push, then resolve the thread via GraphQL.
-- **Reject**: Post the pushback reply to the comment via `gh api`. Do not resolve the thread — leave it open for the reviewer to close if satisfied.
+- **Reject**: Post the pushback reply to the comment via `gh api`. Do not resolve the thread — leave it open for the reviewer to close if satisfied. A rejected 🔴 AI self-review finding is a decision that it is not a blocker after all: record the reason in the follow-up comment below so it no longer counts as unresolved.
 - **Skip**: Do nothing, no reply posted, thread left open.
 
-After all decisions are actioned, run `scripts/verify.sh` once more, push, output a summary, then re-request review:
+After all decisions are actioned, run `scripts/verify.sh` once more and push.
+
+If any AI self-review findings were actioned, post one follow-up comment with `gh pr comment <pr-number> --body-file <file>` recording each finding's outcome, so the next run (and the merge gate) can tell which blocking findings are resolved:
+
+```
+## AI Review — findings actioned
+
+- 🔴 <file:line> — <finding> → Fixed in <short-sha>
+- 🟡 <file:line> — <finding> → Rejected: <reason>
+- 🔵 <file:line> — <finding> → Skipped
+```
+
+Then output a summary and re-request review:
 
 ```
 ## Review response summary
@@ -207,7 +230,7 @@ After all decisions are actioned, run `scripts/verify.sh` once more, push, outpu
 - [list]
 ```
 
-Then re-request review — but **only from reviewers who have not yet approved**:
+Then re-request review — but **only from reviewers who have not yet approved** (in practice, review bots such as Copilot; you cannot request a review from yourself):
 
 ```bash
 # Fetch all reviews for the PR
@@ -225,136 +248,96 @@ Re-request only reviewers whose effective state is **not** `APPROVED`. If all re
 
 ## Step 8 — Offer to poll and auto-merge
 
-If `--watch` was passed as an argument, skip Q1 only (the "merge now?" / auto-merge question) and proceed automatically as if the user said yes — but still ask Q2 about the Jira ticket state, as that answer is required to drive the post-merge action.
+If `--watch` was passed as an argument, skip Q1 (the "merge now?" question) and proceed automatically as if the user said yes.
 
 After the summary, fetch the current PR state:
 
 ```bash
-gh pr view <pr-number> --json mergeable,mergeStateStatus,statusCheckRollup,reviews
+gh pr view <pr-number> --json baseRefName,headRefName,body,closingIssuesReferences,mergeable,mergeStateStatus,statusCheckRollup,reviews
 ```
 
-**Determine approval state**: a PR is considered approved if at least one **human** reviewer's effective state (computed as above, ignoring `COMMENTED`) is `APPROVED`. Bots (any reviewer whose `user.type` is `Bot`, or whose `login` contains `bot` or `copilot`) do not count toward approval — a human must have approved.
+**Determine review state**: there are no unresolved blocking findings when ALL of:
 
-A human account that approved using AI tooling (a reviewer agent — however the review body is attributed) **is** a human approval. This is an agentic workflow: the account owner is accountable for what their tooling submits. Take the approval at face value and do not downgrade it, caveat it, or tell the user "no human has really reviewed this". `user.type` and the login are the only signals for this decision.
+1. No 🔴 AI self-review finding is still unresolved (per Step 3 and the follow-up comment from Step 7).
+2. No NEEDS DISCUSSION item is still awaiting the user's decision.
+3. No reviewer's effective state (computed as above, ignoring `COMMENTED`) is `CHANGES_REQUESTED` — for example a review bot that requested changes which have not yet been re-reviewed.
+
+No approval is required: GitHub does not let you approve your own PR, so the AI self-review is the review gate. A review that is `APPROVED` (from a bot or anyone else) is fine but not needed.
 
 **Determine mergeability**: the PR is mergeable when ALL of:
 
 1. `mergeable` is `MERGEABLE` — no merge conflicts.
 2. `mergeStateStatus` is `CLEAN` or `HAS_HOOKS` — not blocked by branch protection or other gates.
 3. All status checks have passed — no entry in `statusCheckRollup` with `state: FAILURE`, `conclusion: FAILURE`, `PENDING`, or `IN_PROGRESS`.
+4. `baseRefName` is `main` — a stacked PR must not merge into its parent branch. Once the parent PR has merged, retarget it with `gh pr edit <pr-number> --base main`, then re-check.
 
-### If mergeable AND approved by a human
+### If mergeable AND no unresolved blocking findings
 
-The PR is ready. Ask the user **two questions before merging**:
+The PR is ready. Ask the user before merging:
 
 **Q1 — Merge now or watch?**
 
-> "All checks passed and the PR is approved. Would you like me to merge now?"
+> "All checks passed and there are no unresolved blocking findings. Would you like me to merge now?"
 
-**Q2 — Ticket state after merge:**
+If the user says yes to Q1, merge. **Squash-merge by default:**
 
-> "After merging, what should happen to the Jira ticket?
->
-> 1. Move to **Done** (no QA required)
-> 2. Move to **Ready for Testing** and assign to the QA owner (needs QA first)
-> 3. Leave ticket as-is (dependency bump, part of a larger epic, etc.)"
+```bash
+gh pr merge <pr-number> --squash --delete-branch
+```
 
-Name the QA owner in the question rather than saying "the QA owner". Quoting the raw
-`QA_ASSIGNEE_QUERY` value doesn't identify anyone when it's an account ID, so resolve it to a person
-first, using the same lookup as **Post-merge Jira action** below (account-ID vs. search branch), and
-name their `displayName`. If it's unset, empty, or resolves to zero or multiple plausible people, say
-"the QA owner (couldn't resolve `QA_ASSIGNEE_QUERY` to one person)" and let the user confirm who it
-should be. Keep the resolved account ID handy — reuse it in the post-merge step rather than
-re-resolving.
-
-Record the user's answer to Q2 — it drives the post-merge Jira action.
-
-If the user says yes to Q1, merge using a merge commit (not squash — squash breaks stacked PR chains where a subsequent PR's base commit must match):
+**Stacked chains keep merge commits** — squash breaks stacked PR chains, where a subsequent PR's base commit must match. If another open PR is based on this PR's branch (`gh pr list --base <headRefName> --state open`), or this PR was raised as part of a stacked chain, use a merge commit instead:
 
 ```bash
 gh pr merge <pr-number> --merge --delete-branch
 ```
 
-Then apply the Jira action based on Q2 — see **Post-merge Jira action** below.
+Confirm it merged (`gh pr view <pr-number> --json state` → `MERGED`), then apply the **Post-merge issue action** below.
 
-### If approved by a human but not yet fully mergeable (CI still running or mergeStateStatus not yet clean)
+### If there are no blocking findings but the PR is not yet fully mergeable (CI still running or mergeStateStatus not yet clean)
 
-Do **not** offer to merge — the team requires all status checks to pass before merging. Explain the current state concisely and stop:
+Do **not** offer to merge — all status checks must pass before merging. Explain the current state concisely and stop:
 
 > "CI is still running (or branch protection is not yet satisfied) — I'll leave this for you to merge once all checks pass."
 
-If no human has approved yet, say so instead:
+If blocking findings remain, say so instead, and list them:
 
-> "No human reviewer has approved yet — waiting on approval before merging."
+> "There are unresolved blocking findings — not merging until they are fixed or you decide they are not blockers: <list>."
 
-Do not enable GitHub's native auto-merge. The merge is always a human decision once the PR is green.
+Do not enable GitHub's native auto-merge. The merge is always your decision (or pre-authorised with `--watch`) once the PR is green.
 
-### Post-merge Jira action
+### Post-merge issue action
 
-Extract the ticket ID from the branch name (e.g. `proj-41-...` → `PROJ-41`).
+Find the issue(s) this PR closes: `closingIssuesReferences` from the PR (populated by the `Closes #N` line in the body). If it is empty, fall back to the issue number from the branch name (e.g. `42-add-shell-app` → `#42`).
 
-**If Leave as-is (option 3):** No Jira action. Skip this section entirely.
+**If there is no issue** (a `chore/` or Dependabot branch with no `Closes` line): no issue action. Skip this section entirely.
 
-**If Done (option 1):**
+**If the PR body deliberately references the issue without closing it** (e.g. `Part of #42` or `Refs #42` rather than `Closes #42`): the issue is not finished — leave it open and do not change its board status. Say so in the summary.
 
-```bash
-# Fetch transitions, find "Done" by name, apply it
-curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" "$JIRA_BASE_URL/rest/api/3/issue/<ticket>/transitions"
-# then POST the transition id
-```
+**Otherwise**, for each issue:
 
-**If Ready for Testing (option 2):**
+1. Confirm GitHub closed it. `Closes #N` only takes effect on a merge into `main`, and can take a few seconds:
 
-The QA owner comes from **`QA_ASSIGNEE_QUERY` in `.env`**, never from a name hardcoded here and never
-from a name remembered from a previous session. The value may be either form:
+   ```bash
+   gh issue view <issue-number> --json state --jq .state
+   ```
 
-- an **account ID** (contains a `:`, or is a 24-char hex string) — use it directly
-- anything else — treat it as a **user-search query** (display name, partial name, or email)
+2. If it is still `OPEN`, close it:
 
-If `QA_ASSIGNEE_QUERY` is unset or empty, apply the transition but **stop before assigning** and ask who
-QA should go to. Do not guess.
+   ```bash
+   gh issue close <issue-number> --comment "Closed by #<pr-number>"
+   ```
 
-**Always confirm who the value resolves to before assigning**, and name that person back to the user.
-The variable is easy to leave stale when QA ownership changes, and a wrong assignment sends a ticket to
-someone who is not expecting it.
+3. Set its board status to **Done** (GitHub's built-in board automation may already have done this; setting it again is harmless):
 
-```bash
-# 1. Fetch transitions, find "Ready for Testing" by name, apply it (as above)
+   ```bash
+   node scripts/gh-workflow.mjs status <issue-number> "Done"
+   ```
 
-# 2. Resolve the QA owner
-source .env
-: "${QA_ASSIGNEE_QUERY:?QA_ASSIGNEE_QUERY not set in .env — ask the user who QA should go to}"
-
-# Atlassian account IDs come in two shapes: the newer `<numeric-prefix>:<uuid>` form and the older
-# bare 24-char hex form. Matching only on ':' would send the latter to the search endpoint, which
-# looks up a name and finds nothing.
-if printf '%s' "$QA_ASSIGNEE_QUERY" | grep -Eq '(:|^[0-9a-fA-F]{24}$)'; then
-  # Already an account ID — confirm who it belongs to before using it.
-  curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-    --get --data-urlencode "accountId=$QA_ASSIGNEE_QUERY" \
-    "$JIRA_BASE_URL/rest/api/3/user"
-else
-  # A name or email — search for it.
-  curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-    --get --data-urlencode "query=$QA_ASSIGNEE_QUERY" \
-    "$JIRA_BASE_URL/rest/api/3/user/search"
-fi
-# Pick the active account whose displayName matches. If a search returns several plausible people,
-# or none, ask the user rather than assigning to a guess.
-
-# 3. PUT the assignee
-curl -s -X PUT -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"accountId": "<resolved-account-id>"}' \
-  "$JIRA_BASE_URL/rest/api/3/issue/<ticket>/assignee"
-```
-
-`--data-urlencode` matters in both branches: an account ID contains a `:` and a name contains a space,
-either of which produces an invalid URL and a confusing 400 if interpolated raw.
+   If the helper fails, warn the user, suggest `node scripts/gh-workflow.mjs doctor` to diagnose, and continue.
 
 ### If the PR is not mergeable
 
-Explain why concisely (e.g. "GitHub reports conflicts" or "`mergeStateStatus` is BLOCKED — branch protection requires an approval") and do not offer to merge.
+Explain why concisely (e.g. "GitHub reports conflicts" or "`mergeStateStatus` is BLOCKED") and do not offer to merge. If branch protection is blocking because it requires an approving review, point out that you cannot approve your own PR, so that rule has to be removed for the solo merge rule to work — do not try to work around it.
 
 ## Notes
 

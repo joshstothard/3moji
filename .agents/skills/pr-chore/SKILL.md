@@ -1,10 +1,10 @@
 ---
 name: pr-chore
-description: "User-invoked only. Raise a small no-ticket chore PR from a worktree without touching your feature branch"
+description: "User-invoked only. Raise a small no-issue chore PR from a worktree without touching your feature branch"
 disable-model-invocation: true
 ---
 
-Raise a PR for a specific set of files discussed in the current session — tooling fixes, skill updates, config changes. No Jira ticket required.
+Raise a PR for a specific set of files discussed in the current session — tooling fixes, skill updates, config changes. No issue required.
 
 **The current branch must not be touched.** All work happens in a temporary git worktree so the active feature branch (and any other agent working on it) is completely unaffected.
 

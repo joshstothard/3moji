@@ -9,9 +9,11 @@ allowed-tools: Bash(cat:*), Bash(npm install:*), Bash(npm run build:*)
 
 ### Step 1 — Check for missing .env variables
 
-Compare the keys in `.env.example` against your `.env`.
+Compare the keys in `.env.example` against your `.env`. Only uncommented `KEY=value` lines in `.env.example` count as expected keys — commented-out entries (e.g. `# GH_PROJECT_OWNER=`) are optional overrides and are never reported as missing. The GitHub Issues workflow needs no `.env` values of its own: `gh` holds the credentials.
 
-If `.env` does not exist, warn the user and stop:
+If `.env.example` has no uncommented keys, report "`.env` — no required variables" and continue to Step 2, whether or not `.env` exists.
+
+Otherwise, if `.env` does not exist, warn the user and stop:
 
 > **`.env` does not exist.** Copy from `.env.example` and fill in the values before continuing.
 
