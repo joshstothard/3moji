@@ -33,5 +33,6 @@ The index's **Follow-ups** column records the ADRs, workstreams, and issues that
 
 <!-- Newest first. One row per report. Maintained by the report, adr, and workstream skills. -->
 
-| Date | Report | Type | Status | Follow-ups |
-| ---- | ------ | ---- | ------ | ---------- |
+| Date       | Report                                                                          | Type     | Status | Follow-ups |
+| ---------- | ------------------------------------------------------------------------------- | -------- | ------ | ---------- |
+| 2026-09-11 | [Auth library for owned email-and-password sign-in](2026-09-11-auth-library.md) | Research | Draft  | #10        |
