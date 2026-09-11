@@ -1,6 +1,0 @@
-interface:
-  display_name: "Log Time"
-  short_description: "Record unlogged Git work in Tempo"
-  default_prompt: "Use $log-time with the arguments and repository context I provide."
-policy:
-  allow_implicit_invocation: false

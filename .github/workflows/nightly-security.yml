@@ -20,10 +20,13 @@ name: Nightly Security
 # section in docs/development/engineering-standards.md.
 #
 # Note that `security.yml` also runs as a blocking stage in `ci.yml`, so audit
-# regressions are caught on every PR regardless of this schedule.
+# regressions are caught on every PR regardless of this schedule — which matters
+# more now that the schedule is disabled (see the comment on `on:` below).
 on:
-  schedule:
-    - cron: "0 6 * * *"
+  # Schedule disabled per ADR-0002 to conserve Actions minutes on a private repo;
+  # run manually from the Actions tab or re-enable the cron.
+  # schedule:
+  #   - cron: "0 6 * * *"
   workflow_dispatch:
 
 jobs:

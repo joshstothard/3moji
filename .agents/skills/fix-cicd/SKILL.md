@@ -10,7 +10,7 @@ Uses the `gh` CLI — no extra credentials needed beyond the GitHub auth already
 
 ## Step 1 — Identify the branch
 
-Run `git branch --show-current`. Extract the ticket ID from the branch name (e.g. `proj-144-...` → `PROJ-144`).
+Run `git branch --show-current`. Extract the issue number from the branch name, which follows `<issue-number>-<short-description>` (e.g. `42-add-shell-app` → `#42`). A `chore/<short-description>` branch has no issue.
 
 ## Step 2 — Fetch the latest run for this branch
 
@@ -64,4 +64,4 @@ If it fails: output the error and stop — do not attempt a code fix until the r
 
 Read only the files the logs implicate. Apply the minimal fix. Do not refactor surrounding code.
 
-Commit using the ticket ID: `fix(<TICKET-ID>): <short description>` and push.
+Commit using the issue number as the scope: `fix(#<issue-number>): <short description>` (e.g. `fix(#42): stabilise cart total test`), or `fix: <short description>` on a `chore/` branch with no issue. Then push.

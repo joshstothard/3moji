@@ -1,10 +1,18 @@
 ---
 name: pr
-description: "User-invoked only. The full ship workflow: verify → commit → push → PR from template → AI self-review against 8 lenses"
+description: "User-invoked only. The full ship workflow: verify → commit → push → PR from template → AI self-review against 8 lenses → issue to In Review"
 disable-model-invocation: true
 ---
 
 Run the full ship workflow: verify, commit, push, and open a PR.
+
+**Issue numbers:** start from the branch name, which follows `<issue-number>-<short-description>` (e.g. `42-add-shell-app` → `#42`). Then add every issue scoped in this branch's commits — issues stacked onto the branch with `pickup --stay` commit under their own number:
+
+```bash
+git log origin/main..HEAD --format=%s | grep -oE '\(#[0-9]+\)' | tr -d '()#' | sort -un
+```
+
+The branch's issue plus that list is the set of issues this PR closes; wherever a step below says `<issue-number>`, do it for each issue in the set. A `chore/<short-description>` branch with no scoped commits has no issue — skip every issue-specific part below (the `Closes` lines, the issue status, the issue comment) and use an unscoped commit type such as `chore: ...`. See [the GitHub Issues workflow](../../../docs/development/github-workflow.md) for the conventions this skill follows.
 
 1. Clean up ephemeral session artifacts from the repo root:
    - If `PROGRESS.md` exists, read it back to identify any docs that need updating, then delete it. Stage the deletion with `git rm PROGRESS.md` (or `git add PROGRESS.md` if already deleted). The pre-push hook blocks when `PROGRESS.md` is present, so it must be gone before step 5.
@@ -15,24 +23,24 @@ Run the full ship workflow: verify, commit, push, and open a PR.
      These are never committed — no staging needed. If no images are present, this is a no-op.
 2. Run `scripts/verify.sh` from the repo root — always `cd` to the git root first (`cd $(git rev-parse --show-toplevel)`), then run `bash scripts/verify.sh`. If it fails, fix the issues and re-run. Do not skip.
 3. Run `git status` and `git diff` to review all changes.
-4. Create a commit following CONTRIBUTING.md conventions (ticket ID in message, conventional commit format).
+4. Create a commit following CONTRIBUTING.md conventions: Conventional Commits with the issue number as the scope, e.g. `feat(#42): add shell app route` or `fix(#42): handle empty cart`.
 5. Push the branch to origin with `-u` flag.
 6. Create a PR using `gh pr create` following the PR template in `.github/pull_request_template.md`:
    - Keep the title short (under 70 characters).
-   - If this branch is stacked on another branch (i.e. the PR base is not `main`), prepend the following block to the very top of the PR body — before any other content — and fill in the parent PR number, ticket ID, and short title:
+   - If this branch is stacked on another branch (i.e. the PR base is not `main`), prepend the following block to the very top of the PR body — before any other content — and fill in the parent PR number, the parent's issue number, and short title:
 
      ```
-     ⚠️ Stacked PR — depends on #<parent-pr-number> (<TICKET-ID>: <short title of parent>). The diff shown is only this PR's changes — you can review and approve now. **Do not merge** until #<parent-pr-number> merges first, then retarget this PR's base to `main` before merging.
+     ⚠️ Stacked PR — depends on #<parent-pr-number> (#<parent-issue-number>: <short title of parent>). The diff shown is only this PR's changes — it can be reviewed now. **Do not merge** until #<parent-pr-number> merges first, then retarget this PR's base to `main` before merging.
 
      ---
      ```
 
-   - Fill in the ticket link, summary, test evidence, review checklist, and risk/rollback sections.
-   - Never raise stacked PRs as drafts — raise them ready for review immediately so the team can review and approve in parallel.
+   - Fill in one `Closes #<issue-number>` line per issue in the set, summary, test evidence, review checklist, and risk/rollback sections. `Closes #N` is what closes the issue on merge — GitHub only honours it when the PR merges into `main`, which is another reason a stacked PR must be retargeted before it merges.
+   - Never raise stacked PRs as drafts — raise them ready for review immediately so CI and the self-review run on every PR in the chain in parallel.
 
 7. Output the PR URL. Then:
    - Open the PR in the browser with `gh pr view <number> --web`.
-8. Perform a thorough self-review of the PR diff:
+8. Perform a thorough self-review of the PR diff. As the only developer you cannot approve your own PR on GitHub, so this self-review is the review gate that `pr-action-review` checks before merging:
    - Fetch the full diff: `gh pr diff`
    - Read every changed file in full before forming any opinion.
    - Review against each of these lenses — note findings under each:
@@ -41,10 +49,10 @@ Run the full ship workflow: verify, commit, push, and open a PR.
      - **Security (OWASP)**: Injection, XSS, broken auth, exposed secrets, insecure defaults.
      - **Accessibility (WCAG AA)**: Missing ARIA, keyboard nav gaps, contrast issues, focus management.
      - **Test coverage**: Untested paths, missing edge cases, assertions that don't actually verify behaviour.
-     - **Conventions**: Naming, file structure, import order, i18n keys — alignment with `docs/development/conventions.md`.
+     - **Conventions**: Naming, file structure, import order, i18n keys — alignment with `docs/development/engineering-standards.md` and `CONTRIBUTING.md`.
      - **Docs sync**: Do any architecture docs, ADRs, or runbooks need updating to reflect this change?
      - **Performance**: Unnecessary re-renders, N+1 queries, unindexed lookups, large bundle additions.
-   - For each finding, classify it as: 🔴 **Must fix** (bug, security, accessibility) | 🟡 **Should fix** (quality, coverage) | 🔵 **Consider** (nit, optional improvement).
+   - For each finding, classify it as: 🔴 **Must fix** (bug, security, accessibility) | 🟡 **Should fix** (quality, coverage) | 🔵 **Consider** (nit, optional improvement). 🔴 findings are **blocking**: the PR must not merge while one is unresolved.
    - After reviewing, post a comment on the PR using `gh pr comment` with this structure:
 
      ```
@@ -60,93 +68,79 @@ Run the full ship workflow: verify, commit, push, and open a PR.
 
      ### Summary
 
-     <1–2 sentence overall assessment — is this ready for human review, or are there blockers?>
+     <1–2 sentence overall assessment — is this ready to merge once CI is green, or are there blockers?>
      ```
 
-   - If there are 🔴 Must fix findings: fix them before the comment is posted, include them in a follow-up commit, then note them as "Fixed prior to this comment" in the findings list.
-   - If there are only 🟡/🔵 findings: post the comment as-is and let the human reviewer decide.
+   - If there are 🔴 Must fix findings: fix them before the comment is posted, include them in a follow-up commit, then note them as "Fixed prior to this comment" in the findings list. If a 🔴 finding cannot be fixed in this PR, list it as "Unresolved — blocks merge" so `pr-action-review` does not merge past it.
+   - If there are only 🟡/🔵 findings: post the comment as-is — `pr-action-review` triages them alongside any other review comments, and you decide which to act on.
 
-9. Move the Jira ticket to Review:
-   - Extract the ticket ID from the branch name (e.g. `proj-123-...` → `PROJ-123`).
-   - Source `.env` and fetch available transitions: `GET $JIRA_BASE_URL/rest/api/3/issue/<ticket>/transitions`
-   - Find the transition whose `name` matches "Review" (case-insensitive) and apply it:
+9. Move each issue in the set to **In Review** on the board:
 
-     ```bash
-     source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-       -X POST "$JIRA_BASE_URL/rest/api/3/issue/<ticket>/transitions" \
-       -H "Content-Type: application/json" \
-       -d '{"transition": {"id": "<transition-id>"}}'
-     ```
+   ```bash
+   node scripts/gh-workflow.mjs status <issue-number> "In Review"
+   ```
 
-   - If `JIRA_BASE_URL`, `JIRA_API_TOKEN`, or `JIRA_EMAIL` are not set, skip this step and warn the user.
+   The helper adds the issue to the board if it is not already there. If it fails (for example `gh` is not authenticated or lacks the `project` scope, or no board is linked), warn the user, suggest `node scripts/gh-workflow.mjs doctor` to diagnose, and continue — do not block the rest of the workflow. Skip this step on a `chore/` branch.
 
-10. Post a Jira comment if it adds value:
+10. Post an issue comment if it adds value:
 
-    If any of `JIRA_BASE_URL`, `JIRA_API_TOKEN`, or `JIRA_EMAIL` are not set, skip this step and warn the user.
+    Skip this step on a `chore/` branch (there is no issue).
 
-    Use the ticket ID extracted in Step 9 above (e.g. `PROJ-123`) wherever `<ticket>` appears below.
+    Use the issue number extracted from the branch name (e.g. `42`) wherever `<issue-number>` appears below.
 
-    Use judgment — post when a comment would genuinely help QA or the team understand what changed and what to verify. Skip when there's nothing meaningful to add beyond the PR title.
+    Use judgment — post when a comment would genuinely help someone reading the issue later (including future you, or an agent picking up related work) understand what changed and what to verify. Skip when there's nothing meaningful to add beyond the PR title — the PR is already linked to the issue through `Closes #N`.
 
-    **Post a comment when** the change is a bug fix, a visual/UI fix, a behaviour change, or anything where QA needs context to validate it correctly. Good content to include (pick what's relevant):
+    **Post a comment when** the change is a bug fix, a visual/UI fix, a behaviour change, or anything where context is needed to validate it correctly. Good content to include (pick what's relevant):
     - What the problem was (the symptom)
     - Root cause, if non-obvious
     - How it was fixed
-    - What QA should check or what should now look/behave differently
+    - What to check, or what should now look/behave differently
     - The PR link
 
-    **Skip the comment when** it's a pure refactor with no visible change, a chore (deps bump, config, docs), or the PR description already covers everything and there's nothing extra to tell QA.
+    **Skip the comment when** it's a pure refactor with no visible change, a chore (deps bump, config, docs), or the PR description already covers everything and there's nothing extra to record.
 
-    When posting, write the body to a temp file with a single-quoted heredoc, then send with `--data-binary @file` (avoids shell mangling of backticks and special characters in the text). Replace `<your comment text here>` with the generated comment text:
+    When posting, write the body to a temp file with a single-quoted heredoc, then send it with `--body-file` (avoids shell mangling of backticks and special characters in the text). Replace `<your comment text here>` with the generated comment text:
 
     ```bash
     COMMENT_BODY=$(mktemp)
-    cat > "$COMMENT_BODY" <<'JSONEOF'
-    {
-      "body": {
-        "type": "doc",
-        "version": 1,
-        "content": [{
-          "type": "paragraph",
-          "content": [{
-            "type": "text",
-            "text": "<your comment text here>"
-          }]
-        }]
-      }
-    }
-    JSONEOF
+    cat > "$COMMENT_BODY" <<'MDEOF'
+    <your comment text here>
+    MDEOF
 
-    RESPONSE_BODY=$(mktemp)
-    source .env && HTTP_CODE=$(curl -s -o "$RESPONSE_BODY" -w "%{http_code}" \
-      -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-      -X POST "$JIRA_BASE_URL/rest/api/3/issue/<ticket>/comment" \
-      -H "Content-Type: application/json" \
-      --data-binary @"$COMMENT_BODY")
-    rm -f "$COMMENT_BODY" "$RESPONSE_BODY"
+    gh issue comment <issue-number> --body-file "$COMMENT_BODY"
+    rm -f "$COMMENT_BODY"
     ```
 
-    A `201` means success. On failure (`HTTP_CODE` not 2xx), print the contents of `$RESPONSE_BODY` before removing it to help diagnose the error, then continue — do not block the rest of the workflow.
+    On failure, print the `gh` error output to help diagnose it, then continue — do not block the rest of the workflow.
 
-11. Offer to watch for reviews and auto-run `pr-action-review`:
+11. Offer to watch for CI and reviews and auto-run `pr-action-review`:
 
     If `--watch` was passed as an argument, skip the question below and proceed automatically as if the user said yes.
 
     Otherwise, ask the user:
 
-    > "Would you like me to watch for reviews and run `pr-action-review <number>` automatically once one is posted? I'll check every 2 minutes — keep this terminal open."
+    > "Would you like me to watch this PR and run `pr-action-review <number>` automatically once CI finishes or a review is posted? I'll check every 2 minutes — keep this terminal open."
 
-    If the user says **yes** (or `--watch` was passed), keep this workflow active. Wait in no more than 60-second chunks for a total of 120 seconds, then check **both** sources for any review activity. Prefer the current runtime's non-blocking delayed-continuation tool when it has one:
+    If the user says **yes** (or `--watch` was passed), keep this workflow active. Wait in no more than 60-second chunks for a total of 120 seconds, then check **all three** sources for activity. Prefer the current runtime's non-blocking delayed-continuation tool when it has one:
 
-    **Source 1 — formal reviews** (`/pulls/{pr}/reviews`):
+    **Source 1 — CI checks** (`gh pr checks`):
+
+    ```bash
+    gh pr checks <number> --json name,bucket \
+      --jq '[.[] | select(.bucket == "pending")] | length'
+    ```
+
+    `0` means every check has finished (passed, failed, skipped, or cancelled). `gh pr checks` exits non-zero while checks are pending or failing, so read the output rather than the exit code. If `gh` reports that no checks exist for the PR, treat CI as finished.
+
+    **Source 2 — formal reviews** (`/pulls/{pr}/reviews`), from a review bot such as Copilot or CodeRabbit, or a review you left on the PR yourself:
 
     ```bash
     REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
     gh api "repos/$REPO/pulls/<number>/reviews" --paginate \
-      --jq '[.[] | select(.user.type != "Bot") | select(.user.login | ascii_downcase | contains("copilot") | not)] | length'
+      --jq '[.[] | select(.user.login != "github-actions[bot]")] | length'
     ```
 
-    A non-zero count means at least one human has submitted a formal review.
+    A non-zero count means at least one review has been submitted.
 
     Also check for Copilot specifically:
 
@@ -155,17 +149,17 @@ Run the full ship workflow: verify, commit, push, and open a PR.
       --jq '[.[] | select(.user.login | ascii_downcase | contains("copilot"))] | length'
     ```
 
-    **Source 2 — issue comments** (`/issues/{pr}/comments`):
+    **Source 3 — issue comments** (`/issues/{pr}/comments`):
 
     ```bash
     gh api "repos/$REPO/issues/<number>/comments" --paginate \
-      --jq '[.[] | select(.user.type != "Bot") | select(.body | test("## AI (Pre-)?Review") | not)] | length'
+      --jq '[.[] | select(.user.login | test("github-actions|codecov|dependabot") | not) | select(.body | test("## AI (Pre-)?Review") | not)] | length'
     ```
 
-    A non-zero count means a human has posted a substantive comment that isn't one of the agent's own AI-review replies.
+    A non-zero count means a substantive comment has been posted (by you or a review bot) that isn't one of the agent's own AI-review comments or CI noise.
 
     **Decision**:
-    - If **either source** shows new review activity: read and follow `.agents/skills/pr-action-review/SKILL.md` with `<number>`. **Do not schedule another wakeup** — this watcher is one-shot per PR. Running that workflow re-requests review from all pending reviewers, which would trigger another Copilot review and loop indefinitely if the watcher kept running.
-    - If **neither source** shows activity yet: wait another 120 seconds using the same bounded method, then repeat the same checks.
+    - If **CI has finished** or **either review source** shows new activity: read and follow `.agents/skills/pr-action-review/SKILL.md` with `<number>`. **Do not schedule another wakeup** — this watcher is one-shot per PR. Running that workflow re-requests review from pending reviewers, which would trigger another Copilot review and loop indefinitely if the watcher kept running.
+    - If **no source** shows activity yet: wait another 120 seconds using the same bounded method, then repeat the same checks.
 
 If any step fails, stop and explain. Do not force or skip gates.

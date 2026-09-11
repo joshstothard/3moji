@@ -34,13 +34,24 @@ push / PR
 
 ## Workflows
 
-| File                                     | Trigger                                 | Purpose                  |
-| ---------------------------------------- | --------------------------------------- | ------------------------ |
-| `.github/workflows/ci.yml`               | PR, push to `main`, `workflow_dispatch` | Full pipeline            |
-| `.github/workflows/security.yml`         | `workflow_call`, `workflow_dispatch`    | Reusable security job    |
-| `.github/workflows/nightly-security.yml` | Daily 06:00 UTC                         | Calls `security.yml`     |
-| `.github/workflows/nightly-mutation.yml` | Weekdays 02:00 UTC                      | Stryker mutation testing |
-| `.github/workflows/morlock.yml`          | Nightly 01:00 UTC                       | Morlock security probe   |
+| File                                     | Trigger                                                         | Purpose                  |
+| ---------------------------------------- | --------------------------------------------------------------- | ------------------------ |
+| `.github/workflows/ci.yml`               | PR, push to `main`, `workflow_dispatch`                         | Full pipeline            |
+| `.github/workflows/security.yml`         | `workflow_call`, `workflow_dispatch`                            | Reusable security job    |
+| `.github/workflows/nightly-security.yml` | `workflow_dispatch` only (daily 06:00 UTC schedule disabled)    | Calls `security.yml`     |
+| `.github/workflows/nightly-mutation.yml` | `workflow_dispatch` only (weekdays 02:00 UTC schedule disabled) | Stryker mutation testing |
+| `.github/workflows/morlock.yml`          | `workflow_dispatch` only (nightly 01:00 UTC schedule disabled)  | Morlock security probe   |
+
+### Scheduled workflows are manual-only
+
+Per [ADR-0002](../adr/0002-track-work-in-github-issues.md), the nightly workflows keep their `schedule:` blocks commented out to conserve GitHub Actions minutes on a private repository. Run them from the repository's **Actions** tab, or from the command line:
+
+```bash
+gh workflow run nightly-security.yml
+gh workflow run nightly-mutation.yml
+```
+
+To restore a schedule, uncomment its `schedule:` block. `morlock.yml` was already manual-only for a separate reason recorded in the workflow file (scheduled runs were being rejected by the Anthropic API); follow that note before re-enabling it. `security.yml` still runs as a blocking stage of `ci.yml` on every PR, so audit regressions are caught without the nightly run.
 
 ## Versioning
 
@@ -118,6 +129,8 @@ Transitive dependencies that Dependabot cannot bump directly are pinned via the 
 
 Trivy runs separately per image in Stage 5 with two passes: blocking on fixable CRITICAL, SARIF report for CRITICAL+HIGH.
 
+**Private repositories:** uploading SARIF to GitHub code scanning (the Security tab) requires GitHub Code Security on a private repo; without it the upload step fails with `Resource not accessible by integration`. The Trivy and Semgrep upload steps therefore run only when the repository is public (`!github.event.repository.private`). The blocking Trivy pass and the Semgrep scan itself still run on every PR, so the security gate is unchanged; only the Security-tab report is skipped. If the repo becomes public or gains Code Security, the uploads resume automatically.
+
 ## ADR sync check
 
 `adr-sync` (Stage 1) runs `scripts/check-adr-sync.sh`, which fails the build if a diff touches
@@ -127,7 +140,7 @@ current-state doc to update by adding `[skip-adr-sync: reason]` to a commit mess
 
 ## Morlock
 
-`morlock.yml` runs nightly at 01:00 UTC. It invokes the Claude Code action seeded with the provider-neutral
+`morlock.yml` runs on demand (`gh workflow run morlock.yml`); its nightly 01:00 UTC schedule is disabled — see the note at the top of the workflow. It invokes the Claude Code action seeded with the provider-neutral
 Morlock security-probe persona (`.agents/skills/morlock/SKILL.md`). The same role is available through
 the Claude Code, Codex, and GitHub Copilot adapters. The agent:
 
@@ -135,7 +148,7 @@ the Claude Code, Codex, and GitHub Copilot adapters. The agent:
 2. Writes proving tests under `apps/api/integration/security/`.
 3. Opens a PR (`morlock/<date>`) and a summary issue.
 
-This is **non-blocking** — it runs as a nightly antibody generator, not a merge gate.
+This is **non-blocking** — it is an antibody generator, not a merge gate.
 
 **Required secret:** `ANTHROPIC_API_KEY`
 

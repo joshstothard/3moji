@@ -1,201 +1,194 @@
 ---
 name: pickup
-description: "User-invoked only. Assign the ticket, read it fully, brief the work, create the branch, start PROGRESS.md"
+description: "User-invoked only. Assign the issue, read it fully, brief the work, create the branch, start PROGRESS.md"
 disable-model-invocation: true
 ---
 
-Pick up a Jira ticket: assign it to me, move it to In Progress, read it fully with all subtasks and linked context, then prepare to implement.
+Pick up a GitHub issue: assign it to me, move it to In Progress on the board, read it fully with its parent epic, sub-issues, and linked context, then prepare to implement.
 
-**Ticket input:** use the value and flags supplied with the skill invocation.
+Conventions (board statuses, branch and commit format) are defined in [docs/development/github-workflow.md](../../../docs/development/github-workflow.md).
 
-Usage: `pickup <ticket-id> [--stay] [--qa]`
+**Issue input:** use the value and flags supplied with the skill invocation.
 
-- `--stay` — do **not** create a new branch. Stay on the current branch and do the work there. Use this when stacking multiple tickets on one branch.
-- `--qa` — **QA-rework mode.** Work is already done and merged to `main`; the ticket is back from QA with comments. Runs the normal Jira front-door (assign, In Progress, board) — which `qa-review-action` doesn't — then hands off to `qa-review-action` for the feedback itself. Branch behaves like a normal pickup (fresh fix branch off `main`); add `--stay` to rework on the current branch with latest `main` merged in first.
+Usage: `pickup <issue> [--stay]`
+
+- `<issue>` — `42`, `#42`, or an issue URL.
+- `--stay` — do **not** create a new branch. Stay on the current branch and do the work there. Use this when stacking multiple issues on one branch.
 
 ---
 
-## Step 0 — Parse arguments and normalise the ticket ID
+## Step 0 — Parse arguments and normalise the issue number
 
-Split the invocation input into the ticket ID and any flags:
+Split the invocation input into the issue reference and any flags:
 
-- If `--stay` is present anywhere in the invocation input, enable **stay mode** and remove the flag before normalising. Stay mode changes Steps 10 and 11 only — all Jira steps run unchanged.
-- If `--qa` is present anywhere in the invocation input, enable **QA-rework mode** and remove the flag before normalising. QA-rework mode is described in Step 12 — all Jira steps (1–8) and the PROGRESS.md step (11) run unchanged; Step 9 adds one conditional brief line.
-- `--stay` and `--qa` can be combined. With both active, you do the QA rework on the current branch (stay mode) and Step 10 merges latest `main` into it first.
-- If the remaining ticket ID is a bare number (e.g. `25`), prepend `$JIRA_PROJECT_KEY-` to get e.g. `PROJ-25`.
-- Store the cleaned, normalised ticket ID as `TICKET_KEY`. Use `TICKET_KEY` for all subsequent steps.
+- If `--stay` is present anywhere in the invocation input, enable **stay mode** and remove the flag before normalising. Stay mode changes Steps 9 and 10 only — all GitHub steps run unchanged.
+- Normalise the remaining issue reference: strip a leading `#`; for a URL such as `https://github.com/<owner>/<repo>/issues/42`, take the number after `/issues/`. If the URL's `<owner>/<repo>` is not this repository (compare with `gh repo view --json nameWithOwner`), stop and tell the user.
+- Store the cleaned issue number as `ISSUE_NUMBER`. Use `ISSUE_NUMBER` for all subsequent steps.
 
-## Step 1 — Verify credentials
+## Step 1 — Check GitHub access
 
-Check that `JIRA_BASE_URL`, `JIRA_API_TOKEN`, `JIRA_EMAIL`, and `JIRA_ACCOUNT_ID` are set in `.env`. If any are missing, stop and ask the user to add them. Source `.env` before all Jira API calls.
-
-## Step 2 — Fetch the ticket
+No `.env` values are needed: `gh` holds the credentials. If any `gh` or `node scripts/gh-workflow.mjs` call below fails with an authentication, scope, repository, or board error, run:
 
 ```bash
-source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  "$JIRA_BASE_URL/rest/api/3/issue/$TICKET_KEY?expand=subtasks,renderedFields"
+node scripts/gh-workflow.mjs doctor
 ```
 
-Parse the response and extract:
+Stop and tell the user the fix it prints for each failing check (e.g. `gh auth refresh -s project`, or `node scripts/gh-workflow.mjs setup`). Do not retry until they confirm it is fixed.
 
-- `fields.summary`
-- `fields.description` (full rendered text)
-- `fields.assignee` (may be null)
-- `fields.status.name`
-- `fields.issuetype.name`
-- `fields.parent` (if present — epic or story)
-- `fields.subtasks` (array of subtask keys)
-- `fields.issuelinks` (linked issues)
-- `fields.labels`
-- `fields.priority.name`
-- `fields.customfield_10014` (epic link, if present)
+## Step 2 — Fetch the issue
+
+```bash
+node scripts/gh-workflow.mjs issue <ISSUE_NUMBER>
+```
+
+Parse the JSON and extract:
+
+- `viewer` (your GitHub login)
+- `title`
+- `body` (full markdown — Context / Acceptance criteria / Notes)
+- `state`
+- `assignees` (may be empty)
+- `boardStatus`
+- `labels` (type: `bug` / `enhancement` / `task`)
+- `milestone`
+- `parent` (if present — usually the epic; includes its own `parent`, the grandparent)
+- `subIssues`
+- `linkedPullRequests`
+- `comments`
+
+If `state` is `CLOSED`, stop and tell the user: "#<ISSUE_NUMBER> is closed — do you want to reopen it (`gh issue reopen <ISSUE_NUMBER>`) and pick it up, or did you mean a different issue?" Do not proceed until the user confirms.
 
 ## Step 2a — Check epic assignment
 
-Check the fetched ticket data:
+Check the fetched issue data:
 
-- If `fields.parent` is present and its issuetype is "Epic", the epic is set → continue to Step 3.
-- If `fields.customfield_10014` is set (classic epic link field), the epic is set → continue to Step 3.
-- If neither is set → note this in the brief (Step 9) as an open question, then continue.
+- If `parent` is set, check whether it is an epic:
+  ```bash
+  gh issue view <parent-number> --json labels --jq '[.labels[].name]'
+  ```
+  If the parent is labelled `epic`, the epic is set → continue to Step 3. If the parent is an ordinary issue, check the grandparent (`parent.parent`) the same way; if that is an `epic`, the epic is set → continue to Step 3.
+- If there is no parent, or no `epic` in the chain → note this in the brief (Step 8) as an open question — "No parent epic: run the `assign-epic` skill for #<ISSUE_NUMBER>, or confirm it is intentionally standalone" — then continue.
 
 ## Step 3 — Assignee safety check
 
-- If `fields.assignee` is **null** (unassigned) → proceed.
-- If `fields.assignee.accountId` matches `$JIRA_ACCOUNT_ID` → proceed.
-- If `fields.assignee` is **someone else** → STOP. Output: "$TICKET_KEY is assigned to [displayName] — are you sure you want to pick this up?" Do not proceed until the user confirms.
+- If `assignees` is **empty** (unassigned) → proceed.
+- If `assignees` contains only `viewer` → proceed.
+- If `assignees` contains **anyone other than `viewer`** → STOP. Output: "#<ISSUE_NUMBER> is assigned to @<login> — are you sure you want to pick this up?" Do not proceed until the user confirms. When they confirm, also ask whether to remove the other assignee (`gh issue edit <ISSUE_NUMBER> --remove-assignee <login>`); only remove on an explicit yes.
 
-## Step 4 — Assign the ticket to me
-
-```bash
-source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -X PUT "$JIRA_BASE_URL/rest/api/3/issue/$TICKET_KEY/assignee" \
-  -H "Content-Type: application/json" \
-  -d "{\"accountId\": \"$JIRA_ACCOUNT_ID\"}"
-```
-
-## Step 5 — Move onto the active board
-
-Do this **before** the In Progress transition (Step 6). Adding an issue to the board drops it into the board's default column (e.g. "Ready for Development"), which would overwrite an In Progress status set beforehand. Always add to the board first, then transition last.
+## Step 4 — Assign the issue to me
 
 ```bash
-source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -X POST "$JIRA_BASE_URL/rest/agile/1.0/board/$JIRA_BOARD_ID/issue" \
-  -H "Content-Type: application/json" \
-  -d "{\"issues\": [\"$TICKET_KEY\"]}"
+gh issue edit <ISSUE_NUMBER> --add-assignee @me
 ```
 
-## Step 6 — Move to In Progress
+## Step 5 — Move to In Progress
 
-This must be the **last** Jira write, so nothing (like the board-add above) can clobber the status afterwards.
-
-First, get available transitions (fetch them fresh — available transitions and their ids depend on the ticket's current status, so never reuse an id from an earlier run):
+This must be the **last** tracker write, so nothing can clobber the status afterwards. The helper adds the issue to the board first if it is not already there, then sets the status, so no separate board step is needed:
 
 ```bash
-source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  "$JIRA_BASE_URL/rest/api/3/issue/$TICKET_KEY/transitions"
+node scripts/gh-workflow.mjs status <ISSUE_NUMBER> "In Progress"
 ```
 
-Find the transition whose `name` matches "In Progress" (case-insensitive). Use its `id` to apply it:
+Then confirm the status actually landed (a successful command only means the request was accepted): fetch the issue again and check that its `boardStatus` entry for the workflow board reads "In Progress":
 
 ```bash
-source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -X POST "$JIRA_BASE_URL/rest/api/3/issue/$TICKET_KEY/transitions" \
-  -H "Content-Type: application/json" \
-  -d '{"transition": {"id": "<transition-id>"}}'
+node scripts/gh-workflow.mjs issue <ISSUE_NUMBER>
 ```
 
-Then confirm the status actually landed on In Progress (a `204` only means the request was accepted, not that the status stuck):
+If the issue has a parent epic (Step 2a), move the epic out of Backlog now that work on it has started. The command is a no-op when the epic is already in progress or the issue has no epic:
 
 ```bash
-source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  "$JIRA_BASE_URL/rest/api/3/issue/$TICKET_KEY?fields=status"
+node scripts/gh-workflow.mjs epic-sync <ISSUE_NUMBER>
 ```
 
-## Step 7 — Fetch all subtasks
+## Step 6 — Fetch all sub-issues
 
-For each key in `fields.subtasks`, fetch the full issue:
+For each entry in `subIssues`, fetch the full issue:
 
 ```bash
-source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  "$JIRA_BASE_URL/rest/api/3/issue/<subtask-key>?expand=renderedFields"
+node scripts/gh-workflow.mjs issue <sub-issue-number>
 ```
 
-Read and summarise each subtask's summary, description, and status.
+Read and summarise each sub-issue's title, body, state, and board status.
 
-## Step 8 — Fetch parent/epic context
+## Step 7 — Fetch parent/epic, pull request, and planning context
 
-If the ticket has a `fields.parent`, fetch that ticket too to understand the broader story or epic.
+- **Parent/epic:** if the issue has a `parent`, fetch it with `node scripts/gh-workflow.mjs issue <parent-number>` to understand the broader epic. If `parent.parent` (the grandparent) is set, fetch that as well.
+- **Linked pull requests:** `linkedPullRequests` lists PRs that close this issue. An open or merged one means work already exists — note it in the brief, and raise it as an open question if it is open.
+- **Referenced issues:** GitHub has no typed issue links, so related issues appear in the body or comments (e.g. "Blocked by #12"). For each, fetch `gh issue view <number> --json number,title,state`. An open blocker is an open question.
+- **Workstream:** if the issue body (or its epic's body) links a document under `docs/workstreams/`, read it — at least the phase this issue belongs to — and name it in the brief. Do the same for any linked ADR (`docs/adr/`) or report (`docs/reports/`).
 
-If `fields.customfield_10014` (epic link) is set and different from the parent, fetch that as well.
-
-## Step 9 — Output a brief
+## Step 8 — Output a brief
 
 Print a structured briefing so the work is clear before any code is written:
 
 ```
-## Ticket: $TICKET_KEY — <summary>
+## Issue: #<ISSUE_NUMBER> — <title>
 
-**Type:** <issuetype>
-**Priority:** <priority>
+**Type:** <bug|enhancement|task label, or "unlabelled">
+**Milestone:** <milestone — omit if none>
 **Status:** → In Progress (just moved)
-**Parent:** <parent key + summary, if any>
+**Parent epic:** <#number — title, or "none (see open questions)">
+**Workstream:** <docs/workstreams/<slug>.md and phase — include this line only when the issue or its epic links one; omit otherwise>
 **Branch (stay mode only):** <current branch — include this line only when `--stay` is active; omit otherwise>
-**🔁 QA rework:** <only include this line when `--qa` is active — "Work is already merged to `main`. This is rework from QA comments. After branch setup, control hands off to `qa-review-action` to classify and action the feedback.">
 
 ### Description
-<rendered description>
+<issue body: Context and Notes>
 
-### Subtasks
-- [ ] <subtask-key>: <summary> (<status>)
+### Acceptance criteria
+<checklist from the issue body — if there is none, say so and list it under open questions>
+
+### Sub-issues
+- [ ] #<number>: <title> (<state / board status>)
 ...
 
-### Linked issues
-- <link type>: <key> — <summary>
+### Linked pull requests
+- #<number> — <title> (<state>)
+...
+
+### Referenced issues
+- <relationship, e.g. Blocked by>: #<number> — <title> (<state>)
 ...
 
 ### Implementation notes
-<what needs to be built, based on reading the ticket and relevant docs>
+<what needs to be built, based on reading the issue and relevant docs>
 
 ### Open questions
 <anything unclear that needs resolving before coding starts>
 ```
 
-## Step 10 — Create the feature branch (skipped in stay mode)
+## Step 9 — Create the feature branch (skipped in stay mode)
 
 **If stay mode (`--stay`) is active:**
 
 - Run `git branch --show-current` to check the current branch.
 - If the current branch is `main` (or empty/detached), **STOP** and tell the user: "You are on `main`. The `--stay` flag is for continuing work on an existing feature branch. Rerun without `--stay` to create a new branch, or switch to the feature branch first."
-- Otherwise: do **not** switch branches, do **not** checkout main, do **not** create a new branch. All work happens on the current branch.
-- **If both `--qa` and `--stay` are active:** bring the merged implementation into the current branch first so the QA fixes land on top of it:
-  ```bash
-  git fetch origin main && git merge origin/main
-  ```
-  If the merge reports conflicts, STOP and ask the user to resolve them before continuing. Do not proceed to the hand-off with an unfinished merge.
-- Every commit for this ticket must reference the **new** ticket ID in its message (e.g. `$TICKET_KEY: feat: ...`), even though the branch name references a different ticket.
-- Skip to Step 11.
+- Otherwise: do **not** switch branches, do **not** switch to main, do **not** create a new branch. All work happens on the current branch.
+- Every commit for this issue must reference the **new** issue number as its scope (e.g. `feat(#<ISSUE_NUMBER>): ...`), even though the branch name references a different issue.
+- Skip to Step 10.
 
-**Otherwise**, following CONTRIBUTING.md naming conventions, create and switch to a new branch:
+**Otherwise**, following the naming conventions in CONTRIBUTING.md and `docs/development/github-workflow.md`, create and switch to a new branch from `main`:
 
 ```bash
-git checkout main && git pull && git checkout -b <ticket-id-lowercase>-<short-description>
+git switch main && git pull && git switch -c <ISSUE_NUMBER>-<short-description>
 ```
 
-Use the ticket ID lowercased and a 2–4 word kebab-case description derived from the summary.
+Use the issue number and a 2–4 word kebab-case description derived from the title, e.g. `42-add-shell-app`. Commits on this branch use `<type>(#<ISSUE_NUMBER>): <description>`.
 
-## Step 11 — Initialise PROGRESS.md
+## Step 10 — Initialise PROGRESS.md
 
-Create a `PROGRESS.md` file in the repo root as the session scratchpad (per AGENTS.md). Seed it with the ticket context so the session log starts with a clear baseline:
+Create a `PROGRESS.md` file in the repo root as the session scratchpad (per AGENTS.md). Seed it with the issue context so the session log starts with a clear baseline:
 
 ```markdown
-# PROGRESS.md — <ticket-id>: <summary>
+# PROGRESS.md — #<ISSUE_NUMBER>: <title>
 
+**Issue:** <issue url>
 **Branch:** <branch-name>
 **Started:** <today's date>
 
 ## Plan
 
-<high-level implementation approach derived from the ticket brief>
+<high-level implementation approach derived from the issue brief>
 
 ## Progress
 
@@ -207,24 +200,25 @@ _None yet._
 
 ## Open Questions
 
-<carry over any open questions from the Step 9 brief>
+<carry over any open questions from the Step 8 brief>
 ```
 
 **If stay mode (`--stay`) is NOT active:** create `PROGRESS.md` fresh. If one already exists (leftover from a previous session), read it first, then overwrite it with the new session header — do not append to stale content.
 
-**If stay mode (`--stay`) is active and a `PROGRESS.md` already exists**, it belongs to the branch's ongoing work — do **not** overwrite it. Instead, append a new ticket section to the end:
+**If stay mode (`--stay`) is active and a `PROGRESS.md` already exists**, it belongs to the branch's ongoing work — do **not** overwrite it. Instead, append a new issue section to the end:
 
 ```markdown
 ---
 
-# <ticket-id>: <summary> (stacked on this branch)
+# #<ISSUE_NUMBER>: <title> (stacked on this branch)
 
+**Issue:** <issue url>
 **Branch:** <current branch>
 **Started:** <today's date>
 
 ## Plan
 
-<high-level implementation approach derived from the ticket brief>
+<high-level implementation approach derived from the issue brief>
 
 ## Progress
 
@@ -236,20 +230,11 @@ _None yet._
 
 ## Open Questions
 
-<carry over any open questions from the Step 9 brief>
+<carry over any open questions from the Step 8 brief>
 ```
 
 **If stay mode (`--stay`) is active and `PROGRESS.md` does NOT exist**, create it fresh using the standard template above (same as non-stay mode).
 
-## Step 12 — Hand off to QA review (QA-rework mode only)
-
-**Only when `--qa` is active** (otherwise skip). The Jira front-door (assign, In Progress, board) and branch are now set up — the state `qa-review-action` can't establish on its own.
-
-Tell the user: "Ticket set up for QA rework — assigned, In Progress, on branch `<branch-name>`. Handing off to `qa-review-action`." Then read and follow `.agents/skills/qa-review-action/SKILL.md` for `$TICKET_KEY` to fetch, classify, and action the feedback. Don't duplicate that work here.
-
 ---
 
-After the briefing is output, the branch is created (or confirmed, in stay mode), and PROGRESS.md is initialised (or appended to):
-
-- **In QA-rework mode (`--qa`):** proceed straight to Step 12 — do not pause for go-ahead, since `qa-review-action` has its own confirmation gates before applying fixes or posting to Jira.
-- **Otherwise:** pause and ask: "Ready to start — any questions before I begin?" Wait for the user's go-ahead before writing any code.
+After the briefing is output, the branch is created (or confirmed, in stay mode), and PROGRESS.md is initialised (or appended to), pause and ask: "Ready to start — any questions before I begin?" Wait for the user's go-ahead before writing any code.

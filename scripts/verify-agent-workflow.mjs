@@ -49,25 +49,25 @@ function resolvePosixShell() {
 const POSIX_SHELL = resolvePosixShell();
 
 const manualSkills = [
+  "adr",
   "briefing",
   "bump-version",
   "capture",
   "dependabot-review",
   "fix-cicd",
-  "log-time",
   "morning",
-  "multi-repo",
   "nightly-check",
   "pickup",
+  "plan-work",
   "pr-action-review-mine-loop",
   "pr-action-review",
   "pr-chore",
-  "pr-review-loop",
   "pr",
   "push",
-  "qa-review-action",
   "refine",
+  "report",
   "sync",
+  "workstream",
   "wrap-up",
 ];
 const automaticSkills = ["assign-epic", "run"];

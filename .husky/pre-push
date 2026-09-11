@@ -68,7 +68,7 @@ npm run test || {
 # --- Conditional checks (only if relevant files changed) ---
 
 # Mutation testing is intentionally excluded from pre-push.
-# The full suite runs nightly in CI (nightly-mutation workflow) as the authoritative gate.
+# The full suite runs in CI (nightly-mutation workflow, dispatched manually per ADR-0002).
 # Running it on push was warn-only and had no quality-gate value, but was expensive enough
 # to cause resource contention when multiple branches are pushed concurrently.
 

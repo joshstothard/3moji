@@ -1,134 +1,177 @@
 ---
 name: assign-epic
-description: Use this skill when a new Jira ticket has just been created (a ticket key was returned from a Jira API POST to /rest/api/3/issue). Automatically assigns the ticket to the most relevant open epic, or asks the user to choose when ambiguous. Also invoked when the user says "assign epic", "link to epic", or "which epic does this belong to".
+description: Use this skill when a new GitHub issue has just been created (for example `gh issue create` just printed an issue URL). Automatically links the issue as a sub-issue of the most relevant open `epic`-labelled issue, or asks the user to choose when ambiguous. Also invoked when the user says "assign epic", "link to epic", or "which epic does this belong to". Do not use it for issues the plan-work skill creates, which it links to their epic itself.
 ---
 
-# Assign a Jira ticket to the right epic
+# Link a GitHub issue to the right epic
 
-Given a ticket ID, fetch all open epics, reason about the best match, and assign the epic — or ask the user to choose when it's ambiguous.
+Given an issue number, fetch all open epics, reason about the best match, and link the issue as a sub-issue of that epic — or ask the user to choose when it's ambiguous.
 
-**Ticket input:** use the value supplied with a direct invocation, or the ticket key from the just-created ticket.
+In this repository an epic is an issue labelled `epic`, and its work items are its **sub-issues** (see [docs/development/github-workflow.md](../../../docs/development/github-workflow.md)). An issue can have only one parent.
+
+**Issue input:** use the value supplied with a direct invocation, or the issue just created (the last path segment of the URL `gh issue create` printed).
 
 ---
 
-## Step 0 — Normalise the ticket ID
+## Step 0 — Normalise the issue number
 
-If the ticket input is a bare number (e.g. `42`), prepend `$JIRA_PROJECT_KEY-` to get e.g. `PROJ-42`. Set this as `TICKET_KEY` and use it for all steps below.
+Accept any of `42`, `#42`, or an issue URL such as `https://github.com/<owner>/<repo>/issues/42`:
 
-## Step 1 — Verify credentials
+- Strip a leading `#`.
+- For a URL, take the number after `/issues/`. If the URL's `<owner>/<repo>` is not this repository (compare with `gh repo view --json nameWithOwner`), stop and tell the user — the helper only works on this repository's issues.
 
-Check that `JIRA_BASE_URL`, `JIRA_API_TOKEN`, `JIRA_EMAIL`, and `JIRA_PROJECT_KEY` are set in `.env`. If any are missing, stop and ask the user to add them. Source `.env` before all Jira API calls.
+Store the result as `ISSUE_NUMBER` and use it for all steps below.
 
-## Step 2 — Fetch the target ticket
+## Step 1 — Check GitHub access
+
+No `.env` values are needed: `gh` holds the credentials. If any `gh` or `node scripts/gh-workflow.mjs` call below fails with an authentication, scope, repository, or board error, run:
 
 ```bash
-source .env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  "$JIRA_BASE_URL/rest/api/3/issue/$TICKET_KEY?expand=renderedFields"
+node scripts/gh-workflow.mjs doctor
 ```
 
-Extract:
+Stop and tell the user the fix it prints for each failing check (e.g. `gh auth refresh -s project`). Do not retry silently.
 
-- `fields.summary`
-- `fields.description` (rendered text — this is the primary signal for matching)
-- `fields.issuetype.name`
-- `fields.labels`
-- `fields.parent` (key + summary, if present)
-- `fields.customfield_10014` (classic epic link, if present)
+## Step 2 — Fetch the target issue
 
-**If the ticket already has an epic assigned** (non-null `fields.parent` _and_ `fields.parent.fields.issuetype.name == "Epic"`, or `fields.customfield_10014` is set):
+```bash
+node scripts/gh-workflow.mjs issue <ISSUE_NUMBER>
+```
 
-- Report: "$TICKET_KEY is already linked to epic [KEY]: [summary]. Do you want to reassign it?"
-- Wait for confirmation before continuing. If the user says no, stop here.
+Extract from the JSON:
+
+- `title`
+- `body` (this is the primary signal for matching)
+- `labels` (type: `bug` / `enhancement` / `task`)
+- `state`
+- `parent` (number, title, url, state — and its own `parent`, if any)
+
+**If `labels` includes `epic`**, the issue is itself an epic. Report: "#<ISSUE_NUMBER> is an epic — epics sit at the top of the hierarchy, so there is nothing to link." Stop here.
+
+**If `parent` is set**, check whether the parent is an epic:
+
+```bash
+gh issue view <parent-number> --json labels --jq '[.labels[].name]'
+```
+
+- **Parent is an `epic`:** report "#<ISSUE_NUMBER> is already a sub-issue of epic #<parent>: <parent title>. Do you want to move it to a different epic?" Wait for confirmation before continuing. If the user says no, stop here.
+- **Parent is not an epic** (the issue is a sub-issue of an ordinary issue): report "#<ISSUE_NUMBER> is a sub-issue of #<parent>: <parent title>, which is not an epic (its epic, if any, is found further up the chain — `parent.parent` in the JSON). Linking it directly to an epic would detach it from #<parent>. Do you want to do that?" Wait for confirmation. If the user says no, stop here.
+
+Remember the current parent as `OLD_PARENT` if the user confirms a move.
 
 ## Step 3 — Fetch all open epics
 
 ```bash
-source .env && curl -s \
-  -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -X POST "$JIRA_BASE_URL/rest/api/3/search/jql" \
-  -H "Content-Type: application/json" \
-  -d "{\"jql\": \"project = $JIRA_PROJECT_KEY AND issuetype = Epic AND statusCategory != Done ORDER BY created DESC\", \"fields\": [\"summary\", \"description\", \"status\", \"labels\"], \"maxResults\": 200}"
+gh issue list --label epic --state open --limit 200 --json number,title,body,url
 ```
 
 Build a list of candidates:
 
 ```
-[KEY] <summary> (<status>)
+#<number> <title>
 ```
 
-If no open epics are found, tell the user and stop — there is nothing to assign.
+Leave out `OLD_PARENT` (if set) — the user has already said they want to move away from it, unless they pick it again explicitly.
+
+If no open epics are found, tell the user and go to Step 4b (offer to create one or leave the issue unparented).
 
 ## Step 4 — Reason about the best match
 
-Using the ticket's summary, description, type, and labels alongside each epic's summary, reason about which epic this ticket most naturally belongs to.
+Using the issue's title, body, and labels alongside each epic's title and body (an epic body usually links the workstream phase it came from), reason about which epic this issue most naturally belongs to.
 
 **Confidence rules:**
 
 - **High confidence** — one epic is a clear fit and the others are clearly not. Proceed to Step 5 without asking.
-- **Ambiguous** — two or more epics are plausible, or the ticket could belong to none of them. Present the shortlist and ask the user to choose (see Step 4a).
-- **No match** — the ticket is clearly standalone (e.g. a chore, infra task, or bug with no thematic home). Confirm with the user that leaving it unassigned is intentional (see Step 4b).
+- **Ambiguous** — two or more epics are plausible, or the issue could belong to none of them. Present the shortlist and ask the user to choose (see Step 4a).
+- **No match** — the issue is clearly standalone (e.g. a chore, infra task, or bug with no thematic home). Confirm with the user that leaving it unparented is intentional (see Step 4b).
 
 **Signals that suggest no epic is needed:**
 
-- `issuetype` is Bug, Chore, or Spike with no clear feature area.
-- Summary contains words like "dependency update", "upgrade", "housekeeping", "docs", "config".
+- The label is `bug` or `task` with no clear feature area.
+- The title contains words like "dependency update", "upgrade", "housekeeping", "docs", "config".
 
 ### Step 4a — Ambiguous: ask the user to choose
 
 Present a numbered list of the plausible epics:
 
 ```
-I found a few possible epics for $TICKET_KEY ("<summary>"):
+I found a few possible epics for #<ISSUE_NUMBER> ("<title>"):
 
-1. PROJ-YY — <epic summary>
-2. PROJ-ZZ — <epic summary>
+1. #YY — <epic title>
+2. #ZZ — <epic title>
 3. None of the above
 
-Which epic should I assign? (1/2/3 or the key directly)
+Which epic should I link it to? (1/2/3 or the epic number directly)
 ```
 
-Wait for the user's answer before continuing.
+Wait for the user's answer before continuing. If they choose "None of the above", go to Step 4b.
 
-### Step 4b — No match: confirm unassigned is intentional
+### Step 4b — No match: confirm unparented is intentional, or create an epic
 
 ```
-$TICKET_KEY ("<summary>") doesn't clearly belong to any open epic.
-Shall I leave it unassigned, or would you like to pick one from the full list?
+#<ISSUE_NUMBER> ("<title>") doesn't clearly belong to any open epic.
+Shall I leave it unparented, create a new epic for it, or would you like to pick one from the full list?
 ```
 
-If the user says leave it unassigned, stop here and report that no change was made.
-If the user asks to see the full list, print all open epics (from Step 3) and let them pick.
+- If the user says leave it unparented, stop here and report that no change was made.
+- If the user asks to see the full list, print all open epics (from Step 3) and let them pick.
+- If the user wants a new epic, go to Step 4c.
 
-## Step 5 — Assign the epic
+### Step 4c — Create a new epic (only when the user asked for one)
 
-Try the `parent` field first (works for next-gen / team-managed projects):
+Epics normally come from a workstream phase via the `plan-work` skill; an ad-hoc epic is fine for work that has no workstream yet. Propose a title and a one-paragraph context, and confirm them with the user. Then create it with the same body shape as other issues (single command, so the temp file variable is still set):
 
 ```bash
-source .env && curl -s -o /tmp/jira-resp.json -w "%{http_code}" \
-  -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -X PUT "$JIRA_BASE_URL/rest/api/3/issue/$TICKET_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"fields\": {\"parent\": {\"key\": \"<EPIC_KEY>\"}}}"
+BODY_FILE=$(mktemp) && cat > "$BODY_FILE" <<'EOF'
+## Context
+
+<what this group of work is for; link the workstream, ADR, or report if one exists>
+
+## Acceptance criteria
+
+- [ ] <observable outcome that means the epic is done>
+
+## Notes
+
+<scope boundaries, anything deliberately excluded>
+EOF
+gh issue create --title "<epic title>" --body-file "$BODY_FILE" --label epic
 ```
 
-If the response is `2xx` (200 or 204), assignment succeeded — go to Step 6.
-
-If the response is `400` or `404`, fall back to `customfield_10014` (classic project epic link):
+`gh issue create` prints the epic's URL; its number is the last path segment. Put the epic on the board — "In Progress" if `#<ISSUE_NUMBER>` is already In Progress, otherwise "Backlog":
 
 ```bash
-source .env && curl -s -o /tmp/jira-resp.json -w "%{http_code}" \
-  -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -X PUT "$JIRA_BASE_URL/rest/api/3/issue/$TICKET_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"fields\": {\"customfield_10014\": \"<EPIC_KEY>\"}}"
+node scripts/gh-workflow.mjs status <EPIC_NUMBER> "<Backlog|In Progress>"
 ```
 
-If both fail, report the contents of `/tmp/jira-resp.json` (Jira's error JSON) and stop. Do not retry silently.
+If the new epic belongs to an existing workstream under `docs/workstreams/`, tell the user so they can add it to that workstream's phase table. Continue to Step 5 with the new epic.
+
+## Step 5 — Link the issue to the epic
+
+**Only if moving from `OLD_PARENT`** (confirmed in Step 2): the helper refuses to link an issue that already has a parent, so remove it from the old parent first. The REST endpoint needs the issue's numeric id, not its number:
+
+```bash
+CHILD_ID=$(gh api "repos/{owner}/{repo}/issues/<ISSUE_NUMBER>" --jq .id) && \
+gh api --method DELETE "repos/{owner}/{repo}/issues/<OLD_PARENT>/sub_issue" -F sub_issue_id="$CHILD_ID"
+```
+
+(`gh api` fills in `{owner}` and `{repo}` from the current repository.)
+
+Then link it:
+
+```bash
+node scripts/gh-workflow.mjs sub-issue <EPIC_NUMBER> <ISSUE_NUMBER>
+```
+
+On success it prints `#<ISSUE_NUMBER> is now a sub-issue of #<EPIC_NUMBER> (<epic title>)` (or `... is already a sub-issue of ...`, which also counts as success).
+
+If it fails, report the error it printed and stop. Do not retry silently. If the error is about authentication, scope, or the repository, run `doctor` as in Step 1.
 
 ## Step 6 — Report back
 
 Tell the user:
 
-- Ticket: `$JIRA_BASE_URL/browse/$TICKET_KEY`
-- Epic assigned: `$JIRA_BASE_URL/browse/<EPIC_KEY>` — `<epic summary>`
-- How the match was made (high-confidence auto-match or user selection)
+- Issue: `#<ISSUE_NUMBER>` — `<title>` — `<issue url>`
+- Epic linked: `#<EPIC_NUMBER>` — `<epic title>` — `<epic url>`
+- How the match was made (high-confidence auto-match, user selection, or new epic created)
+- If the issue was moved, the parent it was moved from (`#<OLD_PARENT>`)

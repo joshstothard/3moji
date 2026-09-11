@@ -1,10 +1,13 @@
-## Ticket
+## Issue
 
-<!-- Jira ticket key e.g. PROJ-123 -->
+<!-- The issue this PR implements. GitHub closes it when the PR merges into main.
+     Chores with no issue: replace the line below with "None — chore". -->
+
+Closes #<number>
 
 ## Plan Link
 
-[Link to plan document if applicable](docs/plans/)
+<!-- Workstream, report, or ADR behind this change, if any (docs/workstreams/, docs/reports/, docs/adr/) -->
 
 ## Summary
 
@@ -23,7 +26,7 @@
 
 ## Review Checklist
 
-- [ ] Does this match the ticket intent?
+- [ ] Does this match the issue intent?
 - [ ] Are data boundaries respected?
 - [ ] Does this introduce new operational risk?
 - [ ] Are rollback mechanisms in place?

@@ -12,13 +12,14 @@ Review the most recent nightly workflow runs for this repo, diagnose any failure
 
 ## Step 1 — Fetch recent scheduled runs
 
-Use the `gh` CLI to fetch scheduled workflow runs for this repo. Look at the last 7 days of nightly (schedule-triggered) runs.
+Use the `gh` CLI to fetch nightly workflow runs for this repo. Look at the last 7 days of nightly runs. The nightly workflows (`.github/workflows/nightly-*.yml`) may be schedule-triggered or, where they have been made manual-only to conserve GitHub Actions minutes ([ADR-0002](../../../docs/adr/0002-track-work-in-github-issues.md)), dispatched by hand — so fetch both event types:
 
 ```bash
 gh run list --event schedule --limit 30 --json databaseId,displayTitle,status,conclusion,createdAt,headSha,workflowName
+gh run list --event workflow_dispatch --limit 30 --json databaseId,displayTitle,status,conclusion,createdAt,headSha,workflowName
 ```
 
-Filter to runs from the last 7 days. For each run, note:
+From the `workflow_dispatch` list, keep only runs of the nightly workflows (ignore manual runs of CI or other workflows). Filter to runs from the last 7 days. If there are none, output: "⚪ No nightly runs in the last 7 days — the nightly workflows only run when dispatched (e.g. `gh workflow run nightly-security.yml`)." and stop. For each run, note:
 
 - Run ID and workflow name
 - Triggered at (date/time)
@@ -58,14 +59,14 @@ These are actionable. For each one:
 1. Identify the affected files, tests, or config.
 2. Read the relevant source files to understand the failure.
 3. Propose a concrete fix plan (what to change, where, why).
-4. Ask: "Should I create a Jira ticket and pick it up for [failure description]?"
-   - If yes → read and follow `.agents/skills/capture/SKILL.md` to log it, then read and follow `.agents/skills/pickup/SKILL.md` with the new ticket key to start work.
+4. Ask: "Should I create a GitHub issue and pick it up for [failure description]?"
+   - If yes → read and follow `.agents/skills/capture/SKILL.md` to file it as a GitHub issue, then read and follow `.agents/skills/pickup/SKILL.md` with the new issue number (e.g. `42`) to start work.
    - If no → note it and move on.
 
 ## Step 5 — For each Flake failure
 
 1. Check if the flake has occurred more than twice in the last 7 days.
-2. If yes → it is chronic and needs fixing. Propose a fix plan and ask whether to create a ticket.
+2. If yes → it is chronic and needs fixing. Propose a fix plan and ask whether to create a GitHub issue (as in Step 4).
 3. If no → log it as a known flake and move on.
 
 ## Step 6 — For Infra failures
@@ -78,5 +79,5 @@ Summarise what was found and what was actioned:
 
 - Pipelines reviewed
 - Failures found (by category)
-- Tickets created (if any)
+- Issues created (if any)
 - Recommended next steps

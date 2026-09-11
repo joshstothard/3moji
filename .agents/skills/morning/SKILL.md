@@ -42,8 +42,8 @@ Failed job: <job name>
 Root cause: <one-line summary>
 ```
 
-4. Ask: "Should I create a Jira ticket and pick this up now?"
-   - If yes → read and follow `.agents/skills/capture/SKILL.md` to log it, then read and follow `.agents/skills/pickup/SKILL.md` with the new ticket key to start work immediately.
+4. Ask: "Should I create a GitHub issue and pick this up now?"
+   - If yes → read and follow `.agents/skills/capture/SKILL.md` to file it as a GitHub issue, then read and follow `.agents/skills/pickup/SKILL.md` with the new issue number (e.g. `42`) to start work immediately.
    - If no → note it and continue.
 
 If main is **Green**, output: "✅ Main is green." and continue.
@@ -56,7 +56,7 @@ If main is **Unknown** (no recent push pipelines found), output: "⚪ Main healt
 
 Read and follow `.agents/skills/nightly-check/SKILL.md` in full.
 
-Wait for it to complete before proceeding. If it surfaces any tickets that were created and picked up, note the ticket IDs — they are now in progress.
+Wait for it to complete before proceeding. If it surfaces any issues that were created and picked up, note the issue numbers — they are now In Progress.
 
 ## Step 3 — Dependabot review
 
@@ -72,16 +72,16 @@ Print a final summary of everything actioned this morning:
 ## Morning Summary — <today's date>
 
 ### Main branch
-<Green / Red — root cause if broken, ticket created if actioned>
+<Green / Red — root cause if broken, issue created if actioned>
 
 ### Nightly CI
-<pass/fail counts, tickets created, any open issues>
+<pass/fail counts, issues created, anything still unresolved>
 
 ### Dependabot
 <merged PRs, failing PRs diagnosed, PRs pending>
 
 ### Next up
-<any tickets now In Progress that need work today>
+<any issues now In Progress that need work today>
 ```
 
 If there is nothing to action across all steps, output: "✅ All clear — main is green, nightly runs green, no Dependabot PRs outstanding."

@@ -1,8 +1,10 @@
 name: Nightly Mutation Tests
 
 on:
-  schedule:
-    - cron: "0 2 * * 1-5"
+  # Schedule disabled per ADR-0002 to conserve Actions minutes on a private repo;
+  # run manually from the Actions tab or re-enable the cron.
+  # schedule:
+  #   - cron: "0 2 * * 1-5"
   workflow_dispatch:
 
 jobs:

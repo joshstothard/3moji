@@ -4,6 +4,9 @@ A complete, battle-tested workflow for running a software project with **Claude 
 
 Everything in this repo was developed and refined on a real production client project (a Next.js + NestJS monorepo on AWS), where it ran the full delivery loop for months: tickets picked up, features built test-first, PRs raised, reviews actioned, CI fixed, dependencies maintained — with humans steering and machines enforcing quality.
 
+> [!NOTE]
+> **This copy is adapted for a solo developer using GitHub Issues — see [ADR-0002](docs/adr/0002-track-work-in-github-issues.md).** Work is tracked as GitHub issues on a GitHub Project board instead of Jira; the team-only skills (Tempo time logging, QA review, teammate PR review, multi-clone slots) are removed; and a planning layer of reports, ADRs, and workstreams feeds the board. Conventions: [docs/development/github-workflow.md](docs/development/github-workflow.md). The sections below that describe importing the upstream template still point at the original repository.
+
 <p align="center">
   <a href="https://youtu.be/oxiBNyUlh7c" target="_blank" rel="noopener noreferrer">
     <img src="https://img.youtube.com/vi/oxiBNyUlh7c/maxresdefault.jpg" width="640" alt="Watch the walkthrough on YouTube" />
@@ -70,7 +73,7 @@ AI self-review       the agent reviews its own PR against 8 lenses
 Human review         spot-checking — the last slice, not the only one
 ```
 
-And **end-to-end traceability**: every change starts from a ticket, the ticket ID is in the branch name and every commit, the PR links the ticket with test evidence and a rollback plan, and the ticket closes when the PR merges. Machine-enforced, not remembered.
+And **end-to-end traceability**: every change starts from a GitHub issue (planned from a report, ADR, or workstream when the work is non-trivial), the issue number is in the branch name and every commit, the PR says `Closes #N` with test evidence and a rollback plan, and the issue closes when the PR merges. Machine-enforced, not remembered.
 
 ## What's inside
 
@@ -78,9 +81,9 @@ And **end-to-end traceability**: every change starts from a ticket, the ticket I
 ADOPT.md                  Playbook an agent follows to import this into your repo
 AGENTS.md                 The agent contract — rules, workflow, golden rules
 CLAUDE.md                 Claude Code import stub for AGENTS.md
-CONTRIBUTING.md           Branch, commit, and PR conventions
+CONTRIBUTING.md           Branch, commit, PR, report, and workstream conventions
 .agents/
-  skills/                 Skills (Jira flavour — ticket lifecycle + PR workflow) and reusable agent roles
+  skills/                 Skills (GitHub Issues flavour — planning, issue lifecycle, PR workflow) and reusable agent roles
 .claude/
   settings.json           Claude Code hook wiring (PreToolUse / PostToolUse / Stop)
   skills                  Symlink to the canonical .agents/skills directory
@@ -92,6 +95,7 @@ CONTRIBUTING.md           Branch, commit, and PR conventions
 .mcp.json                 Shared Playwright MCP config for Claude Code and GitHub Copilot CLI
 scripts/
   verify.sh               Full verification suite — same checks as CI
+  gh-workflow.mjs         The one place skills talk to GitHub Issues and the Project board
   hooks/                  The shared guardrail hook scripts
 .husky/                   pre-commit and pre-push quality gates
 .github/
@@ -100,8 +104,12 @@ scripts/
   pull_request_template.md
 docs/
   philosophy.md           The engineering philosophy, expanded
-  development/            Engineering standards the agent codes against
+  development/            Engineering standards and workflow conventions the agent codes against
+  architecture/           Current-state architecture — what is true now
   adr/                    Architecture Decision Records (immutable)
+  reports/                Dated research, spike, retro, and audit reports
+  workstreams/            Living plans: goal, scope, phases, acceptance criteria
+  templates/              Templates for reports, ADRs, and workstreams
 ```
 
 ### The skills
@@ -109,32 +117,39 @@ docs/
 > Not sure whether to run `pr-action-review` or `pr-action-review-mine-loop`? See
 > [docs/development/pr-review-workflows.md](docs/development/pr-review-workflows.md) — diagrams and a cheat sheet.
 
-| Skill                          | What it does                                                                                              |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `pickup <ticket-id>`           | Assign the ticket, read it fully, brief the work, create the branch, start PROGRESS.md                    |
-| `refine <ticket-id>`           | Pre-implementation refinement: clarifying questions, ranked approaches, posted back to the ticket         |
-| `briefing <ticket-id>`         | Read-only context build: the ticket, its comment trail, epic chain, and every PR raised against it        |
-| `pr`                           | The full ship workflow: verify → commit → push → PR from template → AI self-review against 8 lenses       |
-| `push`                         | Verify, commit, push — no PR                                                                              |
-| `pr-action-review <pr>`        | Fetch every review comment, triage (auto-fix / discuss / informational), action them, merge when eligible |
-| `pr-review-loop`               | Review all teammates' open PRs — respecting prior discussion, never re-raising pushed-back findings       |
-| `pr-action-review-mine-loop`   | Action reviews on all of _your_ open PRs, looping until everything is merged or blocked                   |
-| `qa-review-action <ticket-id>` | Classify QA feedback: genuine bug / intended behaviour / out of scope — fix or push back accordingly      |
-| `morning`                      | Daily routine: main-branch health, nightly CI triage, Dependabot review                                   |
-| `nightly-check`                | Triage scheduled CI runs: flake vs regression vs config vs infra                                          |
-| `fix-cicd`                     | Read the failing CI logs on this branch, diagnose flake vs real, fix or re-run                            |
-| `dependabot-review`            | Merge green minor/patch bumps, diagnose failing ones, escalate majors                                     |
-| `capture`                      | Turn the current conversation into a tracked ticket + commit                                              |
-| `main`                         | Safely return to main: checks uncommitted/unpushed work before deleting the branch                        |
-| `sync`                         | Post-pull sync: missing env vars, install, generate, build                                                |
-| `pr-chore`                     | Raise a small no-ticket chore PR from a worktree without touching your feature branch                     |
-| `multi-repo`                   | Manage parallel development slots — several clones, isolated ports, one agent each                        |
-| `bump-version`                 | Bump main's semver tag by one minor version and push it — a tag-only operation, no code change            |
-| `log-time`                     | Log time to Tempo automatically, derived from git activity since your last logged entry                   |
+**Planning** — documents first, then issues:
+
+| Skill        | What it does                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------- |
+| `report`     | Write a dated research, spike, retro, or audit report in docs/reports                               |
+| `adr`        | Draft a numbered Architecture Decision Record from the conversation, and sync the architecture docs |
+| `workstream` | Scope a body of work into a workstream doc: goal, scope, phases, acceptance criteria                |
+| `plan-work`  | Turn a workstream phase into an epic issue with sub-issues on the GitHub board                      |
+
+**Delivery** — issue lifecycle, PRs, and maintenance:
+
+| Skill                        | What it does                                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pickup <issue-number>`      | Assign the issue, read it fully, brief the work, create the branch, move it to In Progress, start PROGRESS.md                                            |
+| `refine <issue-number>`      | Pre-implementation refinement: clarifying questions, ranked approaches, posted back to the issue                                                         |
+| `briefing <issue-number>`    | Read-only context build: the issue, its comments, parent epic, sub-issues, board status, and every linked PR                                             |
+| `capture`                    | Turn the current conversation into a tracked GitHub issue on the board + commit                                                                          |
+| `pr`                         | The full ship workflow: verify → commit → push → PR from template (`Closes #N`) → AI self-review against 8 lenses → issue to In Review                   |
+| `push`                       | Verify, commit, push — no PR                                                                                                                             |
+| `pr-action-review <pr>`      | Fetch every review comment and the AI self-review, triage (auto-fix / discuss / informational), action them, merge when eligible, move the issue to Done |
+| `pr-action-review-mine-loop` | Action reviews on all of _your_ open PRs, looping until everything is merged or blocked                                                                  |
+| `pr-chore`                   | Raise a small no-issue chore PR from a worktree without touching your feature branch                                                                     |
+| `wrap-up`                    | Safely return to main: checks uncommitted/unpushed work before deleting the finished branch                                                              |
+| `morning`                    | Daily routine: main-branch health, CI triage (nightly workflows run on demand), Dependabot review                                                        |
+| `nightly-check`              | Triage scheduled or manually-dispatched CI runs: flake vs regression vs config vs infra                                                                  |
+| `fix-cicd`                   | Read the failing CI logs on this branch, diagnose flake vs real, fix or re-run                                                                           |
+| `dependabot-review`          | Merge green minor/patch bumps, diagnose failing ones, escalate majors                                                                                    |
+| `sync`                       | Post-pull sync: missing env vars, install, generate, build                                                                                               |
+| `bump-version`               | Bump main's semver tag by one minor version and push it — a tag-only operation, no code change                                                           |
 
 The 20 skills above are manual-only. Claude Code and GitHub Copilot CLI use the shared `disable-model-invocation: true` frontmatter. Codex uses `allow_implicit_invocation: false` in each skill's `agents/openai.yaml`. Their descriptions also say user-invoked only. `assign-epic` and `run` remain available to agents because the workflow calls them automatically.
 
-One asymmetry to know about: `allowed-tools` in a skill's frontmatter is a **Claude Code** field. Four skills use it so their required `Step 0 — Context (required first)` block runs start to finish without a permission prompt. Codex and Copilot CLI have no equivalent in the shared skill file — they apply their own approval model — so on those runtimes a Step 0 block may still pause for approval. The facts it gathers are identical; only the prompting differs. `verify:agents` checks that every command in a Step 0 block is allow-listed, which is Claude-specific enforcement of a provider-neutral requirement.
+One asymmetry to know about: `allowed-tools` in a skill's frontmatter is a **Claude Code** field. Some skills (`sync`, `wrap-up`, `bump-version`) use it so their required `Step 0 — Context (required first)` block runs start to finish without a permission prompt. Codex and Copilot CLI have no equivalent in the shared skill file — they apply their own approval model — so on those runtimes a Step 0 block may still pause for approval. The facts it gathers are identical; only the prompting differs. `verify:agents` checks that every command in a Step 0 block is allow-listed, which is Claude-specific enforcement of a provider-neutral requirement.
 
 The two roles — `consultant` and `morlock` — are guarded the same way, one step further. Their bodies live in `.agents/skills/<role>/SKILL.md` so all three runtimes share one copy, but they are **role bodies, not skills**: they carry `disable-model-invocation: true` _and_ `user-invocable: false`, plus `allow_implicit_invocation: false` for Codex, and their descriptions begin with `Role adapter only.` so the Copilot coding agent honours the `AGENTS.md` routing rule. Nothing may select or invoke them as a skill. Each role pins a model on all three runtimes, so its model promise holds everywhere rather than falling back to whatever model the session happens to be using.
 
@@ -159,7 +174,7 @@ The built-in tool is enabled repo-wide in `.claude/settings.json`:
 }
 ```
 
-The [settings reference](https://code.claude.com/docs/en/settings-reference#advisormodel) permits `advisorModel` in any settings file, so committing it here makes it a team default rather than something each developer has to remember to run `/advisor` for. Confirmed on Claude Code 2.1.237: with no key the model reports no `advisor` tool, with the key in `.claude/settings.json` it reports one. Five things to know before adopting the template:
+The [settings reference](https://code.claude.com/docs/en/settings-reference#advisormodel) permits `advisorModel` in any settings file, so committing it here makes it a repo-wide default rather than something you have to remember to run `/advisor` for in every clone. Confirmed on Claude Code 2.1.237: with no key the model reports no `advisor` tool, with the key in `.claude/settings.json` it reports one. Five things to know before adopting the template:
 
 - It is **experimental** and **Anthropic API only** — not Bedrock, Claude Platform on AWS, Google Cloud's Agent Platform, or Microsoft Foundry. On those providers the setting is simply inert.
 - It costs extra tokens, and **subagents inherit it**. The advisor re-reads the whole conversation on every call and that read is never cached, so a `consultant` delegation can itself trigger advisor calls billed against its own transcript. There is no setting that caps how often the advisor is called, and no per-role opt-out — `disallowedTools: advisor` does not suppress it.
@@ -169,26 +184,25 @@ The [settings reference](https://code.claude.com/docs/en/settings-reference#advi
 
 Use the runtime's skill interface to invoke a skill:
 
-- Claude Code: `/pickup PROJ-1`
-- Codex: `$pickup PROJ-1`
-- GitHub Copilot CLI: `/pickup PROJ-1`
+- Claude Code: `/pickup 42`
+- Codex: `$pickup 42`
+- GitHub Copilot CLI: `/pickup 42`
 
-These skills use the **Jira REST API** directly (no MCP server required). Ticket lifecycle skills keep the Jira board in sync: `capture` files into **Backlog**, `pickup` moves to **In Progress**, `pr` to **In Review**, and `pr-action-review` to **Done** on merge. Configure via `.env` — see CONTRIBUTING.md § Jira setup.
+These skills use the **GitHub CLI** (`gh`) directly — no MCP server and no `.env` credentials required. Every tracker call goes through `scripts/gh-workflow.mjs`, so the GitHub Issues and Projects plumbing lives in one place. Issue lifecycle skills keep the GitHub Project board in sync: `plan-work` and `capture` file into **Backlog**, `pickup` moves to **In Progress**, `pr` to **In Review**, and `pr-action-review` to **Done** on merge (`Closes #N` closes the issue). Set up once with `gh auth login`, `gh auth refresh -s project`, and `node scripts/gh-workflow.mjs setup` — see [docs/development/github-workflow.md](docs/development/github-workflow.md).
 
 ## Quickstart
 
-1. **Use this template** (GitHub → "Use this template") or copy `.agents/`, `.claude/`, `.codex/`, `.github/agents/`, `.github/hooks/`, `scripts/`, `.husky/`, `.mcp.json`, `AGENTS.md`, and `CLAUDE.md` into your existing repo.
-2. **Authenticate the GitHub CLI** — run `gh auth login`. The skills use `gh` for PRs and CI; Jira tickets are handled via the REST API, not the CLI.
-3. Edit `AGENTS.md`: fill in your project overview, repo map, and stack-specific rules. Delete what doesn't apply — the contract only works if it's true. Leave `CLAUDE.md` as `@AGENTS.md`.
-4. Wire your package scripts: the gates expect `npm run lint`, `typecheck`, `test`, `build` (and optionally `format:check`, `test:integration`). Adjust `scripts/verify.sh` and `.husky/*` to match your stack.
-5. **Configure Jira** — copy `.env.example` to `.env` and set `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_ACCOUNT_ID`, and `JIRA_PROJECT_KEY`. These are config, not secrets — `.env.example` documents them and your real `.env` stays uncommitted.
-6. Confirm the `playwright` MCP server is connected in your chosen runtime.
-7. Create a well-written Jira ticket (acceptance criteria included — the agent implements exactly what the ticket says).
-8. Open your coding agent and invoke `pickup PROJ-1`: `/pickup PROJ-1` in Claude Code or GitHub Copilot CLI, or `$pickup PROJ-1` in Codex.
+1. **Clone and install** — `git clone <your-repo-url> && cd <repo> && npm install`. The `prepare` script installs the git hooks and repairs the `.claude/skills` link.
+2. **Authenticate the GitHub CLI** — `gh auth login`, then `gh auth refresh -s project` so `gh` can manage Project boards. If the clone also has an `upstream` remote, run `gh repo set-default` and choose your own repository, or every `gh` command stops to ask.
+3. **Create the board** — `node scripts/gh-workflow.mjs setup` creates and links a GitHub Project with the Backlog → In Progress → In Review → Done columns and the `epic`/`task`/`bug`/`enhancement` labels. Run `node scripts/gh-workflow.mjs doctor` to confirm, then open the board once and switch its layout to **Board**.
+4. Confirm the `playwright` MCP server is connected in your chosen runtime.
+5. **Plan the work** — invoke `report` to research a question, `adr` to record a decision, or `workstream` to scope a body of work into phases. Small, well-understood changes can skip straight to `capture`.
+6. **Put it on the board** — invoke `plan-work` to turn a workstream phase into an `epic` issue with sub-issues, each with acceptance criteria the agent implements exactly.
+7. **Build it** — invoke `pickup 42`: `/pickup 42` in Claude Code or GitHub Copilot CLI, or `$pickup 42` in Codex. Then `pr` to ship, and `pr-action-review` to action reviews and merge.
 
 ## Adapting it
 
-Different tracker, CI, or stack? That's exactly what **[ADOPT.md](ADOPT.md)** handles — it maps every part of this template (the Jira `curl` calls, the `gh run` CI commands, the npm scripts and Prisma migration check) to your equivalents and drops anything with none. Point an agent at it, or work through it yourself as a checklist.
+Different tracker, CI, or stack? That's exactly what **[ADOPT.md](ADOPT.md)** handles — it maps every part of this template (the tracker calls, the `gh run` CI commands, the npm scripts and Prisma migration check) to your equivalents and drops anything with none. Point an agent at it, or work through it yourself as a checklist.
 
 ## Licence
 
