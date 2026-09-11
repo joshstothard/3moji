@@ -55,6 +55,6 @@
     "prettier": "^3.9.5",
     "secretlint": "^13.0.4",
     "turbo": "^2.10.11",
-    "typescript": "^5.8.0"
+    "typescript": "^7.0.2"
   }
 }
