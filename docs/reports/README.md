@@ -33,5 +33,6 @@ The index's **Follow-ups** column records the ADRs, workstreams, and issues that
 
 <!-- Newest first. One row per report. Maintained by the report, adr, and workstream skills. -->
 
-| Date | Report | Type | Status | Follow-ups |
-| ---- | ------ | ---- | ------ | ---------- |
+| Date       | Report                                                                                 | Type     | Status | Follow-ups |
+| ---------- | -------------------------------------------------------------------------------------- | -------- | ------ | ---------- |
+| 2026-09-11 | [How emoji survive in URL paths on Vercel and Next.js](2026-09-11-emoji-urls.md) (#12) | Research | Draft  | #14        |
