@@ -25,6 +25,14 @@ jobs:
       - uses: ./.github/actions/setup
       - run: npm run verify:agents
 
+  script-tests:
+    name: Script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: npm run test:scripts
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -145,6 +153,7 @@ jobs:
       - code-health
       - openapi
       - adr-sync
+      - script-tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

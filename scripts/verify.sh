@@ -8,6 +8,9 @@ set -euo pipefail
 echo "=== Agent Workflow Parity ==="
 npm run verify:agents
 
+echo "=== Script Tests ==="
+npm run test:scripts
+
 echo "=== Codex Hook Trust ==="
 npm run verify:codex-hooks
 

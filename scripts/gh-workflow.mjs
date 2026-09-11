@@ -57,6 +57,7 @@ const LABELS = [
   ["task", "c5def5", "A unit of work that is neither a bug nor a feature"],
   ["bug", "d73a4a", "Something isn't working"],
   ["enhancement", "a2eeef", "New feature or request"],
+  ["automerge", "0e8a16", "Merge automatically once CI passes (ADR-0003)"],
 ];
 
 const normalise = (name) => name.trim().toLowerCase().replace(/\s+/g, " ");

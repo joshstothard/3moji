@@ -1,0 +1,74 @@
+name: Auto-merge
+
+# Merges a pull request once CI passes on its up-to-date head commit — see
+# ADR-0003 and docs/development/ci-cd.md § Auto-merge. The decision lives in
+# scripts/auto-merge.mjs (unit-tested in scripts/auto-merge.test.mjs):
+#   - a PR labelled `automerge` (added by the `pr` skill after a clean AI
+#     self-review) merges when CI is green;
+#   - a Dependabot PR merges without the label when every update in it is a
+#     semver minor or patch bump;
+#   - a green PR that is behind main is updated and re-tested, never merged on
+#     the stale run.
+#
+# Every trigger runs this file and the script from the default branch, and no
+# step checks out or executes pull request code. That is what makes the write
+# token safe to use from `workflow_run` and `pull_request_target`.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  pull_request_target:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number to evaluate (blank evaluates every open PR)"
+        required: false
+      dry_run:
+        description: "Log each decision without merging or updating anything"
+        type: boolean
+        default: false
+
+# Serialise runs so two merges or branch updates never race on main. GitHub
+# keeps only the newest pending run in a group, so the script evaluates every
+# open PR on each run: a pending run that gets replaced loses nothing.
+concurrency:
+  group: auto-merge
+  cancel-in-progress: false
+
+permissions:
+  contents: write # merge, delete the head branch, update a branch from main
+  pull-requests: write # merge, comment when auto-merge cannot proceed
+  # Dispatch CI after a merge or branch update (GITHUB_TOKEN writes do not
+  # trigger push/pull_request workflows). Also what lets GITHUB_TOKEN merge a PR
+  # that changes files under .github/workflows/.
+  actions: write
+
+jobs:
+  auto-merge:
+    name: Auto-merge
+    # CI runs on main itself (a push, or the dispatch after a merge) have no PR.
+    if: >-
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.head_branch != github.event.repository.default_branch) ||
+      (github.event_name == 'pull_request_target' && github.event.label.name == 'automerge') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Evaluate and merge
+        run: node scripts/auto-merge.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # The commit whose CI just finished, or the PR that was just labelled:
+          # evaluated first. Every run then evaluates the other open PRs too.
+          AUTO_MERGE_SHA: ${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha }}
+          # Manual runs only: restrict the run to this one PR.
+          AUTO_MERGE_PR: ${{ inputs.pr }}
+          AUTO_MERGE_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
