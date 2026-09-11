@@ -2,7 +2,7 @@
 
 ## Required Reading
 
-Before picking up your first ticket, read these. They explain the engineering philosophy behind how this project is built and how we work with Claude Code, Codex, and GitHub Copilot.
+Before picking up your first issue, read these. They explain the engineering philosophy behind how this project is built and how we work with Claude Code, Codex, and GitHub Copilot.
 
 | Resource                                                                                                                                   | What it covers                                                                                                        |
 | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
@@ -12,6 +12,7 @@ Before picking up your first ticket, read these. They explain the engineering ph
 ## Prerequisites
 
 - Node.js (see `.nvmrc` for version)
+- The GitHub CLI (`gh`), authenticated with the `project` scope — see [GitHub CLI and the project board](#github-cli-and-the-project-board) below.
 - Bash — the hooks in `scripts/hooks/` and the parity check shell out to it. On Windows, Git Bash (bundled with Git for Windows) supplies it, but **installing Git is not enough — see below.**
 - On Windows only: `bash` must resolve to Git Bash, not the WSL launcher. See below.
 - On Windows only: symlink support enabled, so `.claude/skills` materialises as a link. See below.
@@ -90,21 +91,18 @@ The parity check accepts a junction: it records an absolute target rather than t
 
 ### Git worktrees and `.env`
 
-`.env` is gitignored, so a freshly created worktree does not have one. Thirteen skills run
-`source .env` to reach `JIRA_API_TOKEN` and `TEMPO_API_TOKEN`, and in a worktree without it
-they stop and ask you for credentials that are sitting in your main checkout.
+`.env` is gitignored, so a freshly created worktree does not have one. That is now harmless for the workflow skills: they reach GitHub through `gh`, whose credentials live in your user profile, not in the repository, so every worktree can already talk to your issues and board.
 
-`.worktreeinclude` at the repo root fixes this for tools that honour the convention — Claude
-Code copies the listed files into each new worktree at creation time. **GitHub Copilot CLI
-does not honour `.worktreeinclude`** (verified against 1.0.80), so a Copilot-created worktree
-still starts without `.env`; copy it in by hand there.
+`.env` is **optional**. Create one only for:
+
+- `GH_PROJECT_OWNER` / `GH_PROJECT_NUMBER` — needed only when more than one GitHub Project is linked to the repository and `scripts/gh-workflow.mjs` must be told which board to use.
+- Application environment variables your apps read locally.
+
+If you do keep one, `.worktreeinclude` at the repo root copies it into new worktrees for tools that honour the convention — Claude Code copies the listed files at creation time. **GitHub Copilot CLI does not honour `.worktreeinclude`** (verified against 1.0.80), so copy it in by hand there.
 
 Note that `.claude/settings.json` hooks already resolve the repo root with
 `git rev-parse --show-toplevel`, which is worktree-correct, and `scripts/verify.sh` needs no
 credentials — so verification and the git hooks work in a worktree regardless.
-
-If you would rather not use worktrees at all, the `multi-repo` skill takes the opposite
-approach deliberately: independent clones per slot, with `.env` copied between them.
 
 ## Coding Agent Setup
 
@@ -168,30 +166,36 @@ GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP=true \
 copilot -p "your prompt"
 ```
 
+### GitHub CLI and the project board
+
+Work is tracked in GitHub Issues on a GitHub Project board, and every skill that touches the tracker goes through `scripts/gh-workflow.mjs`. Set it up once per machine:
+
+```bash
+gh auth login                           # sign in to GitHub
+gh auth refresh -s project              # allow gh to manage Project boards
+node scripts/gh-workflow.mjs setup      # create + link the board, set columns, create labels (idempotent)
+node scripts/gh-workflow.mjs doctor     # confirm everything is ready
+```
+
+No `.env` values are required. See [github-workflow.md](github-workflow.md) for the board statuses, labels, and helper commands.
+
 ### Environment variables
 
-Copy `.env.example` to `.env` and fill in your values:
+`.env` is optional (see [Git worktrees and `.env`](#git-worktrees-and-env) above). To create one:
 
 ```bash
 cp .env.example .env
 ```
 
-The required variables and how to find them are documented inline in `.env.example`. The key ones for Jira:
+The optional variables are documented inline in `.env.example`.
 
-| Variable           | Where to get it                                                                                                                                                            |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JIRA_API_TOKEN`   | [id.atlassian.com](https://id.atlassian.com) → Security → API tokens                                                                                                       |
-| `JIRA_ACCOUNT_ID`  | Run: `curl -u $JIRA_EMAIL:$JIRA_API_TOKEN "$JIRA_BASE_URL/rest/api/3/myself" \| python3 -c "import json,sys; print(json.load(sys.stdin)['accountId'])"`                    |
-| `JIRA_PROJECT_KEY` | The letters before the dash on any ticket in your project (e.g. `PROJ` from `PROJ-123`). Or look it up from any ticket via the API — see `.env.example` for the one-liner. |
-| `JIRA_BOARD_ID`    | Open the project board in Jira — the ID is in the URL: `/jira/software/projects/<KEY>/boards/<ID>`. Or look it up via the API — see `.env.example` for the one-liner.      |
+### Starting an issue
 
-### Starting a ticket
+Invoke the `pickup` skill with the issue number, e.g. `42`. Claude Code and GitHub Copilot CLI use `/pickup 42`; Codex uses `$pickup 42`.
 
-Invoke the `pickup` skill with `PROJ-42`. Claude Code and GitHub Copilot CLI use `/pickup PROJ-42`; Codex uses `$pickup PROJ-42`.
+The agent assigns the issue to you, moves it to **In Progress** on the board, creates the branch, implements the work, runs verification, and raises the PR.
 
-The agent reads the ticket, creates the branch, implements the work, runs verification, and raises the PR.
-
-> **Important:** Make sure the ticket is complete before pointing the agent at it — acceptance criteria defined, relevant designs linked, scope agreed. The agent implements exactly what the ticket says.
+> **Important:** Make sure the issue is complete before pointing the agent at it — acceptance criteria defined, relevant designs linked, scope agreed. The agent implements exactly what the issue says. For larger work, plan it first with the `report`, `adr`, `workstream`, and `plan-work` skills — see [github-workflow.md](github-workflow.md) § The planning layer.
 
 ## Installation
 

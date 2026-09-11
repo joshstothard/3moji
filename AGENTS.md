@@ -7,7 +7,7 @@
 
 ## Project Overview
 
-This is a Turborepo monorepo template with a **Next.js** frontend (`apps/web`, port 3000) and a **NestJS** backend (`apps/api`, port 3001). Shared configuration is centralised in `packages/` — TypeScript compiler options, ESLint rules, Jest presets, and a stub shared library. The entire stack is TypeScript strict-mode. When adopting this template, rename the `@template` namespace to your own project scope throughout all `package.json` files. Architecture decisions live in `docs/adr/`.
+This is a Turborepo monorepo template with a **Next.js** frontend (`apps/web`, port 3000) and a **NestJS** backend (`apps/api`, port 3001). Shared configuration is centralised in `packages/` — TypeScript compiler options, ESLint rules, Jest presets, and a stub shared library. The entire stack is TypeScript strict-mode. When adopting this template, rename the `@template` namespace to your own project scope throughout all `package.json` files. Architecture decisions live in `docs/adr/`; research reports in `docs/reports/`; workstream plans in `docs/workstreams/`. Work is tracked in GitHub Issues on a GitHub Project board — see [docs/development/github-workflow.md](docs/development/github-workflow.md).
 
 ## Repo Map
 
@@ -20,23 +20,44 @@ packages/eslint-config/ — Centralised ESLint rules (base / nextjs / nestjs)
 packages/jest-config/  — Centralised Jest presets (base / nestjs / nextjs)
 packages/tsconfig/     — Centralised TypeScript configs (base / nestjs / nextjs / react-library)
 packages/test-utils/   — Shared test data builders and helpers (stub)
-docs/                  — All documentation (plans, ADRs, architecture, runbooks)
-scripts/               — Developer and CI scripts
+docs/                  — All documentation (reports, ADRs, workstreams, architecture, runbooks)
+scripts/               — Developer and CI scripts (incl. gh-workflow.mjs, the GitHub Issues/Project helper)
 ```
 
 ## Workflow Loop
 
 ```
-Proposal -> Plan -> Tickets -> Branch -> Code -> Gates -> Deploy -> Monitor -> Trace back
+Proposal (report, ADR) -> Plan (workstream) -> Issues -> Branch -> Code -> Gates -> Deploy -> Monitor -> Trace back
 ```
 
-- Work starts from Jira tickets. Every branch references a ticket.
-- The active coding agent can pick up tickets from the backlog and execute them with the `pickup` skill for `PROJ-1`.
+- Work starts from GitHub issues. Every branch references an issue.
+- The active coding agent can pick up issues from the backlog and execute them with the `pickup` skill for issue `42`.
 - Fast feedback loops (tests, lint, typecheck) catch problems early.
 - CI pipeline and repo hooks act as deterministic guardrails.
 - The active coding agent should browse, test, and verify the running app as part of the build experience (e.g. via the Playwright MCP server), not just write code blindly.
 
-The Jira board mirrors this loop, and keeping it in sync is **required, not optional**. Tickets move forward through four statuses — **Backlog** (`capture`) → **In Progress** (`pickup`) → **In Review** (`pr`) → **Done** (`pr-action-review` on merge).
+The GitHub Project board mirrors this loop, and keeping it in sync is **required, not optional**. Issues move forward through four statuses — **Backlog** (`plan-work`, `capture`) → **In Progress** (`pickup`) → **In Review** (`pr`) → **Done** (`pr-action-review` on merge). Set a status with `node scripts/gh-workflow.mjs status <number> "<status>"`; never hand-write the GraphQL.
+
+## Planning Layer
+
+Non-trivial work is planned in versioned documents before it becomes issues, so every change can cite the research and decision behind it:
+
+```
+report -> adr -> workstream -> plan-work -> pickup -> pr
+```
+
+| Document   | Lives in                            | Created by             | Mutable?                                             |
+| ---------- | ----------------------------------- | ---------------------- | ---------------------------------------------------- |
+| Report     | `docs/reports/YYYY-MM-DD-<slug>.md` | `report`               | Frozen once its conclusions are acted on             |
+| ADR        | `docs/adr/NNNN-<slug>.md`           | `adr`                  | **Immutable** once Accepted (status line only)       |
+| Workstream | `docs/workstreams/<slug>.md`        | `workstream`           | Living: status, phases, and issue links kept current |
+| Issue      | GitHub                              | `plan-work`, `capture` | Closed by the PR that implements it (`Closes #N`)    |
+
+- Take only the steps a change needs: a decision with no open question skips `report`, and a small fix goes straight from `capture` to `pickup`.
+- `plan-work` turns one workstream phase into an `epic` issue with sub-issues on the board. Each issue's Context section links the workstream, ADR, or report behind it.
+- `report`, `adr`, `workstream`, and `plan-work` are user-invoked only, like every other workflow skill.
+
+Issue conventions, board statuses, templates, and the helper commands are in [docs/development/github-workflow.md](docs/development/github-workflow.md).
 
 ## Skill Invocation
 
@@ -74,13 +95,15 @@ Never write "consult the advisor" in a prompt, skill, or commit message and expe
 
 Before starting any task, read the relevant context files. Do not code from memory or assumptions.
 
-| Area                            | Files to Read                                                       |
-| ------------------------------- | ------------------------------------------------------------------- |
-| Always                          | `AGENTS.md`, `CONTRIBUTING.md`                                      |
-| Architecture / design decisions | `docs/architecture/`, `docs/adr/`                                   |
-| Engineering patterns            | `docs/development/engineering-standards.md`                         |
-| Quality / testing               | `docs/development/quality-strategy.md`                              |
-| Feature work                    | The Jira ticket — it is the source of truth for acceptance criteria |
+| Area                            | Files to Read                                                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Always                          | `AGENTS.md`, `CONTRIBUTING.md`                                                                                  |
+| Architecture / design decisions | `docs/architecture/`, `docs/adr/`                                                                               |
+| Engineering patterns            | `docs/development/engineering-standards.md`                                                                     |
+| Quality / testing               | `docs/development/quality-strategy.md`                                                                          |
+| Feature work                    | The GitHub issue (`node scripts/gh-workflow.mjs issue <n>`) — it is the source of truth for acceptance criteria |
+| Planned work                    | The workstream in `docs/workstreams/` that the issue or its epic links to                                       |
+| Research and prior findings     | The reports in `docs/reports/` cited by the issue, workstream, or ADR                                           |
 
 If a task spans multiple areas, read all relevant files. When in doubt, read more rather than less.
 
@@ -104,7 +127,7 @@ CI enforces this with `scripts/check-adr-sync.sh`: a diff that touches `docs/adr
    - Default: update the docs first, then implement. The docs lead, code follows.
    - Also flag if the deviation might indicate we're heading in the wrong direction.
 4. **After coding**: Check if any docs need updating to reflect what was built. If you added a new pattern, endpoint, data flow, ADR, or changed behaviour — update the relevant docs in the same PR.
-5. **New features or significant changes**: Update architecture docs if the system shape changed. Feature context lives in Jira — not in the repo.
+5. **New features or significant changes**: Update architecture docs if the system shape changed. Feature context lives in the GitHub issue; the plan behind it lives in `docs/workstreams/` and `docs/reports/`.
 
 This applies to ALL documentation: architecture, ADRs, conventions, engineering standards, quality strategy, and runbooks.
 
@@ -116,13 +139,13 @@ When writing **any** code **always** refer to @docs/development/engineering-stan
 
 ## PROGRESS.md — Session Scratchpad
 
-> **Primary development agent only.** PROGRESS.md is for the agent actively working a feature or fix on this branch. Secondary agents opened for quick, unrelated tasks (Jira lookups, ticket creation, chore commands, one-off queries) must **not** write to PROGRESS.md — they have no relevant progress to log and doing so pollutes the scratchpad and triggers the stop hook unnecessarily.
+> **Primary development agent only.** PROGRESS.md is for the agent actively working a feature or fix on this branch. Secondary agents opened for quick, unrelated tasks (issue lookups, issue creation, chore commands, one-off queries) must **not** write to PROGRESS.md — they have no relevant progress to log and doing so pollutes the scratchpad and triggers the stop hook unnecessarily.
 
 Maintain a `PROGRESS.md` file in the repo root during development sessions. This is a running log of progress, decisions, open questions, and direction changes.
 
 ### During a session
 
-- Append progress after completing each ticket or significant milestone.
+- Append progress after completing each issue or significant milestone.
 - Record decisions made, problems encountered, and questions that arose.
 - Note any direction changes or deviations from the plan.
 
@@ -150,7 +173,7 @@ Every test must be observed failing for the right reason before it counts. A tes
 
 Two orders satisfy this:
 
-1. **Test first** (default): write the test, run it red, implement, run it green. Batch the suite — write the tests for the whole ticket's acceptance criteria, watch them all go red, then implement. One-test-at-a-time micro-loops are human working-memory scaffolding; they cost turns here and buy the same evidence.
+1. **Test first** (default): write the test, run it red, implement, run it green. Batch the suite — write the tests for the whole issue's acceptance criteria, watch them all go red, then implement. One-test-at-a-time micro-loops are human working-memory scaffolding; they cost turns here and buy the same evidence.
 2. **Test after**: write the test, then break the implementation to prove the test goes red, and restore. Test-after risks deriving assertions from the code rather than the requirement — so write them from the acceptance criteria, not from the implementation.
 
 **Exploratory-first is a path, not an exception.** When proving out an unfamiliar approach, write the production code first to validate it works, then comment it out and write the tests. The commented-out code is what produces the red run, so this satisfies the rule. Uncomment incrementally to green.
@@ -165,16 +188,16 @@ This applies to unit, integration, and E2E tests.
 
 These are non-negotiable. No exceptions, no workarounds.
 
-1. **Every task needs a Jira ticket.** No work without a ticket. **Exception:** `chore/` branches (dependency bumps, test maintenance, config housekeeping) are exempt — use a `chore/<short-description>` branch name and a `chore:` commit prefix. All `feat/` and `fix/` work still requires a ticket.
-2. **Every code change needs a feature branch** — named per CONTRIBUTING.md (`<ticket-id>-<short-description>`, or `chore/<short-description>`).
-3. **Merge = Close** — Close the Jira ticket immediately when the PR merges.
+1. **Every task needs a GitHub issue.** No work without an issue. **Exception:** `chore/` branches (dependency bumps, test maintenance, config housekeeping) are exempt — use a `chore/<short-description>` branch name and a `chore:` commit prefix. All feature and fix work still requires an issue.
+2. **Every code change needs a feature branch** — named per CONTRIBUTING.md (`<issue-number>-<short-description>`, or `chore/<short-description>`).
+3. **Merge = Close** — Every PR body carries `Closes #N`, so the issue closes when the PR merges; confirm it closed and its board status is **Done**.
 4. **Never commit a schema change without a migration file** — Schema and migration travel together, always.
 5. **ADRs are immutable** — Never edit the body of an accepted ADR. The only permitted change is updating its status line to `Superseded by ADR-XXXX` and adding the corresponding blockquote pointer. All decision changes require a brand new ADR. See `CONTRIBUTING.md` § Architecture Decision Records.
 6. **Never push with `--no-verify`** without explicit user approval.
 7. **Never ignore pre-existing errors** — Fix them, don't bypass them.
 8. **Never use `any` types** — Strict TypeScript only. Use `unknown` and narrow with type guards if the type is genuinely uncertain.
 9. **Always use i18n keys** (if the project is localised) — Never hardcode user-facing strings.
-10. **Ticket update safety check** — Before updating any ticket, check its assignee. If it's assigned to someone other than the current user, or is unassigned, STOP and ask before proceeding.
+10. **Issue update safety check** — Before updating any issue, check its assignee. If it's assigned to someone other than the current user (an outside contributor, or a bot), STOP and ask before proceeding. On this solo repo an unassigned issue is yours to update; `pickup` assigns it to you (`gh issue edit <n> --add-assignee @me`).
 
 ## What Every Agent MUST Always Do
 
@@ -187,13 +210,13 @@ These are non-negotiable. No exceptions, no workarounds.
 - **Tests with features**: Every feature or fix includes tests. Never reduce coverage.
 - **Strict TypeScript**: No `any` types. Use strict mode, proper generics, and type guards.
 - **Run verification**: Run `scripts/verify.sh` before opening a PR.
-- **Follow branching rules**: Branch from `main`, name branches with ticket IDs (see CONTRIBUTING.md).
-- **Follow commit conventions**: Include the ticket ID in commit messages (see CONTRIBUTING.md).
-- **Close tickets on merge**: When a PR merges, close the corresponding Jira ticket immediately.
+- **Follow branching rules**: Branch from `main`, name branches with the issue number (see CONTRIBUTING.md).
+- **Follow commit conventions**: Include the issue number as the commit scope, e.g. `feat(#42): ...` (see CONTRIBUTING.md).
+- **Close issues on merge**: Every PR body says `Closes #N`; after merge, confirm the issue closed and its board status is **Done**.
 - **Respect quality gates**: Never bypass lint, typecheck, tests, or CI checks.
 - **Test against standards**: Explicitly test against WCAG and OWASP compliance standards.
-- **Trace everything**: Include the ticket ID, plan link, and test evidence in PRs.
-- **Fill the PR template fully**: ticket, summary, test evidence, risk, rollback.
+- **Trace everything**: Include `Closes #N`, the workstream/report/ADR link, and test evidence in PRs.
+- **Fill the PR template fully**: issue, summary, test evidence, risk, rollback.
 
 ## What Every Agent MUST Never Do
 
@@ -211,11 +234,11 @@ These are non-negotiable. No exceptions, no workarounds.
 - Bypass pre-commit or pre-push hooks.
 - Deploy without passing all quality gates.
 - Create PRs without running `scripts/verify.sh`.
-- Start work without a ticket (except `chore/` branches).
+- Start work without a GitHub issue (except `chore/` branches).
 
 ## PR Review Standards
 
-These rules apply to **all AI-assisted PR reviews** on this repo — regardless of which review command, tool, or workflow a developer uses.
+These rules apply to **all AI-assisted PR reviews** on this repo — regardless of which review command, tool, or workflow is used. This is a solo repository: the reviews a PR receives are the AI self-review raised by `pr`, review bots such as Copilot code review, and the occasional outside contributor. The standards below keep those reviews consistent and stop an agent re-litigating a finding that has already been settled.
 
 ### Always check conversation history first
 
@@ -227,9 +250,9 @@ gh api repos/{owner}/{repo}/issues/{pr}/comments --paginate
 gh api repos/{owner}/{repo}/pulls/{pr}/reviews --paginate
 ```
 
-Build a map of every issue that has been raised before. For each prior finding, determine whether it was:
+Build a map of every finding that has been raised before. For each prior finding, determine whether it was:
 
-- **Pushed back on** — the PR author replied disagreeing, explained why it was intentional, or explicitly rejected the suggestion.
+- **Pushed back on** — the PR author (usually you) replied disagreeing, explained why it was intentional, or explicitly rejected the suggestion.
 - **Accepted and addressed** — a fix was committed, or the thread was resolved.
 - **Still open** — raised but not yet discussed.
 
@@ -237,14 +260,14 @@ Build a map of every issue that has been raised before. For each prior finding, 
 
 ### Verdict and approval rules
 
-| Situation                                                    | Verdict                                                                                                 |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| No must-fix findings detected                                | **Approve**                                                                                             |
-| Must-fix findings detected, but all have been pushed back on | **Approve** — note the outstanding items in the summary for the human reviewer, but do not block the PR |
-| Must-fix findings detected and none have been discussed      | **Request changes**                                                                                     |
-| Must-fix findings that are new AND genuinely blockers        | **Request changes**                                                                                     |
+| Situation                                                    | Verdict                                                                                            |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| No must-fix findings detected                                | **Approve**                                                                                        |
+| Must-fix findings detected, but all have been pushed back on | **Approve** — note the outstanding items in the summary for the developer, but do not block the PR |
+| Must-fix findings detected and none have been discussed      | **Request changes**                                                                                |
+| Must-fix findings that are new AND genuinely blockers        | **Request changes**                                                                                |
 
-The goal is to avoid blocking PRs on issues the team has already decided to accept. When in doubt, approve and note — do not block.
+The goal is to avoid blocking PRs on findings the developer has already decided to accept. When in doubt, approve and note — do not block.
 
 **A review from a human account counts as a human review, whatever tooling produced it.** This is an agentic workflow: reviews and approvals submitted through a coding agent or any reviewer agent are the act of the account owner, who is accountable for them. Never discount, caveat, or re-litigate an approval because its body is attributed to an AI tool, and never tell the user "no human has really reviewed this" on that basis. Only a genuine bot account (`user.type` of `Bot`, or a login containing `bot`/`copilot`) falls outside this.
 
@@ -286,7 +309,7 @@ _or_ (omit this section if none)
 
 ### After posting the review comment — submit the formal GitHub review
 
-**This step is mandatory.** A `gh pr comment` does not record a verdict in GitHub's review system. Always follow it with:
+**This step is mandatory whenever GitHub allows it.** A `gh pr comment` does not record a verdict in GitHub's review system. Always follow it with:
 
 ```bash
 gh pr review <pr-number> --approve --body '<one-line verdict summary>'
@@ -295,6 +318,8 @@ gh pr review <pr-number> --request-changes --body '<one-line verdict summary>'
 ```
 
 The body should be a single sentence summarising the verdict (e.g. `"No 🔴 findings — approving. One 🟡 noted in the review comment above."` or `"🔴 must-fix: <brief description> — see review comment above."`). This is what shows up in GitHub's review status and counts toward branch protection approval requirements.
+
+**Your own PRs are the exception.** GitHub rejects an approval or change request from the PR's author, and on a solo repo the agent acts as the author. For those PRs the `## AI Review` comment is the review gate: per the solo merge rule (CONTRIBUTING.md § Pull Requests), a PR may merge when CI is green and the comment's 🔴 findings are resolved or pushed back on. Do not work around the restriction with a second account.
 
 ## Commands for Validation
 

@@ -5,7 +5,7 @@
 # Copilot-created worktree still starts without these files — see
 # docs/development/local-setup.md § Git worktrees and `.env`.
 #
-# Deliberately minimal: developer credentials only. Never add dependencies,
+# Deliberately minimal: local environment files only. Never add dependencies,
 # build output, or branch state — copying those defeats the point of a clean
 # worktree.
 .env
