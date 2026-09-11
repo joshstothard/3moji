@@ -337,7 +337,9 @@
       else runs.push({ name: names[k], n: 1 });
     }
     var parts = runs.map(function (r) {
-      return r.n === 1 ? "a " + r.name : NUMWORD[r.n] + " " + plural(r.name);
+      if (r.n > 1) return NUMWORD[r.n] + " " + plural(r.name);
+      // Vowel-aware article, or the flagship reads "a ice".
+      return (/^[aeiou]/.test(r.name) ? "an " : "a ") + r.name;
     });
     if (parts.length === 1) return parts[0];
     if (parts.length === 2) return parts[0] + " and " + parts[1];
