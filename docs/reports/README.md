@@ -36,3 +36,4 @@ The index's **Follow-ups** column records the ADRs, workstreams, and issues that
 | Date | Report | Type | Status | Follow-ups |
 | ---- | ------ | ---- | ------ | ---------- |
 | 2026-09-11 | [Emoji Set candidate: which emoji render on both iOS and Android](2026-09-11-emoji-set.md) ([candidates JSON](2026-09-11-emoji-set.candidates.json)) | Research | Draft | #9 |
+| 2026-09-11 | [Auth library for owned email-and-password sign-in](2026-09-11-auth-library.md) | Research | Draft | #10 |
