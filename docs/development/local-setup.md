@@ -11,7 +11,7 @@ Before picking up your first issue, read these. They explain the engineering phi
 
 ## Prerequisites
 
-- Node.js (see `.nvmrc` for version)
+- Node.js 24 (pinned in `.nvmrc`; run `nvm use`). The root `package.json` `engines` field accepts `^24.15.0 || >=26.0.0`. `@nestjs/schematics@12` needs 22.22.3+ or 24.15+, but the API's Jest tests load the ESM-only NestJS 12 packages through `require()`, which Jest only supports on Node 24.9+ (see [quality-strategy.md § API unit tests](quality-strategy.md#api-unit-tests-appsapi)). On Node 22 the API builds and runs, but its tests fail.
 - The GitHub CLI (`gh`), authenticated with the `project` scope — see [GitHub CLI and the project board](#github-cli-and-the-project-board) below.
 - Bash — the hooks in `scripts/hooks/` and the parity check shell out to it. On Windows, Git Bash (bundled with Git for Windows) supplies it, but **installing Git is not enough — see below.**
 - On Windows only: `bash` must resolve to Git Bash, not the WSL launcher. See below.
