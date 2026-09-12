@@ -4,18 +4,32 @@
 
 A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
-| Path                                                | What it is                                                                                                                           | Port |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---- |
-| `apps/web`                                          | Next.js (App Router) frontend: home, dashboard, and OKR objective pages                                                              | 3000 |
-| `apps/api`                                          | NestJS backend: `health` module and an `okr` module (objectives, key results, check-ins) backed by an in-memory store with seed data | 3001 |
-| `packages/shared`                                   | Types, Zod schemas, and constants shared by web and api                                                                              | —    |
-| `packages/ui`                                       | Shared React component library (stub)                                                                                                | —    |
-| `packages/test-utils`                               | Shared test helpers                                                                                                                  | —    |
-| `packages/tsconfig`, `eslint-config`, `jest-config` | Shared tooling presets                                                                                                               | —    |
+`apps/web` is the only application that will be deployed ([ADR-0003](../adr/0003-nextjs-on-vercel-is-the-whole-application.md)). Route handlers and server actions are thin transport adapters over `packages/core`, which holds the domain logic and must import no framework.
+
+| Path                                                | What it is                                                                                                                                                  | Port |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `apps/web`                                          | Next.js (App Router) frontend and backend. Still carries the template's OKR pages                                                                           | 3000 |
+| `apps/api`                                          | NestJS backend with an in-memory OKR demo. **Planned for deletion, not yet removed** ([ADR-0003](../adr/0003-nextjs-on-vercel-is-the-whole-application.md)) | 3001 |
+| `packages/core`                                     | **Planned, not yet built:** framework-free domain logic, use cases, and Zod schemas ([ADR-0003](../adr/0003-nextjs-on-vercel-is-the-whole-application.md))  | —    |
+| `packages/shared`                                   | Types, Zod schemas, and constants shared across the workspace                                                                                               | —    |
+| `packages/ui`                                       | Shared React component library (stub)                                                                                                                       | —    |
+| `packages/test-utils`                               | Shared test helpers                                                                                                                                         | —    |
+| `packages/tsconfig`, `eslint-config`, `jest-config` | Shared tooling presets                                                                                                                                      | —    |
 
 ## Communication
 
-The web app calls the API over HTTP. The base URL comes from `NEXT_PUBLIC_API_URL`, defaulting to `http://localhost:3001` (`apps/web/src/lib/api.ts`). There is no database: API state lives in memory and resets on restart.
+**Today:** the web app calls the NestJS API over HTTP, with the base URL from `NEXT_PUBLIC_API_URL`, defaulting to `http://localhost:3001` (`apps/web/src/lib/api.ts`). There is no database: API state lives in memory and resets on restart.
+
+**Planned** ([ADR-0003](../adr/0003-nextjs-on-vercel-is-the-whole-application.md)): that cross-process call disappears. The web app talks to `packages/core` in-process, and `packages/core` talks to Neon Postgres through Drizzle using the serverless HTTP driver. Migrations run from committed files in the Vercel build step against the unpooled connection, with a database branch per preview deployment. No schema change is applied by hand.
+
+## Deployment
+
+**Planned** ([ADR-0003](../adr/0003-nextjs-on-vercel-is-the-whole-application.md)): Vercel on the Hobby plan, which forbids commercial use. Postgres is Neon via the Vercel Marketplace; transactional email is Resend, sending from a subdomain of `3moji.me`.
+
+## Areas
+
+- [data-model.md](data-model.md) — Account, Handle, Profile, Link, and the Emoji Set
+- [auth.md](auth.md) — sign-in, verification, and the gate on claiming a Handle
 
 ## Quality gates
 

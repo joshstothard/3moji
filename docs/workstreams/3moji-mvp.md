@@ -205,7 +205,11 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - 2026-09-11 — The Emoji Set is pinned to Emoji 12.0: 1,053 single-codepoint emoji. ADR-0005 to be written from [#9](https://github.com/joshstothard/3moji/issues/9).
 - 2026-09-12 — Spoken Names get a curated layer over the immutable CLDR names, holding names only. [#25](https://github.com/joshstothard/3moji/issues/25)
 - 2026-09-12 — An unclaimed Handle renders the home-page builder pre-filled, rather than a 404. [#16](https://github.com/joshstothard/3moji/issues/16)
+- 2026-09-12 — Next.js on Vercel is the whole application; `apps/api` is deleted and domain logic lives in `packages/core` ([ADR-0003](../adr/0003-nextjs-on-vercel-is-the-whole-application.md))
+- 2026-09-12 — The Handle model: canonical key, 24-hour hold, one Handle per Account, Release as account deletion ([ADR-0004](../adr/0004-the-handle-model.md))
+- 2026-09-12 — The Emoji Set pinned to Emoji 12.0 with a curated name layer and no colour field ([ADR-0005](../adr/0005-the-emoji-set.md))
 
 ## Changelog
 
 - 2026-09-12 — Created (Proposed).
+- 2026-09-12 — ADR-0003, ADR-0004 and ADR-0005 accepted; architecture docs added for the data model and auth.
