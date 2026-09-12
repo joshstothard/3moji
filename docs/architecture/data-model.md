@@ -1,6 +1,6 @@
 # Data model
 
-**Planned, not yet built.** This describes the shape decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md). The PR that builds each part removes its "planned" wording. Vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
+**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, with their migration in `packages/core/migrations/`. Everything below about Handles, Profiles and Links is still planned. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
 
 ## Account
 

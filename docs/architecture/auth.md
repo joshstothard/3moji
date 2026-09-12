@@ -1,6 +1,6 @@
 # Authentication
 
-**Planned, not yet built.** This describes the shape decided in [ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md). The PR that builds it removes this wording.
+**Partly built.** The tables and their migration exist in `packages/core`; the sign-in, verification and reset flows are not wired yet (#31). The shape is decided in [ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md).
 
 ## Shape
 
@@ -31,3 +31,18 @@ A successful password reset does **not** mark the email verified, even though it
 Duplicate sign-ups return a synthetic success, so the API never reveals whether an address is registered. Because every live Account owns exactly one Handle, a duplicate address can never claim a second one; the existing owner is told by email instead.
 
 Every email-sending endpoint is rate limited.
+
+## The tables, as they exist today
+
+Defined in `packages/core/src/db/schema.ts`, migrated by `packages/core/migrations/0000_auth_tables.sql`.
+
+| Table          | Holds                                                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user`         | Identity: name, unique email, `email_verified`, timestamps                                                                                            |
+| `session`      | A session row per sign-in: unique token, expiry, IP, user agent, cascading to `user`                                                                  |
+| `account`      | One row per auth method. For email and password, `provider_id = "credential"` and the hashed password lives in `account.password`. Cascades to `user` |
+| `verification` | Email-verification and password-reset tokens, by identifier and expiry                                                                                |
+
+**The Drizzle property keys are load-bearing.** Better Auth's adapter looks a table up by model name and addresses columns by the Drizzle property key, so renaming one breaks authentication at runtime rather than at build time. `schema.test.ts` calls Better Auth's own `getAuthTables()` and asserts our tables against it, so an upstream change that adds a column fails a test instead of production.
+
+Database column names are snake_case and free to differ from the property keys, because the adapter never sees them.
