@@ -7,7 +7,7 @@
 Emoji are on every keyboard on earth, so a handle that is three emoji long is typeable by anyone, memorable as a picture, and speakable as a phrase. At launch only three-emoji handles are claimable — one- and two-emoji handles are reserved.
 
 > [!NOTE]
-> **Status: pre-code.** The MVP is fully specified — domain model, research, and a five-phase plan — but implementation has not started. The source tree is still the scaffold this repo was forked from. See [Where the project is](#where-the-project-is) below.
+> **Status: pre-code.** The MVP is fully specified — domain model, research, and a five-phase plan — but implementation has not started. The source tree is still the scaffold this repo grew out of. See [Where the project is](#where-the-project-is) below.
 
 ## The domain
 
@@ -19,7 +19,7 @@ Every live Account owns exactly one Handle, so releasing a Handle and deleting a
 
 ## Where the project is
 
-Planning is complete. [Issue #8](https://github.com/joshstothard/3moji/issues/8) is the MVP map and the canonical record of every decision taken so far; it reached its destination on 2026-09-12. Four research reports are in [`docs/reports/`](docs/reports/), and a `3moji-mvp` workstream with five phases is the next document to be written, followed by ADRs 0003 (backend shape), 0004 (Handle model), and 0005 (Emoji Set).
+The decision tickets are closed. [Issue #8](https://github.com/joshstothard/3moji/issues/8) is the MVP map and the canonical record of every decision taken so far; it reached its destination on 2026-09-12. Four research reports are in [`docs/reports/`](docs/reports/README.md), and a `3moji-mvp` workstream with five phases is the next document to be written, followed by ADRs 0003 (backend shape), 0004 (Handle model), and 0005 (Emoji Set).
 
 **Decided, not yet built.** None of the following is installed in the repo today:
 
@@ -37,7 +37,7 @@ The reports are dated snapshots and still carry `Status: Draft`; where a report 
 
 ## What's in the repo today
 
-A Turborepo monorepo on npm workspaces, TypeScript in strict mode throughout — inherited from the template this repo was forked from, and still carrying its demo app:
+A Turborepo monorepo on npm workspaces, TypeScript in strict mode throughout — adopted from the template this repo grew out of, and still carrying its demo app:
 
 ```
 apps/web/        Next.js 16 (App Router) — demo OKR pages, to be replaced
