@@ -25,13 +25,27 @@ const SUITE_TAG = `auth-int-${String(Date.now())}`;
 /** A fresh address per case, so no test depends on another's cleanup. */
 const addressFor = (name: string): string => `${SUITE_TAG}-${name}@example.com`;
 
-/** Better Auth puts the token in the link; the tests need it to follow one. */
+/**
+ * Extracts the token from a Better Auth link.
+ *
+ * The two link shapes differ, which a real run is the only way to discover:
+ *
+ * - verification: `/api/auth/verify-email?token=<TOKEN>&callbackURL=...`
+ * - reset:        `/api/auth/reset-password/<TOKEN>?callbackURL=...`
+ *
+ * The reset token is a **path segment**, not a query parameter. Handling only
+ * the query form silently breaks every reset test.
+ */
 const tokenFrom = (text: string | undefined): string => {
-  const match = /[?&]token=([^&\s]+)/.exec(text ?? "");
-  if (match?.[1] === undefined) {
-    throw new Error(`No token found in email body: ${String(text)}`);
-  }
-  return match[1];
+  const body = text ?? "";
+
+  const query = /[?&]token=([^&\s]+)/.exec(body);
+  if (query?.[1] !== undefined) return query[1];
+
+  const segment = /\/reset-password\/([^/?\s]+)/.exec(body);
+  if (segment?.[1] !== undefined) return segment[1];
+
+  throw new Error(`No token found in email body: ${body}`);
 };
 
 describeWithDatabase("auth against a real Postgres", () => {
