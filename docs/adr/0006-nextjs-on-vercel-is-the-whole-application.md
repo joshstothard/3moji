@@ -1,7 +1,9 @@
 # ADR-0006: Next.js on Vercel is the whole application
 
-**Status:** Accepted
+**Status:** Accepted, partially superseded by ADR-0010
 **Date:** 2026-09-12
+
+> Decision 6's clause "using the serverless HTTP driver" superseded by [ADR-0010: Use one Postgres driver in every environment](./0010-use-one-postgres-driver-in-every-environment.md) on 2026-09-12. The rest of this ADR still applies.
 
 ## Context
 

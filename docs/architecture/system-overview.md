@@ -19,7 +19,7 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 **Today:** there is one application. `apps/api` has been deleted ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)), so nothing runs on port 3001 and no cross-process call remains. There is no database yet.
 
-**Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): that cross-process call disappears. The web app talks to `packages/core` in-process, and `packages/core` talks to Neon Postgres through Drizzle using the serverless HTTP driver. Migrations run from committed files in the Vercel build step against the unpooled connection, with a database branch per preview deployment. No schema change is applied by hand.
+**Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): that cross-process call disappears. The web app talks to `packages/core` in-process, and `packages/core` talks to Neon Postgres through Drizzle using **`node-postgres` in every environment** — the same driver locally, in CI and in production, so CI exercises what production runs ([ADR-0010](../adr/0010-use-one-postgres-driver-in-every-environment.md); **planned, not yet built**, see [#89](https://github.com/joshstothard/3moji/issues/89)). Migrations run from committed files in the Vercel build step against the unpooled connection, with a database branch per preview deployment. No schema change is applied by hand.
 
 ## Routing
 

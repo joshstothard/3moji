@@ -246,6 +246,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - 2026-09-12 — A Handle keeps one identity and gains a second address: a dot-separated word alias, because an autolinker truncates the emoji URL and drops the Handle. Partially supersedes ADR-0004 decision 1's unconditional 404 ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md))
 - 2026-09-12 — The 30-day Handle cooldown is dropped for the MVP: a released Handle returns to the pool immediately. Release still writes a key-and-timestamp tombstone, because time cannot be backfilled. Resolves [#63](https://github.com/joshstothard/3moji/issues/63) and unblocks Phase 3; partially supersedes ADR-0004 decision 5 ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md))
 
+- 2026-09-12 — One Postgres driver in every environment: `node-postgres`, replacing the serverless HTTP driver in production. The driver was chosen by `NODE_ENV`, so CI exercised something production never ran and four merged PRs passed over a Claim path that could not open a transaction. Partially supersedes ADR-0006 decision 6's driver clause; unblocks #84 ([ADR-0010](../adr/0010-use-one-postgres-driver-in-every-environment.md))
+
 ## Changelog
 
 - 2026-09-12 — Created (Proposed).
