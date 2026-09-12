@@ -71,11 +71,18 @@ describeWithDatabase("the auth migration against a real Postgres", () => {
     expect(await tableExists("user")).toBe(true);
   });
 
-  it("records itself in drizzle's migration journal exactly once", async () => {
+  /**
+   * The literal is spelled out rather than read from `_journal.json`, so
+   * committing a migration is a deliberate edit here. Deriving it would
+   * parameterise the test on the value it constrains and it would then pass
+   * however many migrations appeared — including a duplicate applied twice,
+   * which is the failure this is here to catch.
+   */
+  it("applies each committed migration exactly once", async () => {
     const result = await db.execute<{ count: string }>(sql`
       SELECT count(*) AS count FROM drizzle.__drizzle_migrations
     `);
-    expect((result.rows as { count: string }[])[0]?.count).toBe("1");
+    expect((result.rows as { count: string }[])[0]?.count).toBe("2");
   });
 
   it("cascades a session delete when its user is removed", async () => {
