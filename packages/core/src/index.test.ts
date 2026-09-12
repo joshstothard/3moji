@@ -11,12 +11,15 @@ import {
   findEmojiByCodepoint,
   isClaimableEmoji,
   isReservedHandle,
+  releasedHandle,
+  releaseHandle,
   releasedEmojiSet,
   RESERVED_HANDLES,
   resolveDriver,
 } from "./index";
 import type {
   ClaimabilityResult,
+  ReleaseStore,
   Clock,
   CoreDependencies,
   CoreServices,
@@ -109,5 +112,19 @@ describe("package entry point", () => {
       services.auth.options.emailAndPassword.requireEmailVerification,
     ).toBe(true);
     await handle.close();
+  });
+
+  /**
+   * The Release, through the public API alone. `apps/web` reaches the domain
+   * only through this entry point, so a use case left out here is an
+   * unreachable one — and the account surface that will call it is Phase 4's.
+   */
+  it("exports the Release use case, its port and the tombstone table", () => {
+    expect(typeof releaseHandle).toBe("function");
+    expect(releasedHandle).toBeDefined();
+    // The port is a type, so the annotation is the assertion: this file does
+    // not compile if `ReleaseStore` is not exported.
+    const store: ReleaseStore | undefined = undefined;
+    expect(store).toBeUndefined();
   });
 });

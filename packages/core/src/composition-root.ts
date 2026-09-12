@@ -7,12 +7,14 @@ import { createDrizzleAccountDirectory } from "./adapters/drizzle-account-direct
 import { createDrizzleClaimFinaliser } from "./adapters/drizzle-claim-finaliser";
 import { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
 import { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
+import { createDrizzleReleaseStore } from "./adapters/drizzle-release-store";
 import { createDrizzleVerificationDispatchStore } from "./adapters/drizzle-verification-dispatch-store";
 import type { Database } from "./db/client";
 import type { AccountDirectory } from "./ports/account-directory";
 import type { ClaimFinaliser } from "./ports/claim-finaliser";
 import type { Clock } from "./ports/clock";
 import type { ClaimStore } from "./ports/claim-store";
+import type { ReleaseStore } from "./ports/release-store";
 import type { HandleRepository } from "./ports/handle-repository";
 import type { VerificationDispatchStore } from "./ports/verification-dispatch-store";
 
@@ -66,6 +68,16 @@ export interface CoreServices {
    * and the finalisation has no business creating an Account.
    */
   readonly claimFinaliser: ClaimFinaliser;
+  /**
+   * The Release's unit of work: the tombstone and the account deletion in one
+   * transaction ([ADR-0009](../../../docs/adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)).
+   *
+   * **A separate port from {@link claims} rather than more methods on it.**
+   * `deleteAccount` is not on the claim path, and putting it there would hand
+   * the Claim a verb for deleting somebody's Account — the Interface
+   * Segregation rule in `docs/development/engineering-standards.md`.
+   */
+  readonly releases: ReleaseStore;
   /** Who an address belongs to, and which Handle is theirs. Read-only. */
   readonly accounts: AccountDirectory;
   /** Which verification links went out, and when. */
@@ -142,6 +154,9 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     handles: createDrizzleHandleRepository(deps.db),
     claims: createDrizzleClaimStore(transactional),
     claimFinaliser: createDrizzleClaimFinaliser(transactional),
+    // No auth rebinding and no deferred sender: a Release writes no Better Auth
+    // row and sends no email, so it needs a plain transaction.
+    releases: createDrizzleReleaseStore({ db: deps.db }),
     accounts: createDrizzleAccountDirectory(deps.db),
     dispatches,
     emailSender: deps.auth.emailSender,

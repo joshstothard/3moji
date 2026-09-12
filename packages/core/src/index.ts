@@ -113,6 +113,22 @@ export { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
 export type { DrizzleClaimStoreInput } from "./adapters/drizzle-claim-store";
 export { claimHandle, HOLD_DURATION_MS } from "./handle/claim-handle";
 export type { ClaimHandleInput, ClaimResult } from "./handle/claim-handle";
+export type {
+  ReleasedHandle,
+  ReleaseStore,
+  ReleaseTransaction,
+} from "./ports/release-store";
+export {
+  createDrizzleReleaseStore,
+  releaseTransactionOn,
+} from "./adapters/drizzle-release-store";
+export type { DrizzleReleaseStoreInput } from "./adapters/drizzle-release-store";
+export { releaseHandle } from "./handle/release-handle";
+export type {
+  ReleaseHandleInput,
+  ReleaseResult,
+} from "./handle/release-handle";
+export { releasedHandle } from "./db/released-handle";
 export { submitClaim } from "./handle/submit-claim";
 export type { ClaimSubmission, SubmitClaimInput } from "./handle/submit-claim";
 

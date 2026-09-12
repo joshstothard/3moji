@@ -1,6 +1,6 @@
 # Data model
 
-**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, and the `handle` table — the first we design ourselves — in `packages/core/src/db/handle.ts`, with their migrations in `packages/core/migrations/`. The Emoji Set ships as data in `packages/core/src/emoji/`. The **table** a Handle lives in is built, and so is [the Claim](#the-claim) that writes to it — as a domain path, with no user interface in front of it yet. **Lazy hold expiry is built**, as the write inside that Claim (see [Expiring a hold](#expiring-a-hold)). The release flow is not built, and neither are Profiles and Links. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
+**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, and the `handle` table — the first we design ourselves — in `packages/core/src/db/handle.ts`, with their migrations in `packages/core/migrations/`. The Emoji Set ships as data in `packages/core/src/emoji/`. The **table** a Handle lives in is built, and so is [the Claim](#the-claim) that writes to it — as a domain path, with no user interface in front of it yet. **Lazy hold expiry is built**, as the write inside that Claim (see [Expiring a hold](#expiring-a-hold)). **Release is built** — account deletion and the `released_handle` tombstone, as a domain path with no account surface in front of it yet (see [The release tombstone](#the-release-tombstone)). Profiles and Links are not built. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
 
 ## Account
 
@@ -33,7 +33,7 @@ Membership is checked left to right and the **leftmost** offender is reported, s
 
 **Alias stability is coupled to curation, which makes curation no longer cosmetic.** `displayName` is curated and mutable — 29 of 307 are overridden — so renaming one silently changes every alias containing it and breaks links already in people's bios. Deriving aliases from the immutable CLDR `spokenName` would avoid that at the cost of `/ice.ice.ice`, the exact defect the curated layer exists to fix. A display-name change is therefore a **breaking URL change** and needs the old alias retained as a redirect.
 
-**Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. The first step of that is built — see [the Claim](#the-claim) below. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job; an expired hold frees the Handle and deletes the unverified Account. **That is built too** — see [Expiring a hold](#expiring-a-hold). **A released Handle returns to the pool immediately — there is no cooldown in the MVP** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). Handles cannot be changed in the MVP.
+**Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. The first step of that is built — see [the Claim](#the-claim) below. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job; an expired hold frees the Handle and deletes the unverified Account. **That is built too** — see [Expiring a hold](#expiring-a-hold). **A released Handle returns to the pool immediately — there is no cooldown in the MVP** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)); **that is built too**, and an integration test claims a Handle at the very instant it is released. Handles cannot be changed in the MVP.
 
 ## Reserved Handles
 
@@ -83,13 +83,35 @@ Membership is checked left to right and the **leftmost** offender is reported, s
 
 ### The release tombstone
 
-**Planned, not yet built** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). `handle.user_id` cascades on delete, so deleting an Account takes its Handle row with it and leaves nothing to date a cooldown from. That contradiction in ADR-0004 decision 5 is resolved by dropping the cooldown rather than by enforcing it: **a released Handle returns to the pool immediately.**
+**Built** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). `handle.user_id` cascades on delete, so deleting an Account takes its Handle row with it and leaves nothing to date a cooldown from. That contradiction in ADR-0004 decision 5 is resolved by dropping the cooldown rather than by enforcing it: **a released Handle returns to the pool immediately.**
 
-Release will still write a `released_handle` row — the canonical key and a release timestamp, **and nothing else**. No `user_id`, no email, no Profile field, no foreign key to any Account: Release is account deletion, and a tombstone naming its former owner would make that promise true in letter and false in substance. The canonical key was a public URL already, so alone it identifies nobody. **That constraint belongs in the table's own comment when it is built** — adding a user reference later would silently undo account deletion.
+Release still writes a `released_handle` row — the canonical key and a release timestamp, **and nothing else**. No `user_id`, no email, no Profile field, no foreign key to any Account: Release is account deletion, and a tombstone naming its former owner would make that promise true in letter and false in substance. The canonical key was a public URL already, so alone it identifies nobody. **That constraint is written in the table's own comment**, because adding a user reference later would silently undo account deletion.
 
 The row exists because **time cannot be backfilled**: a cooldown switched on later with no history behind it starts blind. The write goes in the delete use case inside the deletion transaction, not a database trigger, because `drizzle-kit generate` owns this schema — the same trade taken for the blocked-emoji `CHECK`. The cost is that the database cannot enforce it, so a direct `DELETE` on a `user` row leaves no tombstone; the tombstone is evidence, not an invariant.
 
-**Nothing reads it.** The claim path does not consult it, which is what makes "no cooldown" structural rather than asserted — there is no branch to get wrong and no stale row can block a legitimate claim. Turning a cooldown on is a new ADR plus a read in the claim gate.
+**Nothing reads it.** The claim path does not consult it, which is what makes "no cooldown" structural rather than asserted — there is no branch to get wrong and no stale row can block a legitimate claim. An integration test inserts a tombstone for a Handle nobody ever claimed and then claims it, so the day a read appears in the claim gate is the day that test goes red. Turning a cooldown on is a new ADR plus that read. Rows are never swept in the MVP (decision 6).
+
+#### How it is stored
+
+`packages/core/src/db/released-handle.ts`, migration `0004_released_handle_tombstone`.
+
+| Column        | Type                      | Why                                                                                                                                                                      |
+| ------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`          | `text`, PK                | The row's own identity — **not the key**. With no cooldown a Handle can be released, reclaimed and released again, so one key legitimately has several rows              |
+| `key`         | `text collate "C"`        | The released canonical key, in the same column type `handle.key` uses (`handleKeyColumn`, imported rather than redeclared). Not unique and not indexed: nothing reads it |
+| `released_at` | `timestamptz`, no default | When the Handle returned to the pool, from the injected `Clock`. A cooldown would be dated from this, so a SQL default would put it where no test can move time          |
+
+#### Releasing
+
+`releaseHandle` in `packages/core/src/handle/release-handle.ts`, over the `ReleaseStore` port (`src/ports/release-store.ts`) and its Drizzle adapter (`src/adapters/drizzle-release-store.ts`), wired as `releases` on the composition root.
+
+One transaction does three things in this order, and the order is a rule: **read the Handle the Account owns**, write the tombstone, delete the `user` row. The read has to come first because `handle.user_id` cascades — after the delete there is no key left to record. Deleting the `user` row is what makes Release account deletion: the Handle, the sessions, the credential rows and the verification dispatches all cascade from it, and Phase 4's Profile and Links will hang off the same row.
+
+It is a **separate port from the Claim's** rather than three more methods on `ClaimTransaction`: `deleteAccount` is not on the claim path, and putting it there would hand the Claim a verb for deleting somebody's Account. Better Auth is not rebound to this transaction the way the Claim rebinds it, because a Release writes no Better Auth row and sends no email — so Better Auth's own `deleteUser` API is bypassed and no library hook fires on deletion; the cascade is what the deletion actually needs.
+
+An id that owns no Handle answers `no-handle` and writes nothing: ADR-0004 decision 4 leaves only two ways to reach that — an id naming nobody, or a Release that already happened.
+
+**There is no interface in front of it yet.** ADR-0004 decision 5 requires that the interface say plainly that releasing deletes the Account along with the Profile and its Links, rather than hiding it behind the word "release". There is no authenticated account surface to carry that copy until Phase 4.
 
 ## The Claim
 

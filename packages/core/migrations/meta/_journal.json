@@ -29,6 +29,13 @@
       "when": 1789237821609,
       "tag": "0003_verification_dispatch",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789247422569,
+      "tag": "0004_released_handle_tombstone",
+      "breakpoints": true
     }
   ]
 }

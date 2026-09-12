@@ -58,6 +58,20 @@ describe("createCoreServices", () => {
   });
 
   /**
+   * The Release's unit of work, wired **separately from the Claim's**. They are
+   * two ports rather than one because `deleteAccount` has no business being
+   * reachable from the claim path (Interface Segregation, in
+   * `docs/development/engineering-standards.md`).
+   */
+  it("wires the Release's unit of work", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(typeof services.releases.runInTransaction).toBe("function");
+    expect(Object.keys(services.claims)).toEqual(["runInTransaction"]);
+    await close();
+  });
+
+  /**
    * The read/write split, asserted rather than described. The Handle repository
    * is read-only on purpose — ADR-0004's claim is a transaction, and a port
    * that could also write would let a caller write without one. The writes live
