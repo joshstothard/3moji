@@ -26,12 +26,26 @@
 
 ## Domain unit tests (`packages/core`)
 
-Domain tests run under Jest + ts-jest in the `node` environment, from `@template/jest-config/base`. There is no ESM workaround to remember: the package has no framework dependencies, which is the point of it ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)).
+Domain tests run under Jest + ts-jest in the `node` environment, from `@template/jest-config/base`.
+
+- **`better-auth` is ESM-only, so the `test` script needs `--experimental-vm-modules`.** The script is `node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --coverage` — Jest's documented form, and portable to Windows `cmd.exe` unlike an inline `NODE_OPTIONS=` prefix. Without the flag every suite that touches Better Auth fails before a single test runs, with `Must use import to load ES Module`. Run the tests through `npm test`, not bare `npx jest`, and note that anything spawning Jest itself (a Stryker runner, an IDE) does not inherit the flag and must pass it. This is the same workaround the deleted NestJS app needed, for the same reason.
+- **Framework-free does not mean dependency-free.** `packages/core` holds no _framework_, which is what ADR-0006 requires and what its ESLint config enforces. It does hold the auth library and the database driver, and those bring their own module-format constraints.
 
 - **`packages/core` is framework-free, and its ESLint config enforces that** — any import of `next/*`, `react`, `react-dom` or `@vercel/*` fails the build, type-level imports included.
 - **Collaborators are injected, never reached for.** Anything the domain needs from outside is a port in `src/ports/`, implemented by an adapter in `src/adapters/`, and wired by the composition root. Tests pass a fake in rather than patching a module.
 - **Time is injected.** The `Clock` port exists because rules like a Handle's 24-hour hold and 30-day cooldown ([ADR-0004](../adr/0004-the-handle-model.md)) are untestable if the domain reads the system clock.
 - `tsconfig.json` declares `"types": ["node", "jest"]`. Without it, type-aware lint rules cannot resolve `expect` and report every assertion as an unsafe call — a failure that looks like a code smell but is a config gap.
+- **`tsconfig.json` also includes `drizzle.config.ts`.** A `.ts` file outside the project cannot be parsed by the type-aware linter, and the pre-commit hook lints staged `.ts` files, so a config left out of `include` blocks the commit with a parsing error rather than a real finding.
+- **The schema is tested against the library, not against a document.** `schema.test.ts` calls Better Auth's own `getAuthTables()` and asserts our Drizzle tables against it. Its adapter addresses columns by Drizzle **property key**, so a rename is a runtime failure in production rather than a type error at build time; this is the only cheap way to catch that.
+
+## Integration tests (`packages/core`)
+
+Integration tests are named `*.integration.test.ts` and run under `jest.integration.config.mjs`, separate from the unit suite. CI's `integration-tests` job provides a `postgres:16` service and sets `DATABASE_URL`.
+
+- **They never drop a schema or a table.** Resetting the database is how such suites usually start, and it turns a misaimed `DATABASE_URL` into data loss. Drizzle's migrator is idempotent, which is the property worth asserting anyway, so the suite works against a fresh database and an already-migrated one alike.
+- **A missing `DATABASE_URL` skips locally but throws in CI.** A green run that tested nothing is worse than a red one, so the suite fails loudly when `CI` is set and no database is configured. That guard earned its place immediately: it caught the next bullet.
+- **Turborepo runs tasks in strict environment mode, so a variable CI sets does not reach the test.** Turbo 2.x passes only the variables declared in a task's `env` (plus its own allowlist), so `DATABASE_URL` set on the CI step was silently stripped and every integration test skipped. `turbo.json` now declares `env: ["DATABASE_URL", "REDIS_URL"]` on `test:integration`. **Any future task that needs a new variable must declare it there**, or it will read as undefined with no error. Verify the plumbing without a database by pointing `DATABASE_URL` at a closed port: the tests should fail to connect, not skip.
+- **The unit suite excludes them** via `testPathIgnorePatterns`, and `collectCoverageFrom` excludes test files — otherwise an integration test that does not run in the unit suite is counted as 0% and drags the package under its coverage threshold.
 
 ## Web unit tests (`apps/web`)
 
