@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
+import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import { createRecordingEmailSender } from "./adapters/recording-email-sender";
 import { createAuth } from "./create-auth";
 import { authSchema } from "../db/schema";
@@ -53,6 +54,7 @@ describeWithDatabase("auth against a real Postgres", () => {
   let db: ReturnType<typeof drizzle<typeof authSchema>>;
   let emailSender: ReturnType<typeof createRecordingEmailSender>;
   let auth: ReturnType<typeof createAuth>;
+  let dispatches: ReturnType<typeof createInMemoryVerificationDispatchStore>;
 
   beforeAll(async () => {
     // Built directly rather than through createDatabase: the migrator needs the
@@ -62,9 +64,12 @@ describeWithDatabase("auth against a real Postgres", () => {
     await migrate(db, { migrationsFolder: MIGRATIONS });
 
     emailSender = createRecordingEmailSender();
+    dispatches = createInMemoryVerificationDispatchStore();
     auth = createAuth({
       db,
       emailSender,
+      dispatches,
+      clock: { now: () => new Date() },
       baseUrl: "http://localhost:3000",
       secret: "integration-test-secret-of-sufficient-length",
       from: "3moji <no-reply@mail.3moji.me>",

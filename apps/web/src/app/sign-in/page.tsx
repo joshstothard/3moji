@@ -1,0 +1,100 @@
+import en from "../../../../../packages/shared/messages/en.json";
+import { signInFormAction } from "../../components/sign-in-action";
+
+const copy = en.Claim;
+
+/**
+ * Sign in.
+ *
+ * **Deliberately minimal, and here for one reason:** #82's acceptance criterion
+ * is that signing in before verifying renders the hold screen with a resend
+ * action rather than an error, and a criterion about a form needs a form.
+ * `signInAction` holds that behaviour — the 403 Better Auth returns for an
+ * unverified Account becomes a redirect to that person's own hold screen.
+ *
+ * There is no "forgot your password" link and no sign-up link yet: password
+ * reset has no page of its own until somebody builds one, and sign-up happens
+ * inside the Claim rather than on its own (ADR-0004 decision 4). Adding either
+ * as a dead link would be worse than leaving it out.
+ *
+ * A plain `<form>` posting to a server action, so it works with no JavaScript:
+ * a refusal comes back as a fresh render carrying `?error=`, announced by a
+ * live region because a sighted user sees it appear and a screen-reader user
+ * would otherwise be told nothing at all.
+ */
+interface SignInPageProps {
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+/** Whitelisted, because a query string is public input that lands in copy. */
+function errorFor(value: string | string[] | undefined): string | undefined {
+  const candidate = typeof value === "string" ? value : value?.[0];
+  if (candidate === "invalid") return copy.signInInvalid;
+  if (candidate === "failed") return copy.signInFailed;
+  return undefined;
+}
+
+export default async function SignInPage({ searchParams }: SignInPageProps) {
+  const query = await searchParams;
+  const error = errorFor(query.error);
+
+  return (
+    <main className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <h1 className="text-3xl font-bold text-slate-900 mb-8 tracking-tight">
+        {copy.signInHeading}
+      </h1>
+
+      {error !== undefined && (
+        <p
+          className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-base text-red-800"
+          role="alert"
+        >
+          {error}
+        </p>
+      )}
+
+      <form action={signInFormAction} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <label
+            className="text-base font-medium text-slate-700"
+            htmlFor="sign-in-email"
+          >
+            {copy.signInEmailLabel}
+          </label>
+          <input
+            autoComplete="email"
+            className="rounded-xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            id="sign-in-email"
+            name="email"
+            required
+            type="email"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label
+            className="text-base font-medium text-slate-700"
+            htmlFor="sign-in-password"
+          >
+            {copy.signInPasswordLabel}
+          </label>
+          <input
+            autoComplete="current-password"
+            className="rounded-xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            id="sign-in-password"
+            name="password"
+            required
+            type="password"
+          />
+        </div>
+
+        <button
+          className="self-start rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          type="submit"
+        >
+          {copy.signInSubmit}
+        </button>
+      </form>
+    </main>
+  );
+}

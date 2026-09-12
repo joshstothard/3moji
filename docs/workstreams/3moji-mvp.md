@@ -227,7 +227,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 - Do the `Symbols/alphanum` and `Symbols/geometric` subgroups stay in the Emoji Set? Excluding both takes it from 1,053 to 994. Decided in issue #23.
 - Which flagged emoji are excluded after the side-by-side render check? Issue #23.
-- Is three resends an hour the right limit? It is a starting value to tune, not a principle.
+- Is three resends an hour the right limit? It is a starting value to tune, not a principle. As built (#82) it is one constant, `RESEND_LIMITS` in `packages/core/src/auth/resend-allowance.ts`, with an overridable parameter on the pure decision — so tuning it is a one-line change, and the sign-up link counts towards the three.
 - Should 🍑 and 🍆 stay claimable? Both were left in ([#18](https://github.com/joshstothard/3moji/issues/18)) on the grounds that context makes them rude. ADR-0007 makes Food & Drink a launch category, so they are now prominent rather than buried among a thousand.
 - Which order do later category drops go in, and what triggers one? ADR-0007 defers Objects and schedules nothing else.
 - Should the **canonical** word alias prefer a shorter unambiguous synonym where one exists? [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3 joins the `displayName` slugs, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` is accepted on input but names eight Handles.
@@ -290,3 +290,15 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   in-transaction re-check into #81 (alone it would be a wrapper with nothing calling it). Noted on
   the epic: the phase outcome says "on the live site", which cannot be demonstrated until #19
   unblocks #32 — every issue is testable locally and in CI regardless.
+- 2026-09-12 — The Claim is finalised on verification, with the hold screen and resend (#82). Three things
+  worth carrying forward. **Better Auth's verification token is a stateless JWT it never stores**, so
+  "each resend invalidates the previous link" cannot be configured — it needs our own record, which is
+  the new `verification_dispatch` table, and an interception point, which is why the emailed link points
+  at `/claim/verify` rather than at Better Auth's own endpoint. **Verifying also has to write
+  `handle.claimed_at`**, in the same transaction as `email_verified`: without it a verified owner's
+  Handle still reads as held and lazy expiry (#83) would free it. And **the non-enumeration promise is
+  now kept in the domain**: `submitClaim` collapses `already-registered` into `pending` so no transport
+  can leak it, pads the fast branch to Better Auth's own 500 ms floor, and the claim adapter hashes the
+  password even after deciding the address is taken. One deviation flagged: verifying lands on
+  `/claim/verified/<handle>` rather than on the Handle itself, because `/[handle]` is a Phase 4
+  placeholder that reads no database and would tell a new owner their Handle is available.

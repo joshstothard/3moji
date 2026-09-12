@@ -1,6 +1,5 @@
 import { and, eq, isNull, lte } from "drizzle-orm";
 
-import { createDeferredEmailSender } from "../auth/adapters/deferred-email-sender";
 import type { Auth, AuthFactory } from "../auth/auth-factory";
 import type { EmailSender } from "../auth/ports/email-sender";
 import type { Database, DatabaseOrTransaction } from "../db/client";
@@ -20,6 +19,7 @@ import type {
 } from "../ports/claim-store";
 
 import { createDrizzleHandleRepository } from "./drizzle-handle-repository";
+import { runWithTransactionalAuth } from "./transactional-auth";
 
 export interface DrizzleClaimStoreInput {
   readonly db: Database;
@@ -27,22 +27,6 @@ export interface DrizzleClaimStoreInput {
   readonly auth: AuthFactory;
   /** The real sender. Wrapped per transaction, never called during one. */
   readonly emailSender: EmailSender;
-}
-
-/**
- * Rolls the claim transaction back and carries nothing.
- *
- * Drizzle commits when the callback returns and rolls back when it throws, so a
- * rejected Claim has to throw *something* — and the verdict is already held
- * outside, in the {@link TransactionOutcome}. This type exists only so the
- * `catch` can tell "the domain said no" from "the database fell over" without
- * inspecting a message.
- */
-class ClaimRolledBack extends Error {
-  constructor() {
-    super("the claim transaction was rolled back by the domain");
-    this.name = "ClaimRolledBack";
-  }
 }
 
 /** Better Auth's own default, and the shortest password it will accept. */
@@ -80,72 +64,19 @@ const MINIMUM_PASSWORD_LENGTH = 8;
 export function createDrizzleClaimStore(
   input: DrizzleClaimStoreInput,
 ): ClaimStore {
-  const { db, auth: authFactory, emailSender } = input;
-
   return {
-    async runInTransaction<T>(
+    runInTransaction<T>(
       work: (tx: ClaimTransaction) => Promise<TransactionOutcome<T>>,
     ): Promise<T> {
-      const deferred = createDeferredEmailSender(emailSender);
-      let outcome: TransactionOutcome<T> | undefined;
-
-      try {
-        await db.transaction(async (tx) => {
-          const auth = authFactory({ db: tx, emailSender: deferred });
-          outcome = await work(claimTransactionOn(tx, auth));
-          if (!outcome.commit) {
-            throw new ClaimRolledBack();
-          }
-        });
-      } catch (error) {
-        if (!(error instanceof ClaimRolledBack)) {
-          // Nothing was committed, so nothing may be sent.
-          deferred.discard();
-          throw interactiveTransactionsUnsupported(error) ?? error;
-        }
-      }
-
-      if (outcome === undefined) {
-        throw new Error(
-          "the claim transaction ended without a verdict. The callback must return a TransactionOutcome.",
-        );
-      }
-
-      if (outcome.commit) {
-        // After the commit, never inside it: an email cannot be rolled back.
-        await deferred.flush();
-      } else {
-        deferred.discard();
-      }
-
-      return outcome.value;
+      // The transaction, the rebound auth instance, the deferred sender and the
+      // transaction-bound dispatch store all come from the shared helper — the
+      // finaliser needs exactly the same four and none of them is obvious
+      // enough to have two copies of.
+      return runWithTransactionalAuth(input, (tx, auth) =>
+        work(claimTransactionOn(tx, auth)),
+      );
     },
   };
-}
-
-/**
- * Turns the neon-http driver's refusal into something a reader can act on.
- *
- * Matching on the driver's message is not a load-bearing decision — the error
- * propagates either way, and only the wording of the diagnosis depends on it.
- * A silent 500 saying "No transactions support in neon-http driver" would send
- * whoever reads it looking for a bug in this file rather than at the driver
- * ADR-0006 decision 6 selected.
- */
-function interactiveTransactionsUnsupported(error: unknown): Error | undefined {
-  if (
-    !(error instanceof Error) ||
-    !error.message.includes("No transactions support")
-  ) {
-    return undefined;
-  }
-  return new Error(
-    "The Claim needs an interactive transaction, which the neon-http driver does not provide. " +
-      "ADR-0006 decision 6 selects that driver for production; switching this deployment to " +
-      "drizzle-orm/neon-serverless (WebSockets, still Neon) is the documented remedy and needs a new ADR. " +
-      "Locally and in CI, resolveDriver gives node-postgres, which does support it.",
-    { cause: error },
-  );
 }
 
 /**
@@ -237,6 +168,16 @@ export function claimTransactionOn(
         .where(eq(user.email, account.email))
         .limit(1);
       if (existing.length > 0) {
+        // **Dummy work, deliberately.** The Claim answers an already-registered
+        // address with the same hold screen a fresh sign-up gets (#15), and a
+        // response body that gives nothing away is worthless if the *timing*
+        // does: a fresh Claim hashes a password, and hashing is by far the
+        // slowest thing on this path. So it is hashed here too, and the result
+        // thrown away. Better Auth's own sign-in does exactly this when it
+        // finds no credential — `await ctx.context.password.hash(password)` —
+        // and for exactly the same reason.
+        const { password } = await auth.$context;
+        await password.hash(account.password);
         return { ok: false, reason: "email-taken" };
       }
 

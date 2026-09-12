@@ -9,6 +9,7 @@ import {
   claimTransactionOn,
   createDrizzleClaimStore,
 } from "../adapters/drizzle-claim-store";
+import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import { createRecordingEmailSender } from "../auth/adapters/recording-email-sender";
 import type { AuthFactory } from "../auth/auth-factory";
 import { createAuth } from "../auth/create-auth";
@@ -185,10 +186,16 @@ describeWithDatabase("the Claim against a real Postgres", () => {
     await removeOwnRows();
 
     emailSender = createRecordingEmailSender();
-    const auth: AuthFactory = ({ db: client, emailSender: sender }) =>
+    const auth: AuthFactory = ({
+      db: client,
+      emailSender: sender,
+      dispatches,
+    }) =>
       createAuth({
         db: client,
         emailSender: sender,
+        dispatches,
+        clock: { now: () => new Date() },
         baseUrl: "http://localhost:3000",
         secret: "integration-test-secret-of-sufficient-length",
         from: "3moji <no-reply@mail.3moji.me>",
@@ -603,6 +610,11 @@ describeWithDatabase("the Claim against a real Postgres", () => {
         createAuth({
           db: tx,
           emailSender,
+          // Nothing here issues a verification link, so an in-memory store is
+          // the honest collaborator: it records what it is given and reaches no
+          // database. #82's own suite covers the recording itself.
+          dispatches: createInMemoryVerificationDispatchStore(),
+          clock: pastExpiry,
           baseUrl: "http://localhost:3000",
           secret: "integration-test-secret-of-sufficient-length",
           from: "3moji <no-reply@mail.3moji.me>",

@@ -2,6 +2,7 @@ import { createRecordingEmailSender } from "../auth/adapters/recording-email-sen
 import type { AuthFactory } from "../auth/auth-factory";
 import { createAuth } from "../auth/create-auth";
 import { createDatabase } from "../db/client";
+import { createInMemoryVerificationDispatchStore } from "./in-memory-verification-dispatch-store";
 import { toHandleKey } from "../db/handle-key";
 import {
   claimTransactionOn,
@@ -57,10 +58,12 @@ const causeOf = (error: unknown): unknown =>
 const build = (driver: "neon-http" | "node-postgres") => {
   const emailSender = createRecordingEmailSender();
   const handle = createDatabase({ url: URL, driver });
-  const auth: AuthFactory = ({ db, emailSender: sender }) =>
+  const auth: AuthFactory = ({ db, emailSender: sender, dispatches }) =>
     createAuth({
       db,
       emailSender: sender,
+      dispatches,
+      clock: { now: () => new Date("2026-09-12T12:00:00.000Z") },
       baseUrl: "http://localhost:3000",
       secret: "a".repeat(32),
       from: "3moji <no-reply@mail.3moji.me>",
@@ -166,6 +169,8 @@ describe("claimTransactionOn against an unreachable database", () => {
     const auth = createAuth({
       db: handle.db,
       emailSender: createRecordingEmailSender(),
+      dispatches: createInMemoryVerificationDispatchStore(),
+      clock: { now: () => new Date("2026-09-12T12:00:00.000Z") },
       baseUrl: "http://localhost:3000",
       secret: "a".repeat(32),
       from: "3moji <no-reply@mail.3moji.me>",
