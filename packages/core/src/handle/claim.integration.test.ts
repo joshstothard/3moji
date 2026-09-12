@@ -326,6 +326,36 @@ describeWithDatabase("the Claim against a real Postgres", () => {
   });
 
   /**
+   * Two Claims with the **same address** at the same time, for different
+   * Handles. Neither transaction can see the other's uncommitted `user` row, so
+   * both reach the insert and `user.email`'s unique index decides.
+   *
+   * **This asserts the invariant, not the loser's response.** Exactly one
+   * Account exists and at most one hold was written, which is what ADR-0004
+   * decision 4 promises. Whether the loser is told `already-registered` or gets
+   * a genuine error depends on whether Better Auth surfaces the unique
+   * violation or swallows it, and pinning a coin-flip would make this flaky
+   * rather than informative. The adapter handles the surfaced case; the other
+   * fails loudly on purpose.
+   */
+  it("creates exactly one Account when two Claims race with the same address", async () => {
+    const email = addressFor("race-same-email");
+    const first = handleKeyFromSet(HANDLE_KEY_LENGTH * 7);
+    const second = handleKeyFromSet(HANDLE_KEY_LENGTH * 8);
+
+    await Promise.allSettled([
+      claim({ segment: first, email }),
+      claim({ segment: second, email }),
+    ]);
+
+    expect(await countUsers(email)).toBe("1");
+    const holds = [await countHandles(first), await countHandles(second)];
+    expect(holds.filter((count) => count === "1").length).toBeLessThanOrEqual(
+      1,
+    );
+  });
+
+  /**
    * #15's already-registered path. The submitter must not be able to learn that
    * the address exists, and the Handle they typed must stay free rather than be
    * held for somebody else's Account.

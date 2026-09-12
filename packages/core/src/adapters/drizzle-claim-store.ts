@@ -192,13 +192,25 @@ export function claimTransactionOn(
         );
       }
 
-      await auth.api.signUpEmail({
-        body: {
-          email: account.email,
-          password: account.password,
-          name: account.name,
-        },
-      });
+      try {
+        await auth.api.signUpEmail({
+          body: {
+            email: account.email,
+            password: account.password,
+            name: account.name,
+          },
+        });
+      } catch (error) {
+        // The read above cannot see another transaction's uncommitted row, so
+        // two Claims submitted with the *same* address at the same time both
+        // reach this insert and `user.email`'s unique index decides. That is
+        // the same answer as the read: the address is taken, and nothing is
+        // created either way.
+        if (postgresErrorCode(error) === UNIQUE_VIOLATION) {
+          return { ok: false, reason: "email-taken" };
+        }
+        throw error;
+      }
 
       // Read back rather than trusting the response shape: the row is what the
       // Handle's foreign key needs, and it is in this transaction already.
@@ -209,6 +221,13 @@ export function claimTransactionOn(
         .limit(1);
       const row = created[0];
       if (row === undefined) {
+        // Deliberately loud rather than read as "the address is taken". It is
+        // reachable only if Better Auth reported success while inserting
+        // nothing this transaction can see — which the same-email race above
+        // could produce if Better Auth swallows the unique violation instead
+        // of surfacing it. Guessing which would hide a library defect behind a
+        // routine-looking answer; the invariant is safe either way, because
+        // nothing is committed.
         throw new Error(
           "sign-up reported success but no user row is visible in the claim transaction.",
         );
