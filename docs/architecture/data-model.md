@@ -109,7 +109,7 @@ One transaction does three things in this order, and the order is a rule: **read
 
 It is a **separate port from the Claim's** rather than three more methods on `ClaimTransaction`: `deleteAccount` is not on the claim path, and putting it there would hand the Claim a verb for deleting somebody's Account. Better Auth is not rebound to this transaction the way the Claim rebinds it, because a Release writes no Better Auth row and sends no email — so Better Auth's own `deleteUser` API is bypassed and no library hook fires on deletion; the cascade is what the deletion actually needs.
 
-An id that owns no Handle answers `no-handle` and writes nothing: ADR-0004 decision 4 leaves only two ways to reach that — an id naming nobody, or a Release that already happened.
+The read takes a row lock (`SELECT … FOR UPDATE`), so two Releases of the same Account issued at once cannot both write a tombstone for one Release: the second waits, finds the row gone with the cascade, and answers `no-handle`. An id that owns no Handle answers `no-handle` and writes nothing: ADR-0004 decision 4 leaves only two ways to reach that — an id naming nobody, or a Release that already happened.
 
 **There is no interface in front of it yet.** ADR-0004 decision 5 requires that the interface say plainly that releasing deletes the Account along with the Profile and its Links, rather than hiding it behind the word "release". There is no authenticated account surface to carry that copy until Phase 4.
 

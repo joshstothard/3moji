@@ -108,13 +108,25 @@ export function releaseTransactionOn(
      * `handle.user_id` is `UNIQUE`, so there is at most one row to find
      * (ADR-0004 decision 4), and it cascades from `user`, so after the delete
      * there is no key left to read.
+     *
+     * **`FOR UPDATE` rather than a bare read**, for the same reason
+     * `freeExpiredHold` locks: two Releases of the same Account issued at once
+     * would both see this row under `READ COMMITTED` — a plain `SELECT` does
+     * not wait on a concurrent delete — and both would write a tombstone for
+     * one Release. Locking makes the second wait; Postgres then re-evaluates
+     * the `WHERE` against the new version, finds the row gone with the
+     * cascade, and the second Release answers `no-handle` and writes nothing.
+     * Nothing can contend for it until an account surface exists to double-
+     * submit from, so the lock is here because the window is real, not because
+     * a test covers it.
      */
     async handleOf(userId: string): Promise<HandleKey | undefined> {
       const rows = await tx
         .select({ key: handle.key })
         .from(handle)
         .where(eq(handle.userId, userId))
-        .limit(1);
+        .limit(1)
+        .for("update");
       return rows[0]?.key;
     },
 
