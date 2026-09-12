@@ -83,6 +83,14 @@ describe("npm run lint covers every workspace", () => {
     );
   });
 
+  // Belt and braces, and honestly labelled: this one has never been observed
+  // red, because turbo 2.x emits a task entry for every workspace whether or
+  // not a script backs it — which is exactly what makes the assertion above
+  // work. It cannot be driven red without changing turbo's behaviour, so it
+  // carries no evidence today. It is kept because the assertion above reads
+  // `<NONEXISTENT>` out of that task list: if a future turbo stopped emitting
+  // entries for script-less workspaces, the check would silently pass over
+  // them, and this is what would catch that.
   it("plans a lint task for every workspace, so none can go unaccounted for", () => {
     const { packages, tasks } = turboLintTasks();
     const planned = new Set(tasks.map((task) => task.package));
