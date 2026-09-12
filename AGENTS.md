@@ -207,7 +207,7 @@ A sub-agent launched **without worktree isolation runs in the parent's working d
 
 So, when launching parallel agents:
 
-1. **Pass `isolation: "worktree"`.** It is the actual fix; everything below is damage limitation for when it was forgotten.
+1. **Pass `isolation: "worktree"`.** It fixes everything in this subsection — and **nothing in the one above it.** Measured on 2026-09-12: two agents launched _with_ isolation got genuinely separate worktrees and still shared one scratchpad directory, where one overwrote the other's `prereview.md` and `pr-body.md` mid-task. Isolation separates git state, not working files. **The unique-basename rule is therefore not a fallback for forgetting isolation; it applies always.**
 2. **Never `git add -A`, `git add .` or `git commit -a` in a shared tree** — stage every path explicitly, or you commit another agent's half-finished work and your own reviewer will be the one to find it.
 3. **Never bare `git stash` / `git stash pop`**: the stash is shared across worktrees, so you can pop work that is not yours. Prefer a temporary commit.
 4. **Treat a red `verify.sh` sceptically** before assuming it is yours; check whether the failing files are in your diff at all.
