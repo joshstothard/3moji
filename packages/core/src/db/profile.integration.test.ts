@@ -7,9 +7,10 @@ import { Pool } from "pg";
 
 import { createDrizzleProfileRepository } from "../adapters/drizzle-profile-repository";
 import { releasedEmojiSet } from "../emoji/emoji-set";
+import { LINK_LIMIT } from "../profile/validate-profile";
 
 import { HANDLE_KEY_LENGTH, toHandleKey, type HandleKey } from "./handle-key";
-import { LINK_LIMIT } from "./link";
+
 import { authSchema } from "./schema";
 
 const url = process.env.DATABASE_URL;

@@ -130,7 +130,7 @@ export type {
 } from "./handle/release-handle";
 export { releasedHandle } from "./db/released-handle";
 export { profile } from "./db/profile";
-export { link, LINK_LIMIT } from "./db/link";
+export { link } from "./db/link";
 export type {
   Profile,
   ProfileLink,
@@ -201,3 +201,20 @@ export type {
   ClaimCollisionEmailInput,
   ClaimCollisionInput,
 } from "./auth/claim-collision";
+
+export {
+  ALLOWED_LINK_SCHEMES,
+  BIO_MAX_LENGTH,
+  DISPLAY_NAME_MAX_LENGTH,
+  LINK_LIMIT,
+  LINK_TITLE_MAX_LENGTH,
+  validateProfile,
+} from "./profile/validate-profile";
+export type {
+  ProfileDraft,
+  ProfileLinkDraft,
+  ProfileValidationResult,
+  ProfileViolation,
+  ProfileViolationField,
+  ProfileViolationRule,
+} from "./profile/validate-profile";
