@@ -44,6 +44,26 @@ A malformed escape such as `/%F0%9F` never reaches the page: Next.js rejects it 
 
 The placeholder is deliberately the whole of the unclaimed state for now — see the Profile section of [data-model.md](data-model.md).
 
+### The word alias
+
+**Planned, not yet built** ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md)). The emoji URL cannot be shared: an autolinker truncates a path at the first non-ASCII byte, so `3moji.me/🧊🧊🧊` in a bio becomes a link to `3moji.me/` with the emoji orphaned beside it as text. Nothing server-side changes that — both spellings reach the browser as the same percent-encoded `location.pathname`.
+
+So a Handle gets a second address: **three dot-separated term slugs**, `3moji.me/ice-cube.ice-cube.ice-cube`. The identity is unchanged — the alias is a derived lookup over the curated names, with no column and no migration.
+
+**The separator is a dot because a hyphen is measurably ambiguous.** Slugging collapses non-alphanumerics to `-`, so a hyphen-joined form cannot say where one word ends: `curry-rice-wine-pizza` reads as `curry` + `rice-wine` + `pizza` _and_ as `curry-rice` + `wine` + `pizza`, both three emoji, so ADR-0004's exactly-three rule does not disambiguate. A dot cannot occur inside a slug, so the parse is unambiguous by construction.
+
+Every position accepts any of that emoji's terms, so one Handle has many aliases and exactly one **canonical** alias (the `displayName` slugs). The resolver answers on the count of _claimed_ matches:
+
+| Claimed Handles matching | The route answers                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| exactly one              | that Profile, rendered in place — **not** a redirect, so the shared ASCII link stays in the address bar |
+| more than one            | a listing of the matches, each with its emoji and the owner's display name                              |
+| none                     | the claim call to action                                                                                |
+
+The alias page will declare `rel="canonical"` pointing at the emoji path: an alias is ambiguous by construction and so can never be canonical.
+
+Both grammars share the one root route, dispatching on the received segment. Dotted segments already reach it cleanly — `/apple.apple.apple` answers the route's own 404 rather than being taken for a static file.
+
 ## Deployment
 
 **Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): Vercel on the Hobby plan, which forbids commercial use. Postgres is Neon via the Vercel Marketplace; transactional email is Resend, sending from a subdomain of `3moji.me`.

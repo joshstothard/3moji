@@ -1,7 +1,9 @@
 # ADR-0004: The Handle model
 
-**Status:** Accepted
+**Status:** Accepted, partially superseded by ADR-0008
 **Date:** 2026-09-12
+
+> Decision 1's clause "one that cannot be canonicalised returns 404" superseded by [ADR-0008: Handles are addressable by emoji and by their word alias](./0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) on 2026-09-12. The rest of this ADR still applies.
 
 ## Context
 
