@@ -14,8 +14,13 @@ import type { AvailabilityState } from "./availability-state";
 import en from "../../../../packages/shared/messages/en.json";
 
 /**
- * The home page's Handle builder: three slots, the spoken tagline, the live URL
- * preview, and what the table says about the finished Handle.
+ * The Handle builder: three slots, the spoken tagline, the live URL preview,
+ * and what the table says about the finished Handle.
+ *
+ * **Two surfaces, one builder.** The home page renders it empty, and
+ * `/[handle]` renders it pre-filled when the Handle is unclaimed — the same
+ * component with `initialEmoji` supplied, because a second builder would drift
+ * from this one and take the focus behaviour below with it.
  *
  * **The domain is imported, not reimplemented.** `spokenHandle` owns the
  * run-collapsing rules that make 🧊🍕🧊 read "an ice cube, a pizza and an ice
@@ -39,6 +44,18 @@ import en from "../../../../packages/shared/messages/en.json";
  */
 interface HandleBuilderProps {
   readonly checkAvailability: (segment: string) => Promise<AvailabilityState>;
+  /**
+   * Emoji to start with, in order — what `/[handle]` hands over when an
+   * unclaimed Handle renders the builder rather than a dead end
+   * ([#105](https://github.com/joshstothard/3moji/issues/105)). Somebody who
+   * typed a Handle into the address bar has already made the pick, so the
+   * builder opens on it.
+   *
+   * The home page passes nothing and starts empty. This is the whole of the
+   * difference between the two surfaces: one optional prop rather than a second
+   * builder, which would have drifted from this one within a week.
+   */
+  readonly initialEmoji?: readonly string[];
 }
 
 /** What is being shown on the availability line. */
@@ -130,9 +147,33 @@ function segmentOf(filled: readonly string[]): string | undefined {
   return result.ok ? result.encoded : undefined;
 }
 
-export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
-  const [slots, setSlots] =
-    useState<readonly (string | undefined)[]>(EMPTY_SLOTS);
+/**
+ * The slots a render starts on: the given emoji, one per position, padded to
+ * {@link HANDLE_LENGTH} and truncated to it, so an over- or under-long argument
+ * cannot produce a fourth slot or a missing one.
+ */
+function initialSlots(
+  initialEmoji: readonly string[] | undefined,
+): readonly (string | undefined)[] {
+  if (initialEmoji === undefined) {
+    return EMPTY_SLOTS;
+  }
+  return Array.from(
+    { length: HANDLE_LENGTH },
+    (_unused, index) => initialEmoji[index],
+  );
+}
+
+export function HandleBuilder({
+  checkAvailability,
+  initialEmoji,
+}: HandleBuilderProps) {
+  // A lazy initialiser, and deliberately: the slots are this component's state
+  // from the first render on, so a later render with the same prop must not
+  // throw away what the visitor has picked since.
+  const [slots, setSlots] = useState<readonly (string | undefined)[]>(() =>
+    initialSlots(initialEmoji),
+  );
   /**
    * The slot controls, so applying a swap can put focus on the slot that
    * changed.

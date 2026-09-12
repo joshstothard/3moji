@@ -32,6 +32,13 @@ const CANONICAL = `/${ICE}${ICE}${ICE}`;
 const NON_CANONICAL = `${CANONICAL}${VS16}`;
 
 const copy = en.HandlePage;
+/**
+ * The builder's namespace. An unclaimed Handle renders the builder
+ * ([#105](https://github.com/joshstothard/3moji/issues/105)), so "This Handle
+ * is available." is now the builder's wording rather than this page's — which
+ * is why the assertions below reach for it there.
+ */
+const builderCopy = en.HandleBuilder;
 /** Every honest answer the route can give about a Handle that resolves. */
 const EVERY_ANSWER: readonly string[] = Object.values(copy);
 
@@ -94,7 +101,11 @@ test("a platform-reserved Handle resolves, and is never called available", async
   expect(response.status()).toBe(200);
   const body = await response.text();
   expect(body).toContain(copy.stateNotClaimable);
-  expect(body).not.toContain(copy.stateAvailable);
+  expect(body).not.toContain(builderCopy.stateAvailable);
+  // And it is never offered for the taking. A Reserved Handle can never be
+  // claimed, so rendering the builder here would be #68 in a new form.
+  expect(body).not.toContain(builderCopy.builderHeading);
+  expect(body).not.toContain(copy.unclaimed);
 });
 
 test("a Handle carrying a blocked emoji resolves to the same answer, with no reason given", async ({
@@ -107,7 +118,9 @@ test("a Handle carrying a blocked emoji resolves to the same answer, with no rea
   expect(response.status()).toBe(200);
   const body = await response.text();
   expect(body).toContain(copy.stateNotClaimable);
-  expect(body).not.toContain(copy.stateAvailable);
+  expect(body).not.toContain(builderCopy.stateAvailable);
+  expect(body).not.toContain(builderCopy.builderHeading);
+  expect(body).not.toContain(copy.unclaimed);
   // Naming the block would be a hint to go looking for the list, so the two
   // reserved kinds are one message. The reason never leaves `packages/core`.
   expect(body.toLowerCase()).not.toContain("threat");

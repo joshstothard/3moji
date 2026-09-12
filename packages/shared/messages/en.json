@@ -33,7 +33,7 @@
     "swapSuggestion": "Use {spoken}"
   },
   "HandlePage": {
-    "stateAvailable": "This Handle is available.",
+    "unclaimed": "Nobody has this Handle yet. Make it yours below.",
     "stateHeld": "This Handle is on hold.",
     "stateClaimed": "This Handle is taken.",
     "stateNotClaimable": "This Handle is reserved.",

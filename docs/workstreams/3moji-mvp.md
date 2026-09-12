@@ -175,7 +175,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 **Acceptance criteria:**
 
 - [ ] A visitor at a claimed Handle sees the display name, bio, and ordered Links.
-- [ ] An unclaimed Handle renders the builder pre-filled with those three emoji and a claim call to action.
+- [x] An unclaimed Handle renders the builder pre-filled with those three emoji and a claim call to action. Done by [#105](https://github.com/joshstothard/3moji/issues/105): the same `HandleBuilder`, given `initialEmoji` from the path. Reserved and `unknown` deliberately do **not** render it.
 - [ ] A held Handle reveals nothing about who holds it, and shows no expiry timestamp.
 - [ ] Limits are enforced in `packages/core`: 30, 160, 10, and 40 characters, with `http` and `https` URLs only.
 - [ ] A mutation revalidates the cache before redirecting, so the change is visible immediately.
@@ -186,7 +186,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- _Not planned yet._
+- #102, #103, #104, #105, #106, #107, #108, #109 — this phase's sub-issues, on epic [#101](https://github.com/joshstothard/3moji/issues/101). #105 (the unclaimed Handle renders the builder pre-filled) is done.
 
 ### Phase 5 — Launch readiness
 
