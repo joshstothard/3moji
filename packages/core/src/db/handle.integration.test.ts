@@ -63,6 +63,23 @@ function postgresErrorCode(error: unknown): string | undefined {
 }
 
 /**
+ * The SQLSTATE a write was rejected with, or `"resolved"` if it was not
+ * rejected at all.
+ *
+ * `await expect(promise).rejects.toThrow()` would be satisfied by a connection
+ * drop or a typo in the SQL, so every rejection this suite asserts goes through
+ * here and names its code.
+ */
+async function rejectionCode(write: Promise<unknown>): Promise<string> {
+  try {
+    await write;
+    return "resolved";
+  } catch (error) {
+    return postgresErrorCode(error) ?? "no postgres error code";
+  }
+}
+
+/**
  * These tests **never drop a schema or a table**, for the reason set out in
  * `migrate.integration.test.ts`: it would turn a misaimed `DATABASE_URL` into
  * data loss. They create rows under a known prefix and delete exactly those.
@@ -117,17 +134,28 @@ describeWithDatabase("the handle table against a real Postgres", () => {
     }
   };
 
+  /**
+   * Delete this suite's own rows and nothing else. Deleting the Accounts takes
+   * their Handles with them — which is the cascade the suite asserts, so
+   * cleanup and subject agree.
+   */
+  const removeOwnRows = async (): Promise<void> => {
+    await db.execute(sql`DELETE FROM "user" WHERE id LIKE ${`${PREFIX}%`}`);
+  };
+
   beforeAll(async () => {
     pool = new Pool({ connectionString: url });
     db = drizzle(pool);
     // Idempotent, so it does not matter whether another suite migrated first.
     await migrate(db, { migrationsFolder: MIGRATIONS });
+    // Before, as well as after: a run killed mid-suite leaves rows behind, and
+    // the next run would then see both inserts of the race rejected and fail
+    // for a reason that has nothing to do with the code.
+    await removeOwnRows();
   });
 
   afterAll(async () => {
-    // Deleting the Accounts takes their Handles with them — which is the
-    // cascade the suite asserts, so cleanup and subject agree.
-    await db.execute(sql`DELETE FROM "user" WHERE id LIKE ${`${PREFIX}%`}`);
+    await removeOwnRows();
     await pool.end();
   });
 
@@ -239,9 +267,11 @@ describeWithDatabase("the handle table against a real Postgres", () => {
     };
     await insert(handleKeyFromSet(HANDLE_KEY_LENGTH * 2));
 
+    // 23505 unique_violation, not merely "it threw": a connection drop would
+    // satisfy `rejects.toThrow()` and prove nothing about the constraint.
     await expect(
-      insert(handleKeyFromSet(HANDLE_KEY_LENGTH * 3)),
-    ).rejects.toThrow();
+      rejectionCode(insert(handleKeyFromSet(HANDLE_KEY_LENGTH * 3))),
+    ).resolves.toBe("23505");
   });
 
   /**
@@ -258,11 +288,15 @@ describeWithDatabase("the handle table against a real Postgres", () => {
       .map((entry) => entry.emoji)
       .join("");
 
+    // 23514 check_violation — the CHECK, specifically, and not the collation
+    // or the foreign key tripping for some other reason.
     await expect(
-      db.execute(sql`
-        INSERT INTO "handle" (key, user_id, held_until)
-        VALUES (${fourCodePoints}, ${owner}, now() + interval '24 hours')
-      `),
-    ).rejects.toThrow();
+      rejectionCode(
+        db.execute(sql`
+          INSERT INTO "handle" (key, user_id, held_until)
+          VALUES (${fourCodePoints}, ${owner}, now() + interval '24 hours')
+        `),
+      ),
+    ).resolves.toBe("23514");
   });
 });
