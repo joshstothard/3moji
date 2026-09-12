@@ -128,6 +128,33 @@ describe("getServices", () => {
     expect(auth.from).toBe(ENV.RESEND_FROM);
   });
 
+  /**
+   * **Why this is worth an assertion of its own.**
+   *
+   * Better Auth stamps a verification token's `iat` from `Date.now()` at
+   * one-second resolution and adds no nonce, so two links issued for one
+   * address inside the same real second are byte-identical — and an "older"
+   * link that is byte-identical to the newest one is not invalidated, because
+   * it *is* the newest one. What makes that unreachable is the resend floor of
+   * one link a minute, and the floor is measured on the injected `Clock`.
+   *
+   * So "only the newest link works" holds only while the injected clock tracks
+   * real time. A frozen or offset clock wired in here would let the floor pass
+   * while `Date.now()` stood still, and invalidation would weaken silently —
+   * no error, no failing assertion, just an old link that still works. CI
+   * proved this is not hypothetical: an integration test that advanced only the
+   * injected clock got the same token back twice.
+   */
+  it("wires the system clock, which is what the resend floor rests on", async () => {
+    setEnv(ENV);
+    const { getServices } = await loadFresh();
+
+    getServices();
+
+    expect(createSystemClock).toHaveBeenCalledTimes(1);
+    expect(recordedDeps().clock).toBe(createSystemClock.mock.results[0]?.value);
+  });
+
   it("supplies the Next.js cookie plugin, which packages/core cannot import", async () => {
     setEnv(ENV);
     const { getServices } = await loadFresh();

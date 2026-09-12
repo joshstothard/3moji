@@ -106,3 +106,65 @@ export { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
 export type { DrizzleClaimStoreInput } from "./adapters/drizzle-claim-store";
 export { claimHandle, HOLD_DURATION_MS } from "./handle/claim-handle";
 export type { ClaimHandleInput, ClaimResult } from "./handle/claim-handle";
+export { submitClaim } from "./handle/submit-claim";
+export type { ClaimSubmission, SubmitClaimInput } from "./handle/submit-claim";
+
+export { verificationDispatch } from "./db/verification-dispatch";
+export type {
+  VerificationDispatch,
+  VerificationDispatchStore,
+} from "./ports/verification-dispatch-store";
+export { createDrizzleVerificationDispatchStore } from "./adapters/drizzle-verification-dispatch-store";
+export type { DrizzleVerificationDispatchStoreInput } from "./adapters/drizzle-verification-dispatch-store";
+export type {
+  AccountDirectory,
+  AccountRecord,
+  OwnedHandle,
+} from "./ports/account-directory";
+export { createDrizzleAccountDirectory } from "./adapters/drizzle-account-directory";
+export type {
+  ClaimFinaliser,
+  ClaimFinaliserTransaction,
+  EmailVerification,
+  HoldFinalised,
+} from "./ports/claim-finaliser";
+export {
+  createDrizzleClaimFinaliser,
+  finaliserTransactionOn,
+} from "./adapters/drizzle-claim-finaliser";
+export { runWithTransactionalAuth } from "./adapters/transactional-auth";
+export type { TransactionalAuthInput } from "./adapters/transactional-auth";
+
+export { verificationTokenFingerprint } from "./auth/verification-token";
+export { RESEND_LIMITS, resendAllowance } from "./auth/resend-allowance";
+export type {
+  ResendAllowance,
+  ResendAllowanceInput,
+  ResendLimits,
+} from "./auth/resend-allowance";
+export {
+  RESPONSE_FLOOR_MS,
+  realSleep,
+  withResponseFloor,
+} from "./auth/response-floor";
+export type { ResponseFloorInput } from "./auth/response-floor";
+export { resendVerification } from "./auth/resend-verification";
+export type {
+  ResendOutcome,
+  ResendVerificationInput,
+  VerificationMailer,
+} from "./auth/resend-verification";
+export { createBetterAuthVerificationMailer } from "./auth/adapters/better-auth-verification-mailer";
+export { finaliseClaim } from "./auth/finalise-claim";
+export type {
+  ClaimFinalisation,
+  FinaliseClaimInput,
+} from "./auth/finalise-claim";
+export {
+  claimCollisionEmail,
+  notifyExistingOwner,
+} from "./auth/claim-collision";
+export type {
+  ClaimCollisionEmailInput,
+  ClaimCollisionInput,
+} from "./auth/claim-collision";
