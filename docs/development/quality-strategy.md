@@ -24,20 +24,21 @@
 - **Flakes are defects:** a test that fails non-deterministically more than twice in 7 days gets a GitHub issue (see `nightly-check`).
 - **No hard-coded credentials in tests:** tests read credentials from environment variables and throw clearly when absent. The only exception is a mocked secrets provider returning fixture values.
 
-## API unit tests (`apps/api`)
+## Domain unit tests (`packages/core`)
 
-API tests run under Jest 30 + ts-jest against CommonJS test files. NestJS 12 packages are ESM-only (`"type": "module"`), and the API deliberately stays CommonJS, so every spec `require()`s an ES module.
+Domain tests run under Jest + ts-jest in the `node` environment, from `@template/jest-config/base`. There is no ESM workaround to remember: the package has no framework dependencies, which is the point of it ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)).
 
-- **Jest loads ESM through `require()` only when Node exposes `vm.SourceTextModule.prototype.hasAsyncGraph`** — Node 24.9+, and only with `--experimental-vm-modules`. Without the flag every suite fails before any test runs with `Must use import to load ES Module: …/@nestjs/testing/index.js`.
-- The flag therefore lives in the `apps/api` `test` script itself: `node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --coverage` (Jest's documented form, and portable to Windows `cmd.exe`, unlike an inline `NODE_OPTIONS=` prefix). Run the tests through `npm test`, not bare `npx jest`.
-- Each Jest worker prints a `VM Modules is an experimental feature` warning. It is expected; do not suppress it.
-- Anything that spawns Jest itself (a Stryker Jest runner, an IDE test runner) does not inherit the script's flag and must pass `--experimental-vm-modules` (e.g. via `NODE_OPTIONS`) on its own.
+- **`packages/core` is framework-free, and its ESLint config enforces that** — any import of `next/*`, `react`, `react-dom` or `@vercel/*` fails the build, type-level imports included.
+- **Collaborators are injected, never reached for.** Anything the domain needs from outside is a port in `src/ports/`, implemented by an adapter in `src/adapters/`, and wired by the composition root. Tests pass a fake in rather than patching a module.
+- **Time is injected.** The `Clock` port exists because rules like a Handle's 24-hour hold and 30-day cooldown ([ADR-0004](../adr/0004-the-handle-model.md)) are untestable if the domain reads the system clock.
+- `tsconfig.json` declares `"types": ["node", "jest"]`. Without it, type-aware lint rules cannot resolve `expect` and report every assertion as an unsafe call — a failure that looks like a code smell but is a config gap.
 
 ## Web unit tests (`apps/web`)
 
 Web tests run under Jest + `jest-environment-jsdom` with React Testing Library. Conventions:
 
-- **Async server components** are rendered by awaiting the component function and passing the result to `render` — e.g. `render(await ObjectivesPage())`, or `render(await ObjectivePage({ params: Promise.resolve({ id }) }))` for pages that take `params`.
+- **Async server components** are rendered by awaiting the component function and passing the result to `render` — e.g. `render(await SomePage())`, or `render(await SomePage({ params: Promise.resolve({ id }) }))` for pages that take `params`.
+- **Jest cannot parse CSS.** A Next.js layout imports global styles, so `@template/jest-config/nextjs` maps stylesheets to `packages/jest-config/style-mock.js`. Without that mapping a layout test fails at import, before any assertion runs.
 - **Data access is mocked at the module boundary:** `jest.mock("../../lib/okr-api", …)` — presentational components receive data, they do not fetch, so tests drive them by mocking the API client. For `fetch`-based units, assign `global.fetch = jest.fn()` (jsdom does not provide it) and resolve a minimal `{ ok, status, json }` object.
 - **Server-action helpers are never invoked in unit tests.** `next/cache` and `next/navigation` are mocked globally in `jest.setup.ts` so importing a page does not drag in the full Next server runtime; `TextEncoder` is polyfilled there for the same reason.
 - **jest-dom matcher types** (`toBeInTheDocument`, `toHaveAttribute`) are pulled into the TS program via `src/types/jest-dom.d.ts`, because `jest.setup.ts` lives outside `src` and its augmentation would otherwise be invisible to `tsc`/eslint.

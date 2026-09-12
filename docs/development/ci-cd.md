@@ -107,7 +107,7 @@ The image build jobs contain a commented-out push step guarded with `if: false`.
 3. Add a registry login step (GHCR default is shown, commented out).
 4. Provide the relevant secrets (`GITHUB_TOKEN` is already available for GHCR).
 
-Default image names: `app-api`, `app-web`. Default registry: `ghcr.io/${{ github.repository }}`.
+Default image name: `app-web`. Default registry: `ghcr.io/${{ github.repository }}`.
 
 ## Smoke test
 
@@ -135,16 +135,20 @@ Transitive dependencies that Dependabot cannot bump directly are pinned via the 
 
 **Current overrides and why they exist:**
 
-| Package       | Pinned to | Root cause                                                                    |
-| ------------- | --------- | ----------------------------------------------------------------------------- |
-| `glob`        | `10.5.0`  | `@nestjs/cli` devDep (CLI injection)                                          |
-| `tmp`         | `0.2.7`   | `@nestjs/cli` devDep (path traversal)                                         |
-| `picomatch@2` | `2.3.2`   | `@angular-devkit` via `@nestjs/cli` (ReDoS)                                   |
-| `picomatch@4` | `4.0.4`   | `@angular-devkit` via `@nestjs/cli` (ReDoS)                                   |
-| `lodash`      | `4.18.1`  | `@nestjs/swagger` + `@nestjs/config` (prototype pollution)                    |
-| `multer`      | `2.2.0`   | `@nestjs/platform-express` (DoS — no file-upload endpoints, safe to override) |
+| Package       | Pinned to | Root cause                                                                    | Still needed?                    |
+| ------------- | --------- | ----------------------------------------------------------------------------- | -------------------------------- |
+| `tmp`         | `0.2.7`   | `@nestjs/cli` devDep (path traversal)                                         | **No** — absent from the tree    |
+| `multer@2`    | `2.3.0`   | `@nestjs/platform-express` (DoS — no file-upload endpoints, safe to override) | **No** — absent from the tree    |
+| `picomatch@2` | `2.3.2`   | `@angular-devkit` via `@nestjs/cli` (ReDoS)                                   | Unclear — other consumers remain |
+| `picomatch@4` | `4.0.5`   | `@angular-devkit` via `@nestjs/cli` (ReDoS)                                   | Unclear — other consumers remain |
+| `lodash`      | `4.18.1`  | `@nestjs/swagger` + `@nestjs/config` (prototype pollution)                    | Unclear — one consumer remains   |
+| others        | —         | see `overrides` in root `package.json`                                        | Unaffected by the API deletion   |
 
-**Note on `multer`**: npm `overrides` does not propagate to workspace-nested packages when the depender uses an exact version pin. The `multer@2.2.0` entry is therefore applied directly in `package-lock.json` (lockfile patch). `npm ls multer` will report `invalid: "2.1.1"` — this is expected and intentional. When `@nestjs/platform-express` releases a version that depends on `multer@>=2.2.0`, both the lockfile patch and the `overrides` entry can be removed.
+**Every root cause in the first five rows was a NestJS package, and NestJS is gone.** `apps/api` was deleted ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)), removing 208 packages and every `@nestjs/*` entry from the tree. Measured immediately afterwards: `tmp` and `multer` have **zero** occurrences, while `picomatch` still has ten and `lodash` one, so those two may still be doing real work through other dependants.
+
+The overrides were deliberately **left in place** in that change. Root-cause rationale going stale is exactly the trap `docs/development/engineering-standards.md` § Dependency Management describes: an exact pin written to escape an advisory becomes the reason you are held on a vulnerable version later. Removing them safely needs the full clean-install verification that section prescribes, which is its own piece of work rather than a side effect of deleting an app.
+
+The `multer` lockfile patch described below is dead for the same reason: nothing depends on `multer` any more.
 
 **Maintenance rule:** when a HIGH-severity transitive finding appears:
 
@@ -171,7 +175,7 @@ Morlock security-probe persona (`.agents/skills/morlock/SKILL.md`). The same rol
 the Claude Code, Codex, and GitHub Copilot adapters. The agent:
 
 1. Reads and analyses the codebase for security weaknesses.
-2. Writes proving tests under `apps/api/integration/security/`.
+2. Writes proving tests under `apps/web/integration/security/`.
 3. Opens a PR (`morlock/<date>`) and a summary issue.
 
 This is **non-blocking** — it is an antibody generator, not a merge gate.
