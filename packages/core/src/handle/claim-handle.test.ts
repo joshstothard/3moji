@@ -2,6 +2,7 @@ import type { Clock } from "../ports/clock";
 import type {
   AccountCreated,
   ClaimStore,
+  ExpiredHoldFreed,
   HoldWritten,
 } from "../ports/claim-store";
 import { claimHandle, HOLD_DURATION_MS } from "./claim-handle";
@@ -26,6 +27,8 @@ interface FakeStoreConfig {
   readonly ownership?: HandleOwnership;
   readonly account?: AccountCreated;
   readonly hold?: HoldWritten;
+  /** What the expired-hold write reports. Defaults to "there was nothing". */
+  readonly freed?: ExpiredHoldFreed;
   /** Runs the instant the transaction opens, before the work does anything. */
   readonly onOpen?: () => void;
 }
@@ -49,6 +52,10 @@ const createFakeStore = (config: FakeStoreConfig = {}) => {
         availabilityOf: (key, now) => {
           calls.push(`availabilityOf(${key}, ${now.toISOString()})`);
           return Promise.resolve(config.ownership ?? "available");
+        },
+        freeExpiredHold: (key, now) => {
+          calls.push(`freeExpiredHold(${key}, ${now.toISOString()})`);
+          return Promise.resolve(config.freed ?? { freed: false });
         },
         createAccount: (account) => {
           calls.push(`createAccount(${account.email}, ${account.name})`);
@@ -123,6 +130,7 @@ describe("claimHandle", () => {
     expect(calls).toEqual([
       "begin",
       `availabilityOf(${ICE}, ${NOW.toISOString()})`,
+      `freeExpiredHold(${ICE}, ${NOW.toISOString()})`,
       `createAccount(${EMAIL}, ${ICE})`,
       `holdHandle(${ICE}, user-1, 2026-09-13T12:00:00.000Z)`,
       "commit",
@@ -258,10 +266,74 @@ describe("claimHandle", () => {
     expect(calls).toEqual([
       "begin",
       `availabilityOf(${ICE}, ${NOW.toISOString()})`,
+      `freeExpiredHold(${ICE}, ${NOW.toISOString()})`,
       `createAccount(${EMAIL}, ${ICE})`,
       "rollback",
     ]);
   });
+
+  /**
+   * **ADR-0004 decision 3's write side, and the ordering is the rule.**
+   *
+   * Expiry is lazy: nothing sweeps, so the only moment an expired hold can be
+   * freed is the moment someone next attempts the Handle — inside this
+   * transaction. The freeing write must come **before** `createAccount`,
+   * because freeing the Handle is deleting the unverified Account (decision
+   * 5), and that Account may hold the very email address being submitted. A
+   * `createAccount` that ran first would read the doomed row and answer
+   * `already-registered`, so the same person could never reclaim their own
+   * expired hold.
+   */
+  it("frees an expired hold before creating the Account, so the same address can reclaim it", async () => {
+    const { store, calls } = createFakeStore({ freed: { freed: true } });
+
+    const result = await claim({ store });
+
+    expect(result.state).toBe("held");
+    const freeAt = calls.indexOf(
+      `freeExpiredHold(${ICE}, ${NOW.toISOString()})`,
+    );
+    const createAt = calls.indexOf(`createAccount(${EMAIL}, ${ICE})`);
+    expect(freeAt).toBeGreaterThan(-1);
+    // Named rather than asserted as a bare ordering: a reorder that put
+    // createAccount first would make the same-address reclaim impossible.
+    expect({ freeExpiredHold: freeAt, createAccount: createAt }).toEqual({
+      freeExpiredHold: 2,
+      createAccount: 3,
+    });
+    expect(calls.at(-1)).toBe("commit");
+  });
+
+  it("passes the availability read and the freeing write the same instant", async () => {
+    const now = new Date("2001-02-03T04:05:06.000Z");
+    const { store, calls } = createFakeStore({ freed: { freed: true } });
+
+    await claim({ store, clock: fixedClock(now) });
+
+    // One `now` for both, or a row could read as expired and then fail to
+    // match the predicate that deletes it.
+    expect(calls).toContain(`availabilityOf(${ICE}, ${now.toISOString()})`);
+    expect(calls).toContain(`freeExpiredHold(${ICE}, ${now.toISOString()})`);
+  });
+
+  /**
+   * The other half: a Handle that is genuinely held or genuinely claimed is
+   * never offered to the freeing write at all. A verified Account's Handle must
+   * never be freed whatever `held_until` says, and the first defence is simply
+   * not asking.
+   */
+  it.each([{ ownership: "held" as const }, { ownership: "claimed" as const }])(
+    "never attempts to free a Handle the read found $ownership",
+    async ({ ownership }) => {
+      const { store, calls } = createFakeStore({ ownership });
+
+      await claim({ store });
+
+      expect(
+        calls.filter((call) => call.startsWith("freeExpiredHold")),
+      ).toEqual([]);
+    },
+  );
 
   it("reads time once, so the hold and the availability read agree about now", async () => {
     let reads = 0;
