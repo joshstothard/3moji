@@ -14,6 +14,11 @@ const config = {
       },
     ],
   },
+  moduleNameMapper: {
+    ...base.moduleNameMapper,
+    // Next.js layouts import global CSS, which Jest cannot parse.
+    "\\.(css|less|sass|scss)$": require.resolve("./style-mock.js"),
+  },
   transformIgnorePatterns: ["/node_modules/(?!(next-intl|use-intl)/)"],
 };
 

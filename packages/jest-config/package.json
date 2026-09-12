@@ -6,7 +6,8 @@
   "exports": {
     "./base": "./base.js",
     "./nestjs": "./nestjs.js",
-    "./nextjs": "./nextjs.js"
+    "./nextjs": "./nextjs.js",
+    "./style-mock": "./style-mock.js"
   },
   "dependencies": {
     "ts-jest": "^29.2.0"

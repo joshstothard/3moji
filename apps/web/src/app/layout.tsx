@@ -8,8 +8,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "OKR Tracker",
-  description: "Turborepo monorepo template",
+  title: "3moji",
+  description: "A web address you can say out loud.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
