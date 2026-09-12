@@ -23,6 +23,7 @@
     "test:integration": "turbo test:integration --continue",
     "test:e2e": "playwright test --pass-with-no-tests",
     "test:scripts": "node --test scripts/*.test.mjs",
+    "generate:emoji": "node scripts/generate-emoji-set.mjs",
     "verify:agents": "node scripts/verify-agent-workflow.mjs",
     "clean": "turbo clean",
     "prepare": "husky && bash scripts/setup-links.sh",

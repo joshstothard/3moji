@@ -15,6 +15,19 @@ export type {
   NodePostgresDatabase,
 } from "./db/client";
 
+export { EMOJI_CATEGORIES, RELEASED_CATEGORIES } from "./emoji/emoji-category";
+export { isCategoryReleased } from "./emoji/emoji-category";
+export type { EmojiCategory } from "./emoji/emoji-category";
+export { EMOJI_SET_VERSION } from "./emoji/emoji-candidate";
+export type { EmojiCandidate } from "./emoji/emoji-candidate";
+export {
+  candidateEmojiSet,
+  findEmojiByCodepoint,
+  isClaimableEmoji,
+  releasedEmojiSet,
+} from "./emoji/emoji-set";
+export type { EmojiSetEntry } from "./emoji/emoji-set";
+
 export type { EmailSender, OutboundEmail } from "./auth/ports/email-sender";
 export { createRecordingEmailSender } from "./auth/adapters/recording-email-sender";
 export type { RecordingEmailSender } from "./auth/adapters/recording-email-sender";

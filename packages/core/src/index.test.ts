@@ -1,13 +1,22 @@
 import {
   authSchema,
+  candidateEmojiSet,
   createCoreServices,
   createDatabase,
   createRecordingEmailSender,
   createResendEmailSender,
   createSystemClock,
+  findEmojiByCodepoint,
+  isClaimableEmoji,
+  releasedEmojiSet,
   resolveDriver,
 } from "./index";
-import type { Clock, CoreDependencies, CoreServices } from "./index";
+import type {
+  Clock,
+  CoreDependencies,
+  CoreServices,
+  EmojiSetEntry,
+} from "./index";
 
 describe("package entry point", () => {
   it("exports the composition root", () => {
@@ -26,6 +35,16 @@ describe("package entry point", () => {
   it("exports both email sender adapters", () => {
     expect(typeof createRecordingEmailSender).toBe("function");
     expect(typeof createResendEmailSender).toBe("function");
+  });
+
+  it("exports the Emoji Set and a lookup by code point", () => {
+    expect(candidateEmojiSet).toHaveLength(1053);
+    expect(releasedEmojiSet).toHaveLength(307);
+
+    const apple: EmojiSetEntry | undefined = findEmojiByCodepoint("🍎");
+    expect(apple?.spokenName).toBe("red apple");
+    expect(isClaimableEmoji("🍎")).toBe(true);
+    expect(isClaimableEmoji("😀")).toBe(false);
   });
 
   it("exports the auth schema keyed the way Better Auth expects", () => {
