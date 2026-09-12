@@ -12,9 +12,22 @@ Releasing a Handle therefore deletes the Account, along with its Profile and Lin
 
 An ordered sequence of emoji from the Emoji Set. Only three-emoji Handles are claimable at launch; one- and two-emoji Handles are Reserved. Repetition is allowed, and all-same triples are freely claimable.
 
-**Canonical key.** Decode the URL path once, apply NFC, strip U+FE0E and U+FE0F, split into code points, and require every one to be in the Emoji Set. That code-point sequence is the key, stored under a `UNIQUE` index with a deterministic collation. There is no separate display column: every emoji in the Set renders correctly as-is.
+**Canonical key. Built** — `canonicalise` in `packages/core/src/handle/canonicalise.ts`. Decode the URL path once, apply NFC, strip U+FE0E and U+FE0F, split into code points, and require exactly three, each in a **released** category. That code-point sequence is the key, stored under a `UNIQUE` index with a deterministic collation. There is no separate display column: every emoji in the Set renders correctly as-is.
 
 The application must canonicalise before every write, or the index does not mean what it appears to. A path that is not byte-identical to the encoded canonical form redirects permanently to it; one that cannot be canonicalised returns 404.
+
+`canonicalise` **returns a result, it does not throw**: every rejection is an ordinary answer to a public request, and "redirect to the canonical spelling" is a different branch from "404". A success carries the `key`, the `encoded` canonical segment (what a `Location` header must be given — a raw emoji in a header throws), `isCanonical` (whether the received segment was byte-identical to `encoded`, a **routing** answer that a non-URL caller should ignore), and the three Emoji Set entries in order. A rejection carries one of four reasons, which are deliberately different answers:
+
+| Reason                | Means                                                        |
+| --------------------- | ------------------------------------------------------------ |
+| `malformed-encoding`  | `decodeURIComponent` threw — the segment is not even text    |
+| `wrong-length`        | Not exactly three code points, Reserved lengths included     |
+| `unknown-codepoint`   | Not in the candidate list: a letter, ZWJ, skin-tone modifier |
+| `unreleased-category` | A real Emoji Set entry whose category has not dropped yet    |
+
+Membership is checked left to right and the **leftmost** offender is reported, so the reason is a function of the input alone and not of the order of the candidate data.
+
+**The rule says NFC, and callers must not "help" by applying NFKC.** Compatibility normalisation is not the identity over the candidate list: it rewrites 13 Symbols emoji into plain CJK characters (U+1F233 🈳 becomes U+7A7A 空), turning a real emoji into an unknown code point. NFC and NFD are both the identity over all 1,053 candidates, and a test asserts that so a future candidate with a canonical decomposition turns red.
 
 **Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job. An expired hold frees the Handle and deletes the unverified Account. A released Handle returns to the pool after 30 days. Handles cannot be changed in the MVP.
 
