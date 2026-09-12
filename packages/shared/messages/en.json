@@ -1,6 +1,5 @@
 {
   "Footer": {
-    "api": "API: v{version}",
     "ui": "UI: v{version}"
   }
 }

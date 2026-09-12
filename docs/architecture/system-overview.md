@@ -8,7 +8,7 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 | Path                                                | What it is                                                                                                                                                  | Port |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| `apps/web`                                          | Next.js (App Router) frontend and backend. Still carries the template's OKR pages                                                                           | 3000 |
+| `apps/web`                                          | Next.js (App Router) frontend and backend. A placeholder home page; the real one arrives with the Handle builder                                            | 3000 |
 | `apps/api`                                          | NestJS backend with an in-memory OKR demo. **Planned for deletion, not yet removed** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)) | 3001 |
 | `packages/core`                                     | **Planned, not yet built:** framework-free domain logic, use cases, and Zod schemas ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md))  | —    |
 | `packages/shared`                                   | Types, Zod schemas, and constants shared across the workspace                                                                                               | —    |
@@ -18,7 +18,7 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 ## Communication
 
-**Today:** the web app calls the NestJS API over HTTP, with the base URL from `NEXT_PUBLIC_API_URL`, defaulting to `http://localhost:3001` (`apps/web/src/lib/api.ts`). There is no database: API state lives in memory and resets on restart.
+**Today:** nothing calls the NestJS API. The web app's HTTP client and its OKR pages have been removed, so `apps/api` still runs but has no consumer; it is deleted next. There is no database: API state lives in memory and resets on restart.
 
 **Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): that cross-process call disappears. The web app talks to `packages/core` in-process, and `packages/core` talks to Neon Postgres through Drizzle using the serverless HTTP driver. Migrations run from committed files in the Vercel build step against the unpooled connection, with a database branch per preview deployment. No schema change is applied by hand.
 
