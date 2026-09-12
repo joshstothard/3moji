@@ -9,15 +9,12 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { profile } from "./profile";
-
-/**
- * How many Links one Profile may have, from
- * [`data-model.md` § Profile](../../../../docs/architecture/data-model.md).
- *
- * Exported so the write path (#106) and the `CHECK` below are one number in
- * one place, the way `HANDLE_KEY_LENGTH` is.
- */
-export const LINK_LIMIT = 10;
+// One source of truth for the limit. The CHECK below and `validateProfile`
+// must agree, and two constants that must agree with nothing making them
+// agree is a defect waiting for someone to raise one of them. The dependency
+// runs db -> profile, never the reverse, so the validator stays free of
+// Drizzle and can still be bundled for the browser.
+import { LINK_LIMIT } from "../profile/validate-profile";
 
 /**
  * One link on a Profile: a title, a URL, and the place it sits in the list.

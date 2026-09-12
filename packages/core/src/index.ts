@@ -130,7 +130,7 @@ export type {
 } from "./handle/release-handle";
 export { releasedHandle } from "./db/released-handle";
 export { profile } from "./db/profile";
-export { link, LINK_LIMIT } from "./db/link";
+export { link } from "./db/link";
 export type {
   Profile,
   ProfileLink,
