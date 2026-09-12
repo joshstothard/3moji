@@ -21,8 +21,12 @@ One titled URL on a Profile, shown in the order its owner set.
 _Avoid_: button, entry
 
 **Emoji Set**:
-The curated allowlist of single-codepoint emoji that render on both iOS and Android. Only these emoji can appear in a Handle.
+The emoji a Handle may use: the single-codepoint emoji of a **released category**. The wider candidate list is larger; only released categories are claimable, and categories are added over time but never withdrawn.
 _Avoid_: emoji list, safe emoji
+
+**Released Category**:
+A group of emoji made claimable as one drop. Adding a category is additive and safe; removing one could orphan a claimed Handle, so it never happens.
+_Avoid_: batch, wave, tranche
 
 **Spoken Name**:
 The single canonical English name of one emoji in the Emoji Set, used to say a Handle aloud.

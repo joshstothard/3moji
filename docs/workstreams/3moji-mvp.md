@@ -94,7 +94,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Deliverables:**
 
-- The Emoji Set shipped as versioned data in `packages/core`, pinned to Emoji 12.0.
+- The Emoji Set shipped as versioned data in `packages/core`, pinned to Emoji 12.0, with the **three launch categories** released ([ADR-0007](../adr/0007-release-the-emoji-set-in-category-drops.md)).
 - The curated name layer: `displayName`, `synonyms`, and a stored plural.
 - The side-by-side render check and the verdict on the alphanumeric and geometric subgroups (issue #23).
 - The Reserved Handle file and its domain-layer guard.
@@ -102,12 +102,13 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Acceptance criteria:**
 
-- [ ] A test asserts the Emoji Set's size and that every Spoken Name is unique.
+- [ ] A test asserts the released set is the three launch categories (307 emoji) and that every Spoken Name in it is unique.
+- [ ] An emoji outside a released category cannot form a Handle, asserted in the domain layer.
 - [ ] Canonicalisation decodes once, applies NFC, strips U+FE0E and U+FE0F, and validates every code point against the Emoji Set.
 - [ ] A property test shows two spellings of one Handle produce the same canonical key.
 - [ ] A Reserved Handle is rejected in the domain layer, and the database constraint holds under a concurrent insert.
 
-**Dependencies:** Phase 1. ADR-0005 accepted. Issue #23, which needs two physical phones.
+**Dependencies:** Phase 1. ADR-0005 and ADR-0007 accepted. Issue #23 narrowed to the three launch categories, which still needs two physical phones.
 
 **Issues:**
 
@@ -202,6 +203,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - Do the `Symbols/alphanum` and `Symbols/geometric` subgroups stay in the Emoji Set? Excluding both takes it from 1,053 to 994. Decided in issue #23.
 - Which flagged emoji are excluded after the side-by-side render check? Issue #23.
 - Is three resends an hour the right limit? It is a starting value to tune, not a principle.
+- Should 🍑 and 🍆 stay claimable? Both were left in ([#18](https://github.com/joshstothard/3moji/issues/18)) on the grounds that context makes them rude. ADR-0007 makes Food & Drink a launch category, so they are now prominent rather than buried among a thousand.
+- Which order do later category drops go in, and what triggers one? ADR-0007 defers Objects and schedules nothing else.
 
 ## Decision log
 
@@ -221,3 +224,4 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - 2026-09-12 — Phase 1 planned: epic #26, issues #27–#32.
 - 2026-09-12 — Clerical fix: the Next.js ADR is renumbered 0003 → 0006. ADR-0003 was taken on `main` by the auto-merge decision, which landed from a separate PR while this one was drafted. No decision changed.
 - 2026-09-12 — Status Proposed → Active. Phase 1 is five-sixths done: #27, #28, #29, #30 and #31 are closed. #32 is the only remaining item and is blocked on #19, which needs accounts, a payment method and DNS access.
+- 2026-09-12 — The Emoji Set is released in category drops; a Handle may only use emoji from a released category, starting with Food & Drink, Animals & Nature and Activities ([ADR-0007](../adr/0007-release-the-emoji-set-in-category-drops.md), partially superseding ADR-0005 decision 1)

@@ -1,7 +1,9 @@
 # ADR-0005: The Emoji Set
 
-**Status:** Accepted
+**Status:** Accepted, partially superseded by ADR-0007
 **Date:** 2026-09-12
+
+> Decision 1 partially superseded by [ADR-0007: Release the Emoji Set in category drops](./0007-release-the-emoji-set-in-category-drops.md) on 2026-09-12: a Handle draws from the released categories, not the whole 1,053. The pin, the constraints and the candidate list are unchanged, and the rest of this ADR still applies.
 
 ## Context
 
