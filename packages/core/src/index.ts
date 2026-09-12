@@ -129,6 +129,16 @@ export type {
   ReleaseResult,
 } from "./handle/release-handle";
 export { releasedHandle } from "./db/released-handle";
+export { profile } from "./db/profile";
+export { link, LINK_LIMIT } from "./db/link";
+export type {
+  Profile,
+  ProfileLink,
+  ProfileRepository,
+} from "./ports/profile-repository";
+export { createDrizzleProfileRepository } from "./adapters/drizzle-profile-repository";
+export { profileStateOf } from "./profile/profile-state";
+export type { ProfileState } from "./profile/profile-state";
 export { submitClaim } from "./handle/submit-claim";
 export type { ClaimSubmission, SubmitClaimInput } from "./handle/submit-claim";
 
