@@ -1,5 +1,5 @@
 import { getTableName } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import { handle } from "./handle";
 import { user } from "./schema";
@@ -38,6 +38,36 @@ describe("the handle table", () => {
     expect(config.checks.map((check) => check.name)).toContain(
       "handle_key_three_codepoints",
     );
+  });
+
+  /**
+   * ADR-0004 decision 7's database layer for the Reserved Handle list: the nine
+   * emoji of [#18](https://github.com/joshstothard/3moji/issues/18) cannot
+   * reach a row even if the domain guard is bypassed.
+   *
+   * The constraint is **generated from `BLOCKED_EMOJI`**, so the assertion is
+   * that every one of the nine appears in the expression it produced. A
+   * hand-written CHECK could drift from the data; this cannot.
+   */
+  it("refuses a key holding any blocked emoji", () => {
+    const blockedCheck = config.checks.find(
+      (check) => check.name === "handle_key_no_blocked_emoji",
+    );
+    if (blockedCheck === undefined) {
+      throw new Error(
+        `the handle table has no blocked-emoji CHECK. It has: ${config.checks.map((check) => check.name).join(", ")}.`,
+      );
+    }
+
+    // `chr(<decimal code point>)` rather than a literal emoji: a variation
+    // selector is invisible in SQL source, and `chr` is immutable so a CHECK
+    // may call it. The decimals are the nine of #18.
+    const expression = new PgDialect().sqlToQuery(blockedCheck.value).sql;
+    for (const decimal of [
+      128405, 128299, 128163, 128298, 129683, 128137, 128138, 128684, 129656,
+    ]) {
+      expect(expression).toContain(`chr(${String(decimal)})`);
+    }
   });
 
   /**

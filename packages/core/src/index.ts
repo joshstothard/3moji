@@ -40,6 +40,27 @@ export {
 export type { CuratedEmoji } from "./emoji/emoji-name";
 export { spokenHandle } from "./emoji/spoken-handle";
 
+export {
+  BLOCKED_EMOJI,
+  isReservedHandle,
+  reservationOf,
+  RESERVED_HANDLES,
+  RESERVED_HANDLE_ENTRIES,
+} from "./handle/reserved-handles";
+export type {
+  BlockedEmoji,
+  Reservation,
+  ReservedHandleEntry,
+  ReservedHandleList,
+  ReservedScope,
+} from "./handle/reserved-handles";
+export { claimableHandle } from "./handle/claimable";
+export type {
+  ClaimabilityFailure,
+  ClaimabilityResult,
+  ClaimableHandle,
+} from "./handle/claimable";
+
 export { canonicalise, HANDLE_LENGTH } from "./handle/canonicalise";
 export type {
   CanonicalHandle,

@@ -31,7 +31,31 @@ Membership is checked left to right and the **leftmost** offender is reported, s
 
 **Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job. An expired hold frees the Handle and deletes the unverified Account. A released Handle returns to the pool after 30 days. Handles cannot be changed in the MVP.
 
-**Reserved Handles** are enforced in three independent layers: the domain layer, again inside the claim transaction, and finally the database constraint, which decides races between simultaneous claims.
+## Reserved Handles
+
+**Partly built.** The list is versioned data in `packages/core/src/handle/reserved-handles.ts`, and its domain guard is `claimableHandle` in `packages/core/src/handle/claimable.ts`. [ADR-0004](../adr/0004-the-handle-model.md) decision 7 requires **three independent layers**. Two exist today:
+
+| Layer                                 | Where                                                                        | Status                       |
+| ------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------- |
+| Domain, before any write              | `claimableHandle` (`src/handle/claimable.ts`)                                | **Built**                    |
+| Re-check inside the claim transaction | the claim use case                                                           | **Deferred to Phase 3**      |
+| Database constraint                   | `handle_key_no_blocked_emoji` on `handle.key` (`src/db/handle.ts`, `0002_…`) | **Built**, for the nine only |
+
+The middle layer is deliberately not built: there is no claim path yet, and a transaction wrapper with nothing calling it would be a third layer on paper only. The seam is named in `claimableHandle`'s doc comment — **the claim transaction must call `reservationOf` on the canonical key inside its own transaction** before inserting. Until it does, the database `CHECK` and the primary key are what decide a race.
+
+[Issue #18](https://github.com/joshstothard/3moji/issues/18) settled the list as **three mechanisms, not one list**:
+
+| Mechanism        | What                                                         | Enforced by                                      |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------ |
+| Rules            | Every one- and two-emoji Handle is Reserved                  | `canonicalise`, as `wrong-length` — not the list |
+| Blocked emoji    | Nine emoji, reserved wherever they appear                    | The domain guard **and** the `CHECK`             |
+| Reserved entries | Eight brand-like triples, three platform-owned, plus reports | The domain guard only                            |
+
+**Only the blocked emoji reach the database layer.** They are a rule — "wherever they appear" — which is what a `CHECK` expresses well, and they are the half that protects people. The entries are the half that grows case by case, and a migration per addition would buy nothing the domain guard does not already give.
+
+**Most of the list is forward-looking today, and the data says so.** ADR-0007 released only Food & Drink, Animals & Nature and Activities, so **two of the nine blocked emoji are reachable**: 🔫 water pistol (Activities) and 🔪 kitchen knife (Food & Drink). The other seven — 🖕 (People & Body) and 💣 🪓 💉 💊 🚬 🩸 (Objects) — are already rejected as `unreleased-category` before the list is consulted. Likewise **two of the eight brand-like triples** are reachable: 🍎🍎🍎 and 🐦🐦🐦. The platform-owned entries are drawn only from released categories, because their job is to stop a squatter taking something the product needs now. 🧊🧊🧊 is deliberately **not** reserved: ADR-0004 decision 2 names it as freely claimable. Tests pin which entries are reachable, so a later drop is a visible change to this list rather than a silent one.
+
+**Additions apply to future Claims only, structurally.** Nothing on the resolve path — `canonicalise`, `toHandleKey`, the primary key — reads the reserved list, so a reserved Handle still resolves and an Account that already owns one keeps its Profile and its URL. Taking a claimed Handle away is a deliberate takedown, not a list edit. One consequence to carry forward: adding an emoji to the blocked nine later needs a **hand-written `ALTER TABLE … ADD CONSTRAINT … NOT VALID`** migration, because `ADD CONSTRAINT … CHECK` validates existing rows.
 
 ### How it is stored
 
@@ -150,4 +174,4 @@ pizza and an ice cube". The all-same triple the product pitch is built on is jus
 
 There is deliberately no colour field: colour differs between Apple and Google and could never be verified.
 
-The Reserved Handle list ships beside the Set as versioned data: nine emoji blocked wherever they appear, plus brand-like and platform-owned entries. Additions apply to future Claims only.
+The Reserved Handle list ships beside the Set as versioned data, in `src/handle/reserved-handles.ts` rather than `src/emoji/`: it is a rule about Handles, not a property of an emoji, and it must not become something `canonicalise` consults. See [Reserved Handles](#reserved-handles) above.

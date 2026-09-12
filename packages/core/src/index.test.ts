@@ -1,6 +1,8 @@
 import {
   authSchema,
+  BLOCKED_EMOJI,
   candidateEmojiSet,
+  claimableHandle,
   createCoreServices,
   createDatabase,
   createRecordingEmailSender,
@@ -8,10 +10,13 @@ import {
   createSystemClock,
   findEmojiByCodepoint,
   isClaimableEmoji,
+  isReservedHandle,
   releasedEmojiSet,
+  RESERVED_HANDLES,
   resolveDriver,
 } from "./index";
 import type {
+  ClaimabilityResult,
   Clock,
   CoreDependencies,
   CoreServices,
@@ -45,6 +50,22 @@ describe("package entry point", () => {
     expect(apple?.spokenName).toBe("red apple");
     expect(isClaimableEmoji("🍎")).toBe(true);
     expect(isClaimableEmoji("😀")).toBe(false);
+  });
+
+  /**
+   * The Reserved Handle list and the claim gate, through the public API alone.
+   * `apps/web` reaches the domain only through this entry point, so an export
+   * left out here is an unreachable guard.
+   */
+  it("exports the Reserved Handle list and the claim gate", () => {
+    expect(BLOCKED_EMOJI).toHaveLength(9);
+    expect(RESERVED_HANDLES.entries.length).toBeGreaterThan(0);
+
+    // 🔪 is Food & Drink, so it is released and this is live protection.
+    const blocked: ClaimabilityResult = claimableHandle("🍎🔪🍌");
+    expect(blocked.ok ? undefined : blocked.reason).toBe("reserved");
+    expect(claimableHandle("🍎🍌🍇").ok).toBe(true);
+    expect(isReservedHandle("🍎🍎🍎")).toBe(true);
   });
 
   it("exports the auth schema keyed the way Better Auth expects", () => {

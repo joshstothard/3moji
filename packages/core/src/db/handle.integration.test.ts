@@ -308,4 +308,55 @@ describeWithDatabase("the handle table against a real Postgres", () => {
       ),
     ).resolves.toBe("23514");
   });
+
+  /**
+   * The Reserved Handle list's database layer, proved **by bypassing the layer
+   * above it**. These keys never pass through `claimableHandle` — the domain
+   * guard would have refused them — and they never pass through `toHandleKey`
+   * either, which could not produce 🖕 at all. They are handed straight to
+   * Postgres as strings, which is what an application bug, a migration script
+   * or a psql session would do.
+   *
+   * Both are exactly three code points, so the length CHECK is satisfied and a
+   * rejection can only have come from the blocked-emoji CHECK.
+   */
+  it.each([
+    // In Food & Drink, so claimable today but for this constraint.
+    { name: "a released blocked emoji", key: "🔪🍎🍌" },
+    // In People & Body, which has not dropped: the CHECK is independent of
+    // release state, because a later drop must not make it lapse.
+    { name: "an unreleased blocked emoji", key: "🖕🍎🍌" },
+    // Last position, because "wherever they appear" is the rule.
+    { name: "a blocked emoji in the last position", key: "🍎🍌🔫" },
+  ])("refuses a key holding $name", async ({ key }) => {
+    const owner = `${PREFIX}-blocked-${key}`;
+    await createAccount(owner);
+
+    await expect(
+      rejectionCode(
+        db.execute(sql`
+          INSERT INTO "handle" (key, user_id, held_until)
+          VALUES (${key}, ${owner}, now() + interval '24 hours')
+        `),
+      ),
+    ).resolves.toBe("23514");
+  });
+
+  /**
+   * The other half of that constraint: it must not refuse an ordinary Handle.
+   * A CHECK written with an inverted comparison would pass every rejection
+   * assertion above and block the whole product.
+   */
+  it("admits an ordinary Handle alongside the blocked-emoji constraint", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 4);
+    const owner = `${PREFIX}-blocked-control`;
+    await createAccount(owner);
+
+    await db.execute(sql`
+      INSERT INTO "handle" (key, user_id, held_until)
+      VALUES (${key}, ${owner}, now() + interval '24 hours')
+    `);
+
+    expect(await countHandles(key)).toBe("1");
+  });
 });
