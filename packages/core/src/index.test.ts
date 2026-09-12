@@ -94,8 +94,8 @@ describe("package entry point", () => {
     });
     const deps: CoreDependencies = {
       clock,
+      db: handle.db,
       auth: {
-        db: handle.db,
         emailSender: createRecordingEmailSender(),
         baseUrl: "http://localhost:3000",
         secret: "a".repeat(32),

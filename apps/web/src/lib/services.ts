@@ -41,8 +41,8 @@ function build(): CoreServices {
 
   return createCoreServices({
     clock: createSystemClock(),
+    db,
     auth: {
-      db,
       emailSender: createResendEmailSender({
         apiKey: required("RESEND_API_KEY"),
         from: required("RESEND_FROM"),

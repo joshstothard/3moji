@@ -76,3 +76,13 @@ export { createResendEmailSender } from "./auth/adapters/resend-email-sender";
 export type { ResendEmailSenderInput } from "./auth/adapters/resend-email-sender";
 export { createAuth } from "./auth/create-auth";
 export type { CreateAuthInput } from "./auth/create-auth";
+
+export type { HandleRepository } from "./ports/handle-repository";
+export { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
+export { ownershipOf } from "./handle/handle-ownership";
+export type { HandleHoldRow, HandleOwnership } from "./handle/handle-ownership";
+export { handleAvailability } from "./handle/handle-availability";
+export type {
+  HandleAvailability,
+  HandleAvailabilityInput,
+} from "./handle/handle-availability";

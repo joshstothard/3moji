@@ -1,12 +1,28 @@
 import { createAuth, type CreateAuthInput } from "./auth/create-auth";
+import { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
+import type { Database } from "./db/client";
 import type { Clock } from "./ports/clock";
+import type { HandleRepository } from "./ports/handle-repository";
 
 /**
  * Everything the domain needs from the outside world, supplied by the caller.
  */
 export interface CoreDependencies {
   readonly clock: Clock;
-  readonly auth: CreateAuthInput;
+  /**
+   * The one Drizzle client for this process. Passed in rather than constructed
+   * here, because the driver choice belongs to the deployment and
+   * `createDatabase` needs a connection string this function has no business
+   * reading.
+   *
+   * **It is a single field on purpose.** Better Auth's adapter and the Handle
+   * repository must talk to the same database, and two fields that could hold
+   * different clients would make that an accident waiting to happen rather
+   * than an invariant — so `auth` takes everything *except* the client, and
+   * this function supplies it to both.
+   */
+  readonly db: Database;
+  readonly auth: Omit<CreateAuthInput, "db">;
 }
 
 /**
@@ -15,6 +31,7 @@ export interface CoreDependencies {
 export interface CoreServices {
   readonly clock: Clock;
   readonly auth: ReturnType<typeof createAuth>;
+  readonly handles: HandleRepository;
 }
 
 /**
@@ -31,6 +48,7 @@ export interface CoreServices {
 export function createCoreServices(deps: CoreDependencies): CoreServices {
   return {
     clock: deps.clock,
-    auth: createAuth(deps.auth),
+    auth: createAuth({ ...deps.auth, db: deps.db }),
+    handles: createDrizzleHandleRepository(deps.db),
   };
 }
