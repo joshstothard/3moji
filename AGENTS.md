@@ -196,6 +196,23 @@ Three rules follow, and they apply to every agent that writes a file it later re
 
 The near-miss was worse than the miss: the PR _body_ survived only because the two agents happened not to write it at the same moment.
 
+### A shared working tree is worse than a shared scratchpad
+
+A sub-agent launched **without worktree isolation runs in the parent's working directory**, so it shares the checkout, the index, `HEAD`, and the stash. Measured on 2026-09-12, within about twenty minutes of launching two agents that way:
+
+- One agent switched `HEAD` to its own branch, moving the checkout for everyone in it.
+- A branch belonging to the parent session was reset to `main`'s tip and **two commits were dropped from it**. They survived only as dangling objects and had to be recovered by SHA; the branch's reflog showed nothing but `branch: Created from origin/main`.
+- `scripts/verify.sh` and `format:check` failed on another agent's half-finished files, twice producing a red signal that belonged to nobody's diff.
+- `git push` became impossible without bypassing the pre-push hook, because the hook validates the **working tree** rather than the commit being pushed.
+
+So, when launching parallel agents:
+
+1. **Pass `isolation: "worktree"`.** It is the actual fix; everything below is damage limitation for when it was forgotten.
+2. **Never `git add -A`, `git add .` or `git commit -a` in a shared tree** — stage every path explicitly, or you commit another agent's half-finished work and your own reviewer will be the one to find it.
+3. **Never bare `git stash` / `git stash pop`**: the stash is shared across worktrees, so you can pop work that is not yours. Prefer a temporary commit.
+4. **Treat a red `verify.sh` sceptically** before assuming it is yours; check whether the failing files are in your diff at all.
+5. **To rescue a commit from a shared tree**, create a branch at its SHA (`git branch <name> <sha>`) — it touches neither `HEAD` nor the working tree — and check it out in a worktree of its own, which is also what stops another worktree force-moving it again.
+
 ## Absolute Rules
 
 These are non-negotiable. No exceptions, no workarounds.
