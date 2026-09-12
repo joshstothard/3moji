@@ -223,6 +223,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - 2026-09-12 — The Handle model: canonical key, 24-hour hold, one Handle per Account, Release as account deletion ([ADR-0004](../adr/0004-the-handle-model.md))
 - 2026-09-12 — The Emoji Set pinned to Emoji 12.0 with a curated name layer and no colour field ([ADR-0005](../adr/0005-the-emoji-set.md))
 - 2026-09-12 — A Handle keeps one identity and gains a second address: a dot-separated word alias, because an autolinker truncates the emoji URL and drops the Handle. Partially supersedes ADR-0004 decision 1's unconditional 404 ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md))
+- 2026-09-12 — The 30-day Handle cooldown is dropped for the MVP: a released Handle returns to the pool immediately. Release still writes a key-and-timestamp tombstone, because time cannot be backfilled. Resolves [#63](https://github.com/joshstothard/3moji/issues/63) and unblocks Phase 3; partially supersedes ADR-0004 decision 5 ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md))
 
 ## Changelog
 

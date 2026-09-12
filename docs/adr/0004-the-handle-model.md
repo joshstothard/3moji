@@ -1,9 +1,11 @@
 # ADR-0004: The Handle model
 
-**Status:** Accepted, partially superseded by ADR-0008
+**Status:** Accepted, partially superseded by ADR-0008 and ADR-0009
 **Date:** 2026-09-12
 
 > Decision 1's clause "one that cannot be canonicalised returns 404" superseded by [ADR-0008: Handles are addressable by emoji and by their word alias](./0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) on 2026-09-12. The rest of this ADR still applies.
+
+> Decision 5's clause "A released Handle returns to the pool after 30 days" superseded by [ADR-0009: Release leaves a tombstone and the cooldown is dropped for the MVP](./0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md) on 2026-09-12. The rest of this ADR still applies.
 
 ## Context
 
