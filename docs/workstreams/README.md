@@ -33,6 +33,6 @@ Each phase moves **Not planned → Planned → In progress → Done**. The docum
 
 <!-- One row per workstream, active first. Maintained by the workstream and plan-work skills. -->
 
-| Workstream                  | Status   | Current phase | Target |
-| --------------------------- | -------- | ------------- | ------ |
-| [3moji MVP](./3moji-mvp.md) | Proposed | —             | None   |
+| Workstream                  | Status | Current phase                | Target |
+| --------------------------- | ------ | ---------------------------- | ------ |
+| [3moji MVP](./3moji-mvp.md) | Active | 1 — Foundation and providers | None   |
