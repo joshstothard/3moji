@@ -85,6 +85,24 @@ describe("createCoreServices", () => {
     await close();
   });
 
+  /**
+   * The same read/write split for the Profile, and the same reason. Editing a
+   * Profile rewrites the row and its whole Link list as one act (#106), so
+   * those writes belong on a unit of work rather than on the port a visitor's
+   * page read holds. A write verb appearing here has to turn this red first.
+   *
+   * It also pins that the adapter is constructed **here and nowhere else**: the
+   * composition root is the only place that wires one, so a route handler
+   * reaching for `createDrizzleProfileRepository` itself has no seam a test can
+   * substitute at.
+   */
+  it("wires a read-only Profile repository", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(Object.keys(services.profiles)).toEqual(["profileOf"]);
+    await close();
+  });
+
   it("passes transport plugins through to auth", async () => {
     const handle = createDatabase({
       url: "postgresql://app:app@localhost:5432/app_test",

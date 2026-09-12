@@ -22,8 +22,16 @@ export interface OwnedHandle {
  * Separate from {@link ../ports/handle-repository.HandleRepository}, which
  * answers about a *key* rather than about an Account, and separate from
  * {@link ../ports/verification-dispatch-store.VerificationDispatchStore},
- * which is about links. Three narrow ports rather than one store, because the
- * three have different lifetimes and only this one will grow a Profile.
+ * which is about links. Narrow ports rather than one store, because they have
+ * different lifetimes.
+ *
+ * **This comment used to say "only this one will grow a Profile", and that
+ * turned out to be wrong** (#102). The Profile went to its own port,
+ * {@link ../ports/profile-repository.ProfileRepository}, because it is read
+ * from the opposite direction: this port answers *about an Account* and is
+ * reached from a session, while a Profile is read by a visitor who has typed a
+ * Handle and has no Account at all. Adding `profileOf` here would have forced
+ * that visitor to resolve a `userId` first, for nothing.
  *
  * **Read-only, like `HandleRepository` and for the same reason.** Everything
  * that writes on this path — the hold, its finalisation, the Account's deletion

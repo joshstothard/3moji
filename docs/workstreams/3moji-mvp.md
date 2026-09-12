@@ -184,6 +184,10 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Dependencies:** Phase 3. [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
 
+**Status:** In progress. Planned as epic [#101](https://github.com/joshstothard/3moji/issues/101).
+
+**The storage layer is built** — [#102](https://github.com/joshstothard/3moji/issues/102): the `profile` and `link` tables, their migration, and the read port that resolves a canonical `HandleKey` to a Profile. A Profile is keyed on the Account, so Release takes it and its Links with it; Links carry an explicit order, and "at most ten" is enforced by the schema rather than by the write path. "Claimed but unedited" is a named state rather than an empty object. See [`data-model.md` § Profile](../architecture/data-model.md#profile). The field limits themselves are [#103](https://github.com/joshstothard/3moji/issues/103)'s and the write path is [#106](https://github.com/joshstothard/3moji/issues/106)'s; there is no page yet.
+
 **Issues:**
 
 - #102 Add the profile and link tables with their migration and read path
