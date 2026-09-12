@@ -89,19 +89,27 @@ function matches(entry: CuratedEmoji, query: string): boolean {
   if (entry.spokenName.toLowerCase().includes(query)) {
     return true;
   }
+  if (entry.plural.toLowerCase().includes(query)) {
+    return true;
+  }
   return entry.synonyms.some((synonym) =>
     synonym.toLowerCase().includes(query),
   );
 }
 
 /**
- * Search the released set by display name, CLDR name, or synonym.
+ * Search the released set by display name, CLDR name, plural or synonym.
  *
- * All three are matched because they answer different questions: the display
+ * All four are matched because they answer different questions: the display
  * name is what a picker shows, the CLDR name is what a determined person might
- * know the emoji as, and the synonyms are the words the curation pass added
- * precisely because neither of the other two would have been searched for —
+ * know the emoji as, the plural is what someone after two of something types,
+ * and the synonyms are the words the curation pass added precisely because
+ * none of the others would have been searched for —
  * "ice cube" for 🧊, "aubergine" for 🍆.
+ *
+ * The plural is matched because substring matching cannot reach it from the
+ * singular: `"aubergine".includes("aubergines")` is false, so a search for
+ * "aubergines" found nothing at all before it was added.
  *
  * Case-insensitive substring matching, in candidate-list order. A blank query
  * matches nothing rather than everything, so a picker's empty search box does

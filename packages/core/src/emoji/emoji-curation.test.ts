@@ -210,6 +210,14 @@ describe("searchEmoji", () => {
     expect(findCuratedEmoji("🍆")?.spokenName).toBe("eggplant");
   });
 
+  it("finds an emoji by its stored plural", () => {
+    // The plural is a fourth searchable term, not decoration: a person looking
+    // for two of something types the plural, and substring matching against the
+    // singular cannot reach it — "ice cube".includes("ice cubes") is false.
+    expect(codepointsFor("ice cubes")).toContain("\u{1F9CA}");
+    expect(codepointsFor("aubergines")).toEqual(["\u{1F346}"]);
+  });
+
   it("still finds an emoji by its CLDR name after an override", () => {
     expect(codepointsFor("ice")).toContain("🧊");
   });

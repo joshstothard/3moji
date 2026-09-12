@@ -192,16 +192,18 @@ Categories are released as **data, not code**: a drop is an edit to the released
 
 `scripts/generate-emoji-set.mjs` (`npm run generate:emoji`) generates the candidate module from [the candidate report](../reports/2026-09-11-emoji-set.candidates.json), so the shipped data is derived rather than retyped; a domain test reparses the report and fails if the two drift. Releasing a category needs **no regeneration**: `released` is derived from `RELEASED_CATEGORIES` at load, so a drop is the one-line edit ADR-0007 decision 5 asks for.
 
+`searchEmoji` matches a case-insensitive substring against **four** fields — `displayName`, `spokenName`, `plural` and `synonyms` — because each answers a different question: what the product shows, what Unicode calls it, what someone after two of something types, and the words the curation pass added precisely because none of the others would have been searched for. The plural has to be matched explicitly: substring matching cannot reach it from the singular, so "aubergines" found nothing until it was. A blank query matches nothing rather than everything, so a picker's empty search box is not a request for all 307.
+
 `findEmojiByCodepoint` is keyed on the code point itself — the single-character string that splitting a canonicalised Handle path yields. The `U+XXXX` notation is carried as a field for provenance and is not a lookup key. The lookup returns unreleased entries too, so a caller can tell "not an emoji we know" from "not claimable yet"; `isClaimableEmoji` is what decides a Claim.
 
-| Field         | Source                            | Purpose                                      |
-| ------------- | --------------------------------- | -------------------------------------------- |
-| `spokenName`  | CLDR short name, immutable        | Canonical identity                           |
-| `displayName` | curated, defaults to `spokenName` | What the product says and shows              |
-| `synonyms`    | curated, may be empty             | Search only                                  |
-| `plural`      | curated, stored                   | The collapsed spoken form, "three ice cubes" |
-| `article`     | curated, defaults to a vowel rule | "an ice cube", not "a ice cube"              |
-| `group`       | Unicode                           | Theme, used for swap suggestions             |
+| Field         | Source                            | Purpose                                                    |
+| ------------- | --------------------------------- | ---------------------------------------------------------- |
+| `spokenName`  | CLDR short name, immutable        | Canonical identity                                         |
+| `displayName` | curated, defaults to `spokenName` | What the product says and shows                            |
+| `synonyms`    | curated, may be empty             | Search only                                                |
+| `plural`      | curated, stored                   | The collapsed spoken form, "three ice cubes"; searched too |
+| `article`     | curated, defaults to a vowel rule | "an ice cube", not "a ice cube"                            |
+| `group`       | Unicode                           | Theme, used for swap suggestions                           |
 
 ### The curated name layer
 
