@@ -27,6 +27,15 @@ export {
   releasedEmojiSet,
 } from "./emoji/emoji-set";
 export type { EmojiSetEntry } from "./emoji/emoji-set";
+export { EMOJI_CURATION } from "./emoji/emoji-curation";
+export type { EmojiArticle, EmojiCuration } from "./emoji/emoji-curation";
+export {
+  curatedEmojiSet,
+  findCuratedEmoji,
+  searchEmoji,
+} from "./emoji/emoji-name";
+export type { CuratedEmoji } from "./emoji/emoji-name";
+export { spokenHandle } from "./emoji/spoken-handle";
 
 export type { EmailSender, OutboundEmail } from "./auth/ports/email-sender";
 export { createRecordingEmailSender } from "./auth/adapters/recording-email-sender";
