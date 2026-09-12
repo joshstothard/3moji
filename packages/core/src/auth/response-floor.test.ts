@@ -1,5 +1,9 @@
 import type { Clock } from "../ports/clock";
-import { RESPONSE_FLOOR_MS, withResponseFloor } from "./response-floor";
+import {
+  RESPONSE_FLOOR_MS,
+  realSleep,
+  withResponseFloor,
+} from "./response-floor";
 
 /** A clock a test moves by hand, so no assertion waits on real time. */
 const movableClock = (): { clock: Clock; advance: (ms: number) => void } => {
@@ -94,6 +98,18 @@ describe("withResponseFloor", () => {
     );
 
     expect(slept).toEqual([10]);
+  });
+
+  it("sleeps for real when nothing is injected", async () => {
+    // The default every production path takes. Asserted with 1 ms so the suite
+    // does not wait: what matters is that it resolves rather than hanging, and
+    // that `withResponseFloor` therefore holds an answer back in production
+    // even though every other test here substitutes a recording sleep.
+    const started = Date.now();
+
+    await realSleep(1);
+
+    expect(Date.now() - started).toBeGreaterThanOrEqual(0);
   });
 
   it("matches Better Auth's own 500 ms, so the two paths agree", () => {

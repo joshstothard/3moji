@@ -7,7 +7,10 @@ import { Pool } from "pg";
 
 import { createDrizzleAccountDirectory } from "../adapters/drizzle-account-directory";
 import { createDrizzleClaimFinaliser } from "../adapters/drizzle-claim-finaliser";
-import { createDrizzleClaimStore } from "../adapters/drizzle-claim-store";
+import {
+  claimTransactionOn,
+  createDrizzleClaimStore,
+} from "../adapters/drizzle-claim-store";
 import { createDrizzleVerificationDispatchStore } from "../adapters/drizzle-verification-dispatch-store";
 import {
   HANDLE_KEY_LENGTH,
@@ -40,6 +43,8 @@ const describeWithDatabase = url === undefined ? describe.skip : describe;
 const MIGRATIONS = path.join(__dirname, "..", "..", "migrations");
 const PASSWORD = "correct horse battery staple";
 const BASE_URL = "http://localhost:3000";
+/** Far enough in the past that no clock skew makes a hold look alive. */
+const LONG_PAST = new Date("2020-01-01T00:00:00.000Z");
 
 /** Every Account this suite creates carries this tag, and only these are deleted. */
 const SUITE_TAG = `verify-int-${String(Date.now())}`;
@@ -188,6 +193,31 @@ describeWithDatabase("verification against a real Postgres", () => {
     emailSender.clear();
     now = new Date("2026-09-12T12:00:00.000Z");
   });
+
+  /**
+   * Runs #83's `freeExpiredHold` against one key, in its own transaction.
+   *
+   * Reached through `claimTransactionOn` rather than through a Claim, because a
+   * Claim reads availability first and would answer "claimed" without ever
+   * asking the write to run — which would make the immunity test pass for the
+   * wrong reason. `now` is the wall clock, not the suite's fixed one: the point
+   * is a hold whose `held_until` really is in the past.
+   */
+  const freeExpiredHoldDirectly = (key: HandleKey) =>
+    db.transaction((tx) =>
+      claimTransactionOn(
+        tx,
+        createAuth({
+          db: tx,
+          emailSender,
+          dispatches,
+          clock,
+          baseUrl: BASE_URL,
+          secret: "integration-test-secret-of-sufficient-length",
+          from: "3moji <no-reply@mail.3moji.me>",
+        }),
+      ).freeExpiredHold(key, new Date()),
+    );
 
   /** Claims a Handle and returns the link the claimant was sent. */
   const claim = async (name: string, offset: number) => {
@@ -351,6 +381,69 @@ describeWithDatabase("verification against a real Postgres", () => {
     // Once the oldest ages out of the window, a link is allowed again.
     now = new Date(now.getTime() + 60 * 60 * 1000);
     expect((await attempt()).state).toBe("sent");
+  });
+
+  /**
+   * **The test that neither #82 nor #83 could write alone.**
+   *
+   * #83's lazy expiry frees a hold matching `claimed_at IS NULL AND held_until
+   * <= now`, and it is on `main` today. #82's finalisation is the write that
+   * fills `claimed_at` in. So "is a finalised Handle safe from expiry" is not
+   * answerable inside either change by itself: #83's own suite proves the
+   * predicate refuses a row whose `claimed_at` was set **by hand, in SQL**, and
+   * this proves the column is genuinely filled in by the path a real person
+   * takes — following the link in their email.
+   *
+   * Without it, both changes pass their own tests while the pair loses
+   * somebody's Handle a day after they verified it.
+   */
+  it("leaves a Handle finalised through the link immune to lazy expiry", async () => {
+    const { email, key } = await claim("expiry-immunity", 24);
+    const token = tokenFrom(emailSender.lastSent()?.text);
+
+    // Finalised the way a person does it: by following the link.
+    const finalised = await finaliseClaim({
+      token,
+      dispatches,
+      directory,
+      finaliser,
+      clock,
+    });
+    expect(finalised.state).toBe("claimed");
+
+    // Now push the hold's expiry into the past, which is what time does on its
+    // own after 24 hours. `claimed_at` is untouched, so this is exactly the row
+    // a timestamp-only predicate would delete.
+    await db.execute(
+      sql`UPDATE "handle" SET held_until = ${LONG_PAST} WHERE key = ${key}`,
+    );
+
+    // Ask #83's write to run on it, **directly** — the strongest form of the
+    // question, with no availability read standing in front of it to answer
+    // "claimed" and skip the call.
+    expect(await freeExpiredHoldDirectly(key)).toEqual({ freed: false });
+
+    // The Account and its Handle are both still there. `handle.user_id`
+    // cascades from `user`, so a freed Account would have taken the Handle with
+    // it: this is one assertion about two tables.
+    expect(await userRow(email)).toBeDefined();
+    expect((await holdRow(key))?.claimed_at).not.toBeNull();
+  });
+
+  it("still frees a hold that was never finalised, so the immunity is not blanket", async () => {
+    // The other half. Without #82's write the same row *is* freed — otherwise
+    // the test above would pass against an expiry that frees nothing at all,
+    // which is the way that pair of assertions usually goes wrong.
+    const { email, key } = await claim("expiry-still-works", 27);
+
+    await db.execute(
+      sql`UPDATE "handle" SET held_until = ${LONG_PAST} WHERE key = ${key}`,
+    );
+
+    expect(await freeExpiredHoldDirectly(key)).toEqual({ freed: true });
+    // Freeing the hold is deleting the unverified Account (ADR-0004 decision
+    // 5), and the Handle goes with it through the cascade.
+    expect(await userRow(email)).toBeUndefined();
   });
 
   it("refuses sign-in before verification, which the hold screen renders", async () => {

@@ -2,7 +2,11 @@ import { createRecordingEmailSender } from "../auth/adapters/recording-email-sen
 import { RESPONSE_FLOOR_MS } from "../auth/response-floor";
 import { toHandleKey } from "../db/handle-key";
 import type { AccountDirectory } from "../ports/account-directory";
-import type { AccountCreated, ClaimStore } from "../ports/claim-store";
+import type {
+  AccountCreated,
+  ClaimStore,
+  ExpiredHoldFreed,
+} from "../ports/claim-store";
 import type { Clock } from "../ports/clock";
 import { submitClaim } from "./submit-claim";
 
@@ -17,9 +21,11 @@ const PASSWORD = "correct horse battery staple";
 const RESET_URL = "https://3moji.me/reset-password";
 const FROM = "3moji <no-reply@mail.3moji.me>";
 
+const NOW = new Date("2026-09-12T12:00:00.000Z");
+
 /** A clock a test moves by hand, so nothing waits on real time. */
 const movableClock = (): { clock: Clock; advance: (ms: number) => void } => {
-  let now = new Date("2026-09-12T12:00:00.000Z").getTime();
+  let now = NOW.getTime();
   return {
     clock: { now: () => new Date(now) },
     advance: (ms) => {
@@ -33,6 +39,7 @@ interface Scenario {
   /** Milliseconds the transaction is pretended to take. */
   readonly costMs?: number;
   readonly ownership?: "available" | "held" | "claimed";
+  readonly freed?: ExpiredHoldFreed;
 }
 
 const build = (scenario: Scenario = {}) => {
@@ -48,9 +55,23 @@ const build = (scenario: Scenario = {}) => {
       const outcome = await work({
         availabilityOf: () =>
           Promise.resolve(scenario.ownership ?? "available"),
-        createAccount: () =>
-          Promise.resolve(scenario.account ?? { ok: true, userId: "user-1" }),
-        holdHandle: () => Promise.resolve({ ok: true }),
+        // #83's lazy expiry, which `claimHandle` calls before `createAccount`.
+        // Recorded rather than stubbed silently: the ordering is a rule, and a
+        // fake that answered without saying so would hide it.
+        freeExpiredHold: (key, now) => {
+          calls.push(`freeExpiredHold(${key}, ${now.toISOString()})`);
+          return Promise.resolve(scenario.freed ?? { freed: false });
+        },
+        createAccount: (account) => {
+          calls.push(`createAccount(${account.email})`);
+          return Promise.resolve(
+            scenario.account ?? { ok: true, userId: "user-1" },
+          );
+        },
+        holdHandle: (hold) => {
+          calls.push(`holdHandle(${hold.key})`);
+          return Promise.resolve({ ok: true });
+        },
       });
       calls.push(outcome.commit ? "commit" : "rollback");
       return outcome.value;
@@ -151,8 +172,19 @@ describe("submitClaim", () => {
       await submit();
 
       // The rollback is what makes "the submitter does not lose the Handle"
-      // true: nothing was created, so nobody's Handle moved.
-      expect(calls).toEqual(["begin", "rollback"]);
+      // true: nothing was created, so nobody's Handle moved. The log is the
+      // assertion rather than the result, because a result alone cannot tell a
+      // rejection that wrote nothing from one that wrote and rolled back — and
+      // **no `holdHandle` appears**, so the Handle was never taken from the
+      // person submitting.
+      expect(calls).toEqual([
+        "begin",
+        // #83's lazy expiry still runs: it frees a dead hold on this key
+        // whatever the address turns out to be, and it is a no-op here.
+        `freeExpiredHold(${ICE}, ${NOW.toISOString()})`,
+        `createAccount(${EMAIL})`,
+        "rollback",
+      ]);
     });
 
     it("sends no collision email on a fresh Claim", async () => {

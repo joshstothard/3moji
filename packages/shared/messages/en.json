@@ -42,7 +42,7 @@
     "unverifiedHeading": "Confirm your email to sign in",
     "unverifiedBody": "This account has not been confirmed yet, so there is nothing to sign in to. Your Handle is still held for you — follow the link in your email, or ask for a new one below.",
     "linkUnknownHeading": "We could not read that link",
-    "linkUnknownBody": "The link may have been cut in half by an email client, or it may belong to an account that no longer exists. Ask for a new link below and we will send one.",
+    "linkUnknownBody": "Either the link was cut in half by an email client, or the hold it belonged to ran out and the Handle went back into the pool. If your account is still waiting to be confirmed, asking for a new link below will reach it; if the hold has gone, pick a Handle again.",
     "holdExpiredHeading": "That hold has run out",
     "holdExpiredBody": "A Handle is held for 24 hours while you confirm your email, and this one was not confirmed in time. It has gone back into the pool, so it may be free — or somebody else may have claimed it.",
     "holdExpiredAction": "Pick a Handle",

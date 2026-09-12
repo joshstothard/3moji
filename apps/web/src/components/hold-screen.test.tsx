@@ -121,6 +121,43 @@ describe("HoldScreen", () => {
         screen.getByRole("button", { name: /send a new link/i }),
       ).toBeInTheDocument();
     });
+
+    it("offers both a new link and picking again for a link it cannot place", () => {
+      // #83's lazy expiry deletes the unverified Account a later claimant
+      // finds, and the dispatch rows cascade away with it — so the likeliest
+      // cause of an unrecognised link is a hold that is gone, not a mangled
+      // URL. A resend alone would leave somebody waiting for an email that
+      // can never arrive, because there is no Account left to send it to.
+      render(<HoldScreen reason="link-unknown" resend={() => undefined} />);
+
+      expect(
+        screen.getByRole("button", { name: /send a new link/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: /pick a handle/i }),
+      ).toHaveAttribute("href", "/");
+      // And it says both causes out loud rather than guessing at one.
+      expect(screen.getByText(/went back into the pool/i)).toBeInTheDocument();
+      expect(screen.getByText(/cut in half/i)).toBeInTheDocument();
+    });
+
+    it("offers no way out of a state that has one, and only one", () => {
+      // The four live-hold states must not suggest picking again: the Handle
+      // is theirs, and inviting them to pick another would be the same lie as
+      // saying the hold ran out.
+      for (const reason of [
+        "pending",
+        "link-expired",
+        "link-superseded",
+        "unverified",
+      ] as const) {
+        const { unmount } = renderScreen(reason);
+        expect(
+          screen.queryByRole("link", { name: /pick a handle/i }),
+        ).toBeNull();
+        unmount();
+      }
+    });
   });
 
   describe("the resend form", () => {

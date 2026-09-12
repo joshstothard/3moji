@@ -11,6 +11,8 @@ interface Wording {
   readonly body: string;
   /** Whether asking for a new link is the thing to do from here. */
   readonly offersResend: boolean;
+  /** Whether picking a Handle again is the thing to do from here. */
+  readonly offersPick: boolean;
   /** Whether the Handle is still being held for this person. */
   readonly stillHeld: boolean;
 }
@@ -30,36 +32,56 @@ const WORDING: Readonly<Record<HoldReason, Wording>> = {
     heading: copy.pendingHeading,
     body: copy.pendingBody,
     offersResend: true,
+    offersPick: false,
     stillHeld: true,
   },
   "link-expired": {
     heading: copy.linkExpiredHeading,
     body: copy.linkExpiredBody,
     offersResend: true,
+    offersPick: false,
     stillHeld: true,
   },
   "link-superseded": {
     heading: copy.linkSupersededHeading,
     body: copy.linkSupersededBody,
     offersResend: true,
+    offersPick: false,
     stillHeld: true,
   },
   unverified: {
     heading: copy.unverifiedHeading,
     body: copy.unverifiedBody,
     offersResend: true,
+    offersPick: false,
     stillHeld: true,
   },
   "link-unknown": {
     heading: copy.linkUnknownHeading,
     body: copy.linkUnknownBody,
+    /**
+     * **Both actions, because we genuinely do not know which applies.**
+     *
+     * Since #83's lazy expiry landed, the likeliest cause of an unrecognised
+     * link is that a later claimant's transaction deleted the unverified
+     * Account it belonged to — the dispatch rows cascade away with the `user`
+     * row, so the link becomes one we have no record of. Offering only a
+     * resend there would leave somebody waiting for an email that can never
+     * arrive, because there is no Account left to send it to. Offering only
+     * "pick again" would be wrong for the other cause, a link a mail client
+     * cut in half, where the hold is alive and well.
+     */
     offersResend: true,
+    offersPick: true,
     stillHeld: false,
   },
   "hold-expired": {
     heading: copy.holdExpiredHeading,
     body: copy.holdExpiredBody,
+    // No resend: confirming an email cannot bring back a Handle somebody else
+    // may already have taken.
     offersResend: false,
+    offersPick: true,
     stillHeld: false,
   },
 };
@@ -190,7 +212,7 @@ export function HoldScreen({
           </p>
         )}
 
-        {!wording.offersResend && (
+        {wording.offersPick && (
           <p className="mt-8">
             <Link
               className="inline-block rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
