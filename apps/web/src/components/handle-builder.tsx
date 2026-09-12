@@ -143,7 +143,7 @@ export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
    * avoid. Moving focus deliberately, to a control that is never unmounted, is
    * the fix; leaving it to React is how focus gets lost.
    */
-  const slotControls = useRef<readonly (HTMLButtonElement | null)[]>([]);
+  const slotControls = useRef(new Map<number, HTMLButtonElement>());
   /**
    * The last answer received, **with the Handle it answers about**.
    *
@@ -227,7 +227,7 @@ export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
     setSlots(handle.emoji.map((entry) => entry.emoji));
     // The slot is a permanent control, already in the document, so this lands
     // before the suggestion that had focus is unmounted.
-    slotControls.current[position]?.focus();
+    slotControls.current.get(position)?.focus();
   }
 
   function clear(index: number) {
@@ -260,11 +260,11 @@ export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
             <button
               key={index}
               ref={(node) => {
-                slotControls.current = slots.map((_, position) =>
-                  position === index
-                    ? node
-                    : (slotControls.current[position] ?? null),
-                );
+                if (node === null) {
+                  slotControls.current.delete(index);
+                } else {
+                  slotControls.current.set(index, node);
+                }
               }}
               type="button"
               aria-disabled={emoji === undefined}
