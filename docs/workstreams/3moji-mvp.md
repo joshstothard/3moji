@@ -51,7 +51,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | Phase | Outcome                                                                      | Epic issue | Status      |
 | ----- | ---------------------------------------------------------------------------- | ---------- | ----------- |
 | 1     | The app is live at `3moji.me` and a person can create an account and sign in | #26        | In progress |
-| 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | Planned     |
+| 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | In progress |
 | 3     | You can claim a Handle end to end on the live site                           | —          | Not planned |
 | 4     | A claimed Handle shows a real page its owner controls                        | —          | Not planned |
 | 5     | It survives real people                                                      | —          | Not planned |
@@ -102,20 +102,20 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Acceptance criteria:**
 
-- [ ] A test asserts the released set is the three launch categories (307 emoji) and that every Spoken Name in it is unique.
-- [ ] An emoji outside a released category cannot form a Handle, asserted in the domain layer.
-- [ ] Canonicalisation decodes once, applies NFC, strips U+FE0E and U+FE0F, and validates every code point against the Emoji Set.
-- [ ] A property test shows two spellings of one Handle produce the same canonical key.
-- [ ] A Reserved Handle is rejected in the domain layer, and the database constraint holds under a concurrent insert.
+- [x] A test asserts the released set is the three launch categories (307 emoji) and that every Spoken Name in it is unique.
+- [x] An emoji outside a released category cannot form a Handle, asserted in the domain layer.
+- [x] Canonicalisation decodes once, applies NFC, strips U+FE0E and U+FE0F, and validates every code point against the Emoji Set.
+- [x] A property test shows two spellings of one Handle produce the same canonical key.
+- [x] A Reserved Handle is rejected in the domain layer, and the database constraint holds under a concurrent insert.
 
 **Dependencies:** Phase 1. ADR-0005 and ADR-0007 accepted. Issue #23 narrowed to the three launch categories, which still needs two physical phones.
 
 **Issues:**
 
 - #49 Ship the released Emoji Set into packages/core — done
-- #50 Add Handle canonicalisation with property-based tests
-- #51 Add the handle table, its canonical-key unique index and migration
-- #52 Add the Reserved Handle list and its three-layer domain guard
+- #50 Add Handle canonicalisation with property-based tests — done
+- #51 Add the handle table, its canonical-key unique index and migration — done
+- #52 Add the Reserved Handle list and its three-layer domain guard — done (two layers built; the in-transaction re-check is deferred to Phase 3, which is where the claim path is written)
 - #53 Resolve an emoji URL to a canonical Handle — done
 - #54 Curate display names, synonyms and plurals for the launch set — done
 - #55 Apply the render-check verdict to the launch categories — blocked by #23 (needs two physical phones)
@@ -242,3 +242,13 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   minimal "this Handle is available" placeholder when it is canonical. Confirmed against the
   pinned Next.js version that `params` arrives percent-encoded **and upper-cased**, so a stray
   variation selector — not lower-case hex — is the spelling that needs the redirect.
+- 2026-09-12 — Phase 2 synced from GitHub: **6 of 7 issues done** (#49–#54 closed, epic #48 In
+  progress). Canonicalisation landed with property tests over the released set (#50), then the
+  `handle` table with its canonical-key unique index under the deterministic `C` collation (#51),
+  then the Reserved Handle list (#52). All five acceptance criteria are met — the concurrency one
+  by an integration test that has two Accounts insert the same key at once and asserts exactly one
+  row survives. **#55 is the only item left**, and it is blocked on #23, which needs two physical
+  phones. Two caveats recorded rather than smoothed over: the Reserved Handle guard ships **two**
+  enforcement layers, not three, because the in-transaction re-check has no claim path to sit in
+  until Phase 3; and seven of the nine blocked emoji are unreachable today, since only 🔫 (Activities)
+  and 🔪 (Food & Drink) fall in a released category.
