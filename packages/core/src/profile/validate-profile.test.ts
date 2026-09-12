@@ -212,6 +212,33 @@ describe("validateProfile", () => {
       });
     });
 
+    /**
+     * The malformed branch returns early — there is no scheme to name for
+     * something that did not parse — so this pins that the title violation
+     * already pushed for the same Link still surfaces, and first.
+     */
+    it("reports a bad title beside an unparseable URL on one Link", () => {
+      expect(
+        validateProfile(
+          draft({
+            links: [link({ title: "t".repeat(41), url: "example.com" })],
+          }),
+        ),
+      ).toEqual({
+        ok: false,
+        violations: [
+          {
+            field: "link.title",
+            index: 0,
+            rule: "too-long",
+            limit: LINK_TITLE_MAX_LENGTH,
+            length: 41,
+          },
+          { field: "link.url", index: 0, rule: "malformed-url" },
+        ],
+      });
+    });
+
     it("rejects a bare host with no scheme as malformed", () => {
       expect(
         validateProfile(draft({ links: [link({ url: "example.com" })] })),
