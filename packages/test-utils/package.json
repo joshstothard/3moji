@@ -6,8 +6,15 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "lint": "eslint src"
+  },
   "devDependencies": {
+    "@template/eslint-config": "*",
     "@template/tsconfig": "*",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.8.1",
     "typescript": "^6.0.3"
   }
 }
