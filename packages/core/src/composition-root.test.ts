@@ -12,8 +12,8 @@ const build = (clock: Clock) => {
   });
   const services = createCoreServices({
     clock,
+    db: handle.db,
     auth: {
-      db: handle.db,
       emailSender: createRecordingEmailSender(),
       baseUrl: "http://localhost:3000",
       secret: "a".repeat(32),
@@ -58,8 +58,8 @@ describe("createCoreServices", () => {
     const marker = { id: "marker-plugin" };
     const services = createCoreServices({
       clock: fixedClock("2026-09-12T10:00:00.000Z"),
+      db: handle.db,
       auth: {
-        db: handle.db,
         emailSender: createRecordingEmailSender(),
         baseUrl: "http://localhost:3000",
         secret: "a".repeat(32),

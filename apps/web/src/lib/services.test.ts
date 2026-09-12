@@ -2,7 +2,6 @@
  * @jest-environment node
  */
 interface AuthDeps {
-  readonly db: unknown;
   readonly emailSender: unknown;
   readonly baseUrl: string;
   readonly secret: string;
@@ -11,6 +10,7 @@ interface AuthDeps {
 }
 interface CoreDeps {
   readonly clock: unknown;
+  readonly db: unknown;
   readonly auth: AuthDeps;
 }
 
@@ -114,9 +114,14 @@ describe("getServices", () => {
     const { getServices } = await loadFresh();
 
     getServices();
-    const { auth } = recordedDeps();
+    const { auth, db } = recordedDeps();
 
-    expect(auth.db).toBe("THE-DB");
+    // The client is a single top-level dependency, not one field inside `auth`:
+    // Better Auth's adapter and the Handle repository must talk to the same
+    // database, and two fields that could hold different clients would make
+    // that an accident rather than an invariant.
+    expect(db).toBe("THE-DB");
+    expect(auth).not.toHaveProperty("db");
     expect(auth.emailSender).toBe("THE-SENDER");
     expect(auth.baseUrl).toBe(ENV.BETTER_AUTH_URL);
     expect(auth.secret).toBe(ENV.BETTER_AUTH_SECRET);
