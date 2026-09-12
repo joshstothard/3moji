@@ -138,11 +138,13 @@ ADR-0004 decision 3 expires holds **lazily** — evaluated when someone next att
 
 **One consequence for the verification flow, now met.** A stale verification link may find the hold row **gone entirely** rather than merely expired, because a later claimant's transaction deleted it — and with it the Account the link was for, and the dispatch rows that cascade from it. So the link becomes one we have no record of rather than one pointing at an expired hold, and `finaliseClaim` answers `link-unknown`. That screen therefore offers **both** a new link and picking again, and says both causes out loud: a resend alone would leave somebody waiting for an email that can never arrive, since there is no Account left to send it to.
 
-### The production driver cannot run it
+### One driver runs it, in every environment
 
-`drizzle-orm/neon-http` has **no interactive transactions** — it throws "No transactions support in neon-http driver" — and [ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md) decision 6 selects that driver for production. Local development and CI resolve to `node-postgres`, which does support them, so the Claim is exercised in CI against `postgres:16` and would fail on Vercel as configured today.
+`drizzle-orm/neon-http` has **no interactive transactions** — it throws "No transactions support in neon-http driver" — and ADR-0006 decision 6 selected exactly that driver for production, while local development and CI resolved to `node-postgres`, which supports them. So the Claim passed in CI against `postgres:16` and could not have run on Vercel.
 
-Nothing calls it in production yet — there is no server action and no claim UI — so this is a gap to close before #78-#82 ship, not a live defect. [The hosting report](../reports/2026-09-11-hosting-and-email.md) named this exact trigger in advance: needing interactive transactions in request handlers is the condition under which the driver becomes `drizzle-orm/neon-serverless` over WebSockets, still Neon. **That is a change to an accepted ADR's decision and needs a new ADR**, so it is recorded here rather than made quietly. In the meantime the adapter translates the driver's refusal into a diagnosis naming the driver and the decision, so the failure cannot be mistaken for a bug in the claim path.
+**[ADR-0010](../adr/0010-use-one-postgres-driver-in-every-environment.md) resolves it: `node-postgres` in every environment, on the pooled connection in production. Planned, not yet built** — see [#89](https://github.com/joshstothard/3moji/issues/89).
+
+The point of the decision is not the transaction support but the divergence: a driver chosen by `NODE_ENV` meant CI exercised something production never ran, which is how four merged pull requests passed over a path that could not work. Migrations keep using the unpooled connection. Two things are **unverified and must not be presumed** — `node-postgres` on Vercel's serverless runtime, and whether transaction-mode pooling's lack of prepared statements affects Drizzle's `node-postgres` path; [#32](https://github.com/joshstothard/3moji/issues/32) owes the first. Until the code lands, the adapter translates the HTTP driver's refusal into a diagnosis naming the driver and the decision, so the failure cannot be mistaken for a bug in the claim path.
 
 ### Finalising the Claim
 
