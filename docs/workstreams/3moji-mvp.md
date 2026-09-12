@@ -77,7 +77,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - [ ] A person can sign up, receive a verification email, verify, and sign in.
 - [ ] Migrations run from committed files in the build step; no schema change is applied by hand.
 
-**Dependencies:** ADR-0003 accepted. Issue #19, which only the repository owner can do.
+**Dependencies:** ADR-0006 accepted. Issue #19, which only the repository owner can do.
 
 **Issues:**
 
@@ -192,7 +192,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | ---------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------- |
 | The Neon Free plan is not selectable in the Vercel Marketplace   | M          | M      | Verify during issue #19; fall back to Supabase used as Postgres only                           |
 | Emoji diverge across platforms more than the evidence suggests   | M          | L      | The evidence is a 2016 study, so issue #23 does a side-by-side render before the set is frozen |
-| Better Auth hits an undocumented problem on this Next.js version | L          | H      | A hand-rolled Lucia-style sessions module is named as the fallback in ADR-0003                 |
+| Better Auth hits an undocumented problem on this Next.js version | L          | H      | A hand-rolled Lucia-style sessions module is named as the fallback in ADR-0006                 |
 | Squatting on launch day exhausts the memorable Handles           | M          | M      | The 24-hour hold, verification before a Claim is final, and rate limits on claims              |
 | Vercel Hobby forbids commercial use                              | L          | H      | No monetisation is in scope; any premium tier requires moving to Pro first                     |
 | Free-tier limits change under us                                 | M          | M      | The hosting report cites each figure with its date; re-check before launch                     |
@@ -205,17 +205,18 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 ## Decision log
 
-- 2026-09-11 — Next.js on Vercel is the whole application; `apps/api` is deleted and domain logic lives in a framework-free package. ADR-0003 to be written from [#17](https://github.com/joshstothard/3moji/issues/17).
+- 2026-09-11 — Next.js on Vercel is the whole application; `apps/api` is deleted and domain logic lives in a framework-free package. ADR-0006 to be written from [#17](https://github.com/joshstothard/3moji/issues/17).
 - 2026-09-11 — A Handle is exactly three emoji at launch, held for 24 hours pending verification, and every live Account owns exactly one Handle, so Release deletes the Account. ADR-0004 to be written from [#14](https://github.com/joshstothard/3moji/issues/14).
 - 2026-09-11 — The Emoji Set is pinned to Emoji 12.0: 1,053 single-codepoint emoji. ADR-0005 to be written from [#9](https://github.com/joshstothard/3moji/issues/9).
 - 2026-09-12 — Spoken Names get a curated layer over the immutable CLDR names, holding names only. [#25](https://github.com/joshstothard/3moji/issues/25)
 - 2026-09-12 — An unclaimed Handle renders the home-page builder pre-filled, rather than a 404. [#16](https://github.com/joshstothard/3moji/issues/16)
-- 2026-09-12 — Next.js on Vercel is the whole application; `apps/api` is deleted and domain logic lives in `packages/core` ([ADR-0003](../adr/0003-nextjs-on-vercel-is-the-whole-application.md))
+- 2026-09-12 — Next.js on Vercel is the whole application; `apps/api` is deleted and domain logic lives in `packages/core` ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md))
 - 2026-09-12 — The Handle model: canonical key, 24-hour hold, one Handle per Account, Release as account deletion ([ADR-0004](../adr/0004-the-handle-model.md))
 - 2026-09-12 — The Emoji Set pinned to Emoji 12.0 with a curated name layer and no colour field ([ADR-0005](../adr/0005-the-emoji-set.md))
 
 ## Changelog
 
 - 2026-09-12 — Created (Proposed).
-- 2026-09-12 — ADR-0003, ADR-0004 and ADR-0005 accepted; architecture docs added for the data model and auth.
+- 2026-09-12 — ADR-0006 (then numbered 0003), ADR-0004 and ADR-0005 accepted; architecture docs added for the data model and auth.
 - 2026-09-12 — Phase 1 planned: epic #26, issues #27–#32.
+- 2026-09-12 — Clerical fix: the Next.js ADR is renumbered 0003 → 0006. ADR-0003 was taken on `main` by the auto-merge decision, which landed from a separate PR while this one was drafted. No decision changed.
