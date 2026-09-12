@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -14,6 +16,11 @@ if (url === undefined && process.env.CI !== undefined) {
 }
 
 const describeWithDatabase = url === undefined ? describe.skip : describe;
+
+// Anchored to this file rather than the working directory. A cwd-relative path
+// works when Jest runs from the package root and fails confusingly when it does
+// not, which is exactly the kind of difference that only shows up in CI.
+const MIGRATIONS = path.join(__dirname, "..", "..", "migrations");
 
 /**
  * These tests deliberately **never drop a schema or a table.** Resetting the
@@ -49,7 +56,7 @@ describeWithDatabase("the auth migration against a real Postgres", () => {
   };
 
   it("applies and creates every auth table", async () => {
-    await migrate(db, { migrationsFolder: "./migrations" });
+    await migrate(db, { migrationsFolder: MIGRATIONS });
 
     for (const name of ["user", "session", "account", "verification"]) {
       expect(await tableExists(name)).toBe(true);
@@ -58,7 +65,7 @@ describeWithDatabase("the auth migration against a real Postgres", () => {
 
   it("is a no-op when run a second time", async () => {
     await expect(
-      migrate(db, { migrationsFolder: "./migrations" }),
+      migrate(db, { migrationsFolder: MIGRATIONS }),
     ).resolves.not.toThrow();
 
     expect(await tableExists("user")).toBe(true);
