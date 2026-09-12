@@ -20,29 +20,23 @@ describe("createDatabase", () => {
     expect(createDatabase({ url: URL, nodeEnv: "test" }).driver).toBe(
       "node-postgres",
     );
+    // The decision of ADR-0010, asserted where it would otherwise be assumed:
+    // production gets the same driver as everything else. This test is the
+    // regression guard for the divergence that let four green PRs merge over a
+    // Claim path that could not open a transaction.
     expect(createDatabase({ url: URL, nodeEnv: "production" }).driver).toBe(
-      "neon-http",
+      "node-postgres",
     );
   });
 
-  it("honours an explicit driver override", async () => {
-    const handle = createDatabase({
-      url: URL,
-      nodeEnv: "production",
-      driver: "node-postgres",
-    });
-    expect(handle.driver).toBe("node-postgres");
-    await handle.close();
-  });
-
-  it("closing a neon handle is a no-op rather than an error", async () => {
-    const handle = createDatabase({ url: URL, driver: "neon-http" });
+  it("closes cleanly, because the driver holds a pool", async () => {
+    const handle = createDatabase({ url: URL });
     await expect(handle.close()).resolves.toBeUndefined();
   });
 
   it("does not connect when constructed", () => {
-    // Both drivers are lazy. If either connected eagerly this would reject
-    // against a database that is not running locally.
+    // The driver is lazy. If it connected eagerly this would reject against a
+    // database that is not running locally.
     expect(() => createDatabase({ url: URL, nodeEnv: "test" })).not.toThrow();
   });
 });

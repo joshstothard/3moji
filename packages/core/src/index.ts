@@ -16,7 +16,6 @@ export type {
   DatabaseHandle,
   DatabaseOrTransaction,
   DatabaseTransaction,
-  NeonDatabase,
   NodePostgresDatabase,
 } from "./db/client";
 export { postgresErrorCode, UNIQUE_VIOLATION } from "./db/postgres-error";

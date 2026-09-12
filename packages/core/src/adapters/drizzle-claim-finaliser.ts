@@ -29,7 +29,7 @@ import {
  *
  * It shares its plumbing with the Claim — see
  * {@link ./transactional-auth.runWithTransactionalAuth} — because both need
- * Better Auth rebound to the transaction, and the same neon-http caveat applies
+ * Better Auth rebound to the transaction, on the same single driver (ADR-0010)
  * to both ([#89](https://github.com/joshstothard/3moji/issues/89)).
  */
 export function createDrizzleClaimFinaliser(

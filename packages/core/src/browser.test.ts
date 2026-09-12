@@ -44,7 +44,6 @@ const SRC = resolve(__dirname);
 /** Package names that pull Node built-ins, or a server runtime, into a bundle. */
 const FORBIDDEN_PACKAGES: readonly string[] = [
   "pg",
-  "@neondatabase/serverless",
   "drizzle-orm",
   "better-auth",
   "@better-auth/drizzle-adapter",

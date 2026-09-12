@@ -42,7 +42,7 @@ const messagesOf = (error: unknown, depth = 0): string =>
       }`;
 
 const build = () => {
-  const handle = createDatabase({ url: URL, driver: "node-postgres" });
+  const handle = createDatabase({ url: URL });
   return {
     store: createDrizzleVerificationDispatchStore({
       db: handle.db,

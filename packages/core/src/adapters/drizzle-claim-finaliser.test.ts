@@ -49,8 +49,8 @@ const authFactory: AuthFactory = ({ db, emailSender, dispatches }) =>
     from: "3moji <no-reply@mail.3moji.me>",
   });
 
-const build = (driver: "neon-http" | "node-postgres") => {
-  const handle = createDatabase({ url: URL, driver });
+const build = () => {
+  const handle = createDatabase({ url: URL });
   return {
     close: handle.close,
     finaliser: createDrizzleClaimFinaliser({
@@ -70,28 +70,10 @@ const build = (driver: "neon-http" | "node-postgres") => {
 };
 
 describe("createDrizzleClaimFinaliser", () => {
-  /**
-   * ADR-0006 decision 6 puts production on `neon-http`, which has no
-   * interactive transactions ([#89](https://github.com/joshstothard/3moji/issues/89)).
-   * The finalisation shares the Claim's plumbing, so it shares the diagnosis:
-   * a reader must be sent to the driver rather than to this file.
-   */
-  it("explains itself when the driver has no interactive transactions", async () => {
-    const { finaliser, close } = build("neon-http");
-
-    await expect(
-      finaliser.runInTransaction(() =>
-        Promise.resolve({ commit: true, value: "unreachable" }),
-      ),
-    ).rejects.toThrow(/neon-serverless.+new ADR|ADR-0006 decision 6/s);
-
-    await close();
-  });
-
   it("propagates an unreachable database rather than reporting no hold", async () => {
     // `no-hold` would send somebody to "pick another Handle" because the
     // database was briefly down. The two must never be the same answer.
-    const { tx, close } = build("node-postgres");
+    const { tx, close } = build();
 
     const thrown: unknown = await tx
       .finaliseHold("user-1", NOW)
@@ -113,7 +95,7 @@ describe("createDrizzleClaimFinaliser", () => {
     //
     // It also shows the signature is checked before any query: the database
     // here refuses every connection, and a forged token is still answered.
-    const { tx, close } = build("node-postgres");
+    const { tx, close } = build();
 
     const result = await tx.verifyEmail("not.a.real.jwt");
 
@@ -125,7 +107,7 @@ describe("createDrizzleClaimFinaliser", () => {
     // `rejected` renders "that link expired, here is a new one". An outage
     // rendered as an expired link would send everybody round a loop that cannot
     // end, so the hold read must fail rather than answer.
-    const { tx, close } = build("node-postgres");
+    const { tx, close } = build();
 
     const thrown: unknown = await tx
       .finaliseHold("user-1", NOW)
