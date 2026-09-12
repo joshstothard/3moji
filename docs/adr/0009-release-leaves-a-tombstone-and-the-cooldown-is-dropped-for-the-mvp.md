@@ -53,7 +53,7 @@ So the shipped behaviour today is already that **a released Handle returns to th
 - **`docs/architecture/data-model.md` loses its "Open: the 30-day cooldown has nowhere to live" entry**, because it is no longer open, and its Handle lifecycle line stops promising 30 days.
 - **A migration is required when this is built** (Absolute Rule 4: schema and migration travel together). Nothing is built in this PR — the architecture docs mark the table **planned, not yet built** — so no migration belongs here.
 - **The chosen behaviour must be asserted, not assumed.** Per [#63](https://github.com/joshstothard/3moji/issues/63), Phase 3 needs an integration test against real Postgres proving a just-released Handle **can** be claimed immediately. "No cooldown" is easy to satisfy by accident, so the test exists to make it deliberate.
-- **Phase 3 is unblocked**, which was the point: Release can now be built, and [#63](https://github.com/joshstothard/3moji/issues/63) closes with the ADR that resolves it.
+- **Phase 3 is unblocked**, which was the point: Release can now be built. [#63](https://github.com/joshstothard/3moji/issues/63) does **not** close with this ADR — three of its four acceptance criteria are met here, and the fourth is the integration test above, which belongs to the Phase 3 release flow. The decision is made; the proof is owed.
 - **One privacy rule now outlives this ADR:** if anyone ever adds a user reference to `released_handle`, account deletion stops being deletion. That constraint belongs in the table's own comment, not only here.
 
 ## Related
