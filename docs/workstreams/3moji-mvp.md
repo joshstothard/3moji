@@ -53,7 +53,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | 1     | The app is live at `3moji.me` and a person can create an account and sign in | #26        | In progress |
 | 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | In progress |
 | 3     | You can claim a Handle end to end on the live site                           | #76        | Done        |
-| 4     | A claimed Handle shows a real page its owner controls                        | —          | Not planned |
+| 4     | A claimed Handle shows a real page its owner controls                        | #101       | Planned     |
 | 5     | It survives real people                                                      | —          | Not planned |
 
 ### Phase 1 — Foundation and providers
@@ -186,7 +186,14 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- _Not planned yet._
+- #102 Add the profile and link tables with their migration and read path
+- #103 Enforce the Profile field limits in the domain
+- #104 Render the Profile at a claimed Handle
+- #105 Render the builder pre-filled at an unclaimed Handle
+- #106 Edit the Profile in place
+- #107 Reorder Links by dragging, and by keyboard
+- #108 Resolve a dot-separated word alias to a Handle
+- #109 Render the listing when an alias matches several Handles
 
 ### Phase 5 — Launch readiness
 
@@ -313,3 +320,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   successful reset must not mark an email verified. Phase 3 also closed three issues outside its own
   list: #68 (a reserved Handle rendering "available"), #63 (the cooldown contradiction) and #89
   (the production driver could not open a transaction).
+- 2026-09-12 — Phase 4 planned: epic #101, issues #102–#109. The held-state criterion is already
+  met by #80 and is pinned by a regression assertion in #104 rather than rebuilt. The dotted-segment
+  criterion cannot close until the site deploys (#32, blocked on #19), and #108 records that rather
+  than claiming it. One schema decision was made rather than left open: a Profile is keyed on the
+  **Account**, not the Handle, so it cascades on Release through the path that already exists.
