@@ -28,6 +28,14 @@ export {
 } from "./emoji/emoji-set";
 export type { EmojiSetEntry } from "./emoji/emoji-set";
 
+export { canonicalise, HANDLE_LENGTH } from "./handle/canonicalise";
+export type {
+  CanonicalHandle,
+  CanonicalisationFailure,
+  CanonicalisationFailureReason,
+  CanonicalisationResult,
+} from "./handle/canonicalise";
+
 export type { EmailSender, OutboundEmail } from "./auth/ports/email-sender";
 export { createRecordingEmailSender } from "./auth/adapters/recording-email-sender";
 export type { RecordingEmailSender } from "./auth/adapters/recording-email-sender";
