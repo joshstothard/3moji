@@ -17,6 +17,11 @@ import { user } from "./schema";
  * `text` with a **deterministic collation pinned on the column**, carrying the
  * branded {@link HandleKey} as its TypeScript type.
  *
+ * **Exported so `released_handle` uses this column and not a copy of it.** The
+ * tombstone stores the same canonical key ([ADR-0009](../../../../docs/adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)),
+ * and a second `customType` declaring the same collation would be two places
+ * for one decision — the drift this package's DRY rule exists to prevent.
+ *
  * Both halves matter, and both are ADR-0004 decision 1:
  *
  * - **The collation.** A Postgres `UNIQUE` index is byte equality *under a
@@ -35,7 +40,10 @@ import { user } from "./schema";
  * option, and an expression index would pin the comparison in one index while
  * leaving the column's own equality on the database's default.
  */
-const handleKeyColumn = customType<{ data: HandleKey; driverData: string }>({
+export const handleKeyColumn = customType<{
+  data: HandleKey;
+  driverData: string;
+}>({
   dataType: () => 'text collate "C"',
 });
 

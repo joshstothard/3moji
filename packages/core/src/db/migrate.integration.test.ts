@@ -81,16 +81,17 @@ describeWithDatabase("the auth migration against a real Postgres", () => {
    * **So this number has to be bumped by hand with every new migration**, and
    * it will be red in CI rather than locally: it counts rows in a real
    * database, so nothing on a machine without one can tell you it is stale. It
-   * has already moved 1 → 2 (`handle`), 2 → 3 (the blocked-emoji `CHECK`) and
-   * 3 → 4 (`verification_dispatch`). If you are reading this because CI says
-   * `Expected: "4" / Received: "5"`, your migration is the fifth and this
-   * literal is what needs the edit — it is tracking `migrations/meta/_journal.json`.
+   * has already moved 1 → 2 (`handle`), 2 → 3 (the blocked-emoji `CHECK`),
+   * 3 → 4 (`verification_dispatch`) and 4 → 5 (`released_handle`). If you are
+   * reading this because CI says `Expected: "5" / Received: "6"`, your
+   * migration is the sixth and this literal is what needs the edit — it is
+   * tracking `migrations/meta/_journal.json`.
    */
   it("applies each committed migration exactly once", async () => {
     const result = await db.execute<{ count: string }>(sql`
       SELECT count(*) AS count FROM drizzle.__drizzle_migrations
     `);
-    expect((result.rows as { count: string }[])[0]?.count).toBe("4");
+    expect((result.rows as { count: string }[])[0]?.count).toBe("5");
   });
 
   it("cascades a session delete when its user is removed", async () => {

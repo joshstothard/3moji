@@ -158,7 +158,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - #81 Claim: sign-up and hold as one atomic act
 - #82 Finalise the Claim on verification, with the hold screen and resend
 - #83 Expire holds lazily and delete the unverified Account
-- #84 Release: account deletion and the released_handle tombstone
+- #84 Release: account deletion and the released_handle tombstone — done (also meets #63's outstanding criterion: a just-released Handle is claimed at the instant of release, against real Postgres)
 
 ### Phase 4 — Profile
 
