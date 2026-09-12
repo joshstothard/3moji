@@ -190,6 +190,8 @@ cp .env.example .env
 
 The optional variables are documented inline in `.env.example`.
 
+**Put real values in `.env.local`, never in `.env.example`.** This repository is public: `.env.example` is committed, and its secret fields (`BETTER_AUTH_SECRET`, `RESEND_API_KEY`) are deliberately left empty. A value pasted there is published the moment it is pushed, and the fix is to rotate the credential rather than to delete the line — see `AGENTS.md` § This Repository Is Public.
+
 ### Starting an issue
 
 Invoke the `pickup` skill with the issue number, e.g. `42`. Claude Code and GitHub Copilot CLI use `/pickup 42`; Codex uses `$pickup 42`.

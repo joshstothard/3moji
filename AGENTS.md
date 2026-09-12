@@ -213,6 +213,26 @@ So, when launching parallel agents:
 4. **Treat a red `verify.sh` sceptically** before assuming it is yours; check whether the failing files are in your diff at all.
 5. **To rescue a commit from a shared tree**, create a branch at its SHA (`git branch <name> <sha>`) — it touches neither `HEAD` nor the working tree — and check it out in a worktree of its own, which is also what stops another worktree force-moving it again.
 
+## This Repository Is Public
+
+`joshstothard/3moji` is a **public** repository. Anyone can read the code, the issues, the pull requests, and the GitHub Actions logs, without an account and without being noticed.
+
+The rule against committing secrets was always absolute. What changes when a repository is public is the **consequence of breaking it**, and the response it demands:
+
+- **A leaked secret is compromised the moment it is pushed**, not when someone notices. Bots scan public pushes within seconds. Assume it was read.
+- **Deleting it in a later commit does not help.** Git history is permanent and public, forks keep what they cloned, and GitHub caches unreachable objects. A rewrite does not reliably erase anything.
+- **The only correct response is to rotate the credential** at its source — issue a new key, revoke the old one — and only then tidy the history. Reporting "I removed it" without rotating is reporting the wrong thing as done.
+
+Three surfaces are public that are easy to forget, because none of them is the codebase:
+
+| Surface                      | What leaks there                                                                                                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Actions logs**             | Anything echoed by a command. GitHub masks values registered as repository **secrets**; it does not mask a connection string you happened to print, or a token in an error message |
+| **Issues and pull requests** | Bodies, comments, and review text — including pasted logs and stack traces, which is exactly where a token tends to hide                                                           |
+| **Commit metadata**          | Author name and email on every commit, permanently                                                                                                                                 |
+
+So: never paste a raw log into an issue or PR without reading it first, never echo an environment variable in a workflow step to "check" it, and keep real values in `.env.local` (git-ignored) rather than `.env.example`, whose secret fields stay empty on purpose.
+
 ## Absolute Rules
 
 These are non-negotiable. No exceptions, no workarounds.
