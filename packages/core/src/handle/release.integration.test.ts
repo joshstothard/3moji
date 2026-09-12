@@ -86,6 +86,27 @@ function handleKeyFromSet(offset: number): HandleKey {
 }
 
 /**
+ * The six Handles this suite uses, resolved **at module load** so `beforeAll`
+ * can clear any tombstone a crashed earlier run left behind. The keys are
+ * deterministic across runs and nothing cascades a tombstone away, so a
+ * database that is not thrown away between runs would otherwise carry rows
+ * forward into the `toHaveLength(1)` assertions below.
+ *
+ * The offsets start above `claim.integration.test.ts`'s highest (45) and clear
+ * every other integration suite's window (`handle.integration` 0-15,
+ * `drizzle-handle-repository` 0-18, `verification.integration` 0-30), because
+ * all of them share one database under `maxWorkers: 1`.
+ */
+const KEYS = {
+  deletes: handleKeyFromSet(HANDLE_KEY_LENGTH * 16),
+  anonymous: handleKeyFromSet(HANDLE_KEY_LENGTH * 17),
+  immediate: handleKeyFromSet(HANDLE_KEY_LENGTH * 18),
+  previousOwner: handleKeyFromSet(HANDLE_KEY_LENGTH * 19),
+  stale: handleKeyFromSet(HANDLE_KEY_LENGTH * 20),
+  twice: handleKeyFromSet(HANDLE_KEY_LENGTH * 21),
+} as const;
+
+/**
  * Release against a real Postgres.
  *
  * **These tests never drop a schema or a table.** Every Account they create
@@ -221,7 +242,7 @@ describeWithDatabase("Release against a real Postgres", () => {
    * it. Phase 4's Profile and Links will hang off the same row.
    */
   it("deletes the Account and the Handle with it, and writes one tombstone", async () => {
-    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 16);
+    const key = KEYS.deletes;
     const email = addressFor("deletes");
     await claim({ segment: key, email });
     const userId = await userIdOf(email);
@@ -267,7 +288,7 @@ describeWithDatabase("Release against a real Postgres", () => {
    * Account's id or address, so a tombstone alone identifies nobody.
    */
   it("leaves a tombstone that names no Account", async () => {
-    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 17);
+    const key = KEYS.anonymous;
     const email = addressFor("anonymous");
     await claim({ segment: key, email });
     const userId = await userIdOf(email);
@@ -303,7 +324,7 @@ describeWithDatabase("Release against a real Postgres", () => {
    * presence rather than in its absence.
    */
   it("lets somebody else claim the Handle the instant it is released", async () => {
-    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 18);
+    const key = KEYS.immediate;
     const owner = addressFor("immediate-owner");
     const newcomer = addressFor("immediate-newcomer");
     await claim({ segment: key, email: owner });
@@ -328,7 +349,7 @@ describeWithDatabase("Release against a real Postgres", () => {
    * Account, because the old one no longer exists to collide with.
    */
   it("lets the previous owner reclaim their own Handle immediately", async () => {
-    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 19);
+    const key = KEYS.previousOwner;
     const email = addressFor("previous-owner");
     await claim({ segment: key, email });
     const before = await userIdOf(email);
@@ -359,7 +380,7 @@ describeWithDatabase("Release against a real Postgres", () => {
    * here can be green with the write never having run.
    */
   it("claims a Handle that a stale tombstone names, because nothing reads it", async () => {
-    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 20);
+    const key = KEYS.stale;
     const email = addressFor("stale-tombstone");
     // The write, called directly and read back: proof the row is real.
     await releaseTransactionOn(db).recordRelease({
@@ -388,7 +409,7 @@ describeWithDatabase("Release against a real Postgres", () => {
    * what makes this history reachable.
    */
   it("records a second tombstone when a reclaimed Handle is released again", async () => {
-    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 21);
+    const key = KEYS.twice;
     const first = addressFor("twice-first");
     const second = addressFor("twice-second");
     await claim({ segment: key, email: first });
