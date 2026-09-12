@@ -38,16 +38,9 @@ function isSingleCodePoint(value: string): boolean {
 }
 
 function countCodePoints(value: string): number {
-  let count = 0;
-  for (let index = 0; index < value.length;) {
-    const code = value.codePointAt(index);
-    if (code === undefined) {
-      break;
-    }
-    index += String.fromCodePoint(code).length;
-    count += 1;
-  }
-  return count;
+  // `Array.from` drives the string iterator, so this counts code points, not
+  // UTF-16 units — and it is not spread syntax, so `no-misused-spread` is happy.
+  return Array.from(value).length;
 }
 
 describe("canonicalise", () => {

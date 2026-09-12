@@ -110,22 +110,14 @@ function decodeOnce(segment: string): string | undefined {
 }
 
 /**
- * Split into code points, written without spreading the string:
- * `no-misused-spread` rightly flags that, and the intent here is explicit —
- * one entry per code point, so a surrogate pair never splits in half.
+ * Split into code points. `Array.from` drives the string iterator, which yields
+ * one entry per **code point** — a surrogate pair never splits in half — and is
+ * not spread syntax, so it does not trip `no-misused-spread`. Note it is code
+ * points, not grapheme clusters: splitting a cluster is exactly what makes a
+ * ZWJ sequence or a skin-tone modifier fail Emoji Set membership below.
  */
 function toCodePoints(value: string): readonly string[] {
-  const codePoints: string[] = [];
-  for (let index = 0; index < value.length;) {
-    const code = value.codePointAt(index);
-    if (code === undefined) {
-      break;
-    }
-    const codePoint = String.fromCodePoint(code);
-    codePoints.push(codePoint);
-    index += codePoint.length;
-  }
-  return codePoints;
+  return Array.from(value);
 }
 
 /**
