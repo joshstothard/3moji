@@ -1,7 +1,10 @@
+import type { AuthFactory } from "./auth/auth-factory";
 import { createAuth, type CreateAuthInput } from "./auth/create-auth";
+import { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
 import { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
 import type { Database } from "./db/client";
 import type { Clock } from "./ports/clock";
+import type { ClaimStore } from "./ports/claim-store";
 import type { HandleRepository } from "./ports/handle-repository";
 
 /**
@@ -32,6 +35,12 @@ export interface CoreServices {
   readonly clock: Clock;
   readonly auth: ReturnType<typeof createAuth>;
   readonly handles: HandleRepository;
+  /**
+   * The Claim's unit of work. Separate from {@link handles}, which is read-only
+   * by design: the writes exist only on the object the transaction hands out,
+   * so nothing can write a hold without one.
+   */
+  readonly claims: ClaimStore;
 }
 
 /**
@@ -46,9 +55,24 @@ export interface CoreServices {
  * place to look when you need to know what depends on what.
  */
 export function createCoreServices(deps: CoreDependencies): CoreServices {
+  /**
+   * Rebuilding auth against the claim transaction still happens *here*, in the
+   * sense that matters: this closure is the only thing that reaches
+   * `createAuth`, and it already holds the secret, base URL and sender address.
+   * The claim adapter may vary the client and the email sender, and nothing
+   * else.
+   */
+  const authFactory: AuthFactory = ({ db, emailSender }) =>
+    createAuth({ ...deps.auth, db, emailSender });
+
   return {
     clock: deps.clock,
     auth: createAuth({ ...deps.auth, db: deps.db }),
     handles: createDrizzleHandleRepository(deps.db),
+    claims: createDrizzleClaimStore({
+      db: deps.db,
+      auth: authFactory,
+      emailSender: deps.auth.emailSender,
+    }),
   };
 }

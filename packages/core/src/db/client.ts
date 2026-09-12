@@ -22,6 +22,37 @@ export type NeonDatabase = ReturnType<typeof drizzleNeon<typeof authSchema>>;
 export type Database = NodePostgresDatabase | NeonDatabase;
 
 /**
+ * A transaction opened on a {@link Database}, whichever driver it came from.
+ *
+ * **Derived from the drivers' own signatures rather than named**, because
+ * Drizzle's transaction type is generic in its query-result and schema
+ * parameters and spelling it out would restate three of them — each a chance to
+ * disagree with the client the transaction actually came from.
+ *
+ * **Both shapes are here, and only one of them can ever exist at runtime.**
+ * `Database` is a union, so `db.transaction(…)` hands its callback the union of
+ * both transaction types and a type covering only node-postgres would not
+ * compile. `drizzle-orm/neon-http` nonetheless throws "No transactions support
+ * in neon-http driver" the moment `transaction` is called — the types promise
+ * what that driver does not deliver. See
+ * {@link ../adapters/drizzle-claim-store.createDrizzleClaimStore}, which is
+ * where that matters and where it is reported.
+ */
+export type DatabaseTransaction =
+  | Parameters<Parameters<NodePostgresDatabase["transaction"]>[0]>[0]
+  | Parameters<Parameters<NeonDatabase["transaction"]>[0]>[0];
+
+/**
+ * Anything a read or a write may be issued against: the client, or a
+ * transaction opened on it.
+ *
+ * A repository that takes this works identically inside and outside a
+ * transaction, which is what lets the Claim reuse the same availability read
+ * the resolve path uses instead of a second copy that could disagree with it.
+ */
+export type DatabaseOrTransaction = Database | DatabaseTransaction;
+
+/**
  * A database client plus the means to release it.
  *
  * `close` exists because the node-postgres driver holds a connection pool, and

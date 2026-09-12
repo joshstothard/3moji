@@ -14,9 +14,12 @@ export type {
   CreateDatabaseInput,
   Database,
   DatabaseHandle,
+  DatabaseOrTransaction,
+  DatabaseTransaction,
   NeonDatabase,
   NodePostgresDatabase,
 } from "./db/client";
+export { postgresErrorCode, UNIQUE_VIOLATION } from "./db/postgres-error";
 
 export { EMOJI_CATEGORIES, RELEASED_CATEGORIES } from "./emoji/emoji-category";
 export { isCategoryReleased } from "./emoji/emoji-category";
@@ -54,7 +57,7 @@ export type {
   ReservedHandleList,
   ReservedScope,
 } from "./handle/reserved-handles";
-export { claimableHandle } from "./handle/claimable";
+export { canonicalHandleOf, claimableHandle } from "./handle/claimable";
 export type {
   ClaimabilityFailure,
   ClaimabilityResult,
@@ -76,6 +79,9 @@ export { createResendEmailSender } from "./auth/adapters/resend-email-sender";
 export type { ResendEmailSenderInput } from "./auth/adapters/resend-email-sender";
 export { createAuth } from "./auth/create-auth";
 export type { CreateAuthInput } from "./auth/create-auth";
+export type { Auth, AuthFactory, AuthFactoryInput } from "./auth/auth-factory";
+export { createDeferredEmailSender } from "./auth/adapters/deferred-email-sender";
+export type { DeferredEmailSender } from "./auth/adapters/deferred-email-sender";
 
 export type { HandleRepository } from "./ports/handle-repository";
 export { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
@@ -86,3 +92,17 @@ export type {
   HandleAvailability,
   HandleAvailabilityInput,
 } from "./handle/handle-availability";
+
+export type {
+  AccountCreated,
+  AccountToCreate,
+  ClaimStore,
+  ClaimTransaction,
+  HoldToWrite,
+  HoldWritten,
+  TransactionOutcome,
+} from "./ports/claim-store";
+export { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
+export type { DrizzleClaimStoreInput } from "./adapters/drizzle-claim-store";
+export { claimHandle, HOLD_DURATION_MS } from "./handle/claim-handle";
+export type { ClaimHandleInput, ClaimResult } from "./handle/claim-handle";

@@ -1,7 +1,7 @@
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 
-import type { Database } from "../db/client";
+import type { DatabaseOrTransaction } from "../db/client";
 import { authSchema } from "../db/schema";
 import type { EmailSender } from "./ports/email-sender";
 
@@ -9,7 +9,14 @@ import type { EmailSender } from "./ports/email-sender";
 const MINIMUM_SECRET_LENGTH = 32;
 
 export interface CreateAuthInput {
-  readonly db: Database;
+  /**
+   * The client, **or a transaction opened on it**. The Claim rebuilds auth
+   * against its transaction so that account creation and the Handle's hold are
+   * one atomic act (ADR-0004 decision 4); Better Auth's Drizzle adapter issues
+   * every statement through whatever it is handed, so handing it a transaction
+   * is what puts the `user` and `account` rows inside one.
+   */
+  readonly db: DatabaseOrTransaction;
   readonly emailSender: EmailSender;
   /** Where the app is served from; Better Auth builds its links from this. */
   readonly baseUrl: string;
