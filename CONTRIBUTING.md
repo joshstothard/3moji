@@ -24,7 +24,8 @@ This repository is worked by a single developer with a coding agent, and tracks 
 - Fill the PR template fully: issue, summary, test evidence, risk, rollback.
 - Put `Closes #42` in the PR body so GitHub closes the issue when the PR merges. Chores with no issue write `None — chore`.
 - Delete `PROGRESS.md` before raising the PR (the `pr` workflow does this).
-- **Solo merge rule:** squash-merge (`gh pr merge <pr> --squash --delete-branch`) once CI is green and the AI self-review posted by `pr` has no unresolved 🔴 findings. GitHub does not let you approve your own PR, so no human approval is required.
+- **Solo merge rule:** a PR merges once CI is green and the AI self-review posted by `pr` has no unresolved 🔴 findings. GitHub does not let you approve your own PR, so no human approval is required.
+- **Auto-merge** ([ADR-0003](docs/adr/0003-auto-merge-pull-requests-on-green-ci.md)): the `pr` skill adds the `automerge` label when the self-review is clean, and the auto-merge workflow squash-merges the PR once CI passes on its up-to-date head commit. Dependabot minor and patch updates merge without the label; majors wait for you. Remove the label to hold a PR. A manual merge is still `gh pr merge <pr> --squash --delete-branch`.
 - Stacked PRs: prepend the ⚠️ stacked-PR warning block at the very top of the body, and never squash-merge a stacked chain — use merge commits.
 
 ## GitHub setup

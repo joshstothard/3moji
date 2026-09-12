@@ -14,7 +14,7 @@ node scripts/gh-workflow.mjs setup      # create + link the board, set columns, 
 node scripts/gh-workflow.mjs doctor     # confirm everything is ready
 ```
 
-`setup` is idempotent. It creates a board named after the repository (override with `--title`), links it to the repo, sets the Status columns to **Backlog → In Progress → In Review → Done**, and creates the `epic`, `task`, `bug`, and `enhancement` labels. Afterwards, open the board once and switch the view's layout to **Board**.
+`setup` is idempotent. It creates a board named after the repository (override with `--title`), links it to the repo, sets the Status columns to **Backlog → In Progress → In Review → Done**, and creates the `epic`, `task`, `bug`, `enhancement`, and `automerge` labels. Afterwards, open the board once and switch the view's layout to **Board**.
 
 No `.env` values are required: `gh` holds the credentials. If more than one board is linked to the repo, set `GH_PROJECT_OWNER` and `GH_PROJECT_NUMBER` in `.env` to choose one.
 
@@ -72,12 +72,12 @@ Issue body shape (used by `capture` and `plan-work`):
 
 ## Board statuses
 
-| Status          | Meaning                        | Set by                                                                             |
-| --------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
-| **Backlog**     | Filed, not started             | `plan-work`, `capture` (for work not yet done)                                     |
-| **In Progress** | Assigned and being built       | `pickup`                                                                           |
-| **In Review**   | PR open, CI and review running | `pr`                                                                               |
-| **Done**        | PR merged, issue closed        | `pr-action-review` after merge (GitHub's built-in board automation also does this) |
+| Status          | Meaning                        | Set by                                                                                                  |
+| --------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| **Backlog**     | Filed, not started             | `plan-work`, `capture` (for work not yet done)                                                          |
+| **In Progress** | Assigned and being built       | `pickup`                                                                                                |
+| **In Review**   | PR open, CI and review running | `pr`                                                                                                    |
+| **Done**        | PR merged, issue closed        | GitHub's built-in board automation when the issue closes; `pr-action-review` also sets it after merging |
 
 Set a status with:
 
@@ -97,7 +97,7 @@ Link a sub-issue to its epic with:
 node scripts/gh-workflow.mjs sub-issue <epic-number> <issue-number>
 ```
 
-Keep an epic's card in step with its sub-issues (moves it out of Backlog once work starts; closes it and marks it Done when every sub-issue is closed). `pickup` and `pr-action-review` run this for you:
+Keep an epic's card in step with its sub-issues (moves it out of Backlog once work starts; closes it and marks it Done when every sub-issue is closed). `pickup` and `pr-action-review` run this for you; the auto-merge workflow cannot, so run it yourself when an epic's last issue auto-merges:
 
 ```bash
 node scripts/gh-workflow.mjs epic-sync <issue-number>
@@ -108,7 +108,7 @@ node scripts/gh-workflow.mjs epic-sync <issue-number>
 - Branch: `<issue-number>-<short-description>`, e.g. `42-add-shell-app`. Chores with no issue: `chore/<short-description>`.
 - Commit: Conventional Commits with the issue number as the scope, e.g. `feat(#42): add shell app route`.
 - PR body: `Closes #42`. GitHub closes the issue when the PR merges into `main`.
-- Merge: squash-merge with `gh pr merge <pr> --squash --delete-branch` once CI is green and review findings are resolved. As the only developer you cannot approve your own PR on GitHub, so the AI self-review from `pr` is the review gate.
+- Merge: automatic ([ADR-0003](../adr/0003-auto-merge-pull-requests-on-green-ci.md)). The `pr` skill adds the `automerge` label once its AI self-review has no unresolved 🔴 findings, and the auto-merge workflow squash-merges the PR when CI passes on its up-to-date head commit. Dependabot minor and patch updates need no label. As the only developer you cannot approve your own PR on GitHub, so the AI self-review from `pr` is the review gate. See [ci-cd.md § Auto-merge](ci-cd.md#auto-merge) for the full rules; a manual merge is `gh pr merge <pr> --squash --delete-branch`.
 
 ## Pushing changes
 
@@ -119,7 +119,7 @@ git switch -c 42-add-shell-app
 # ...work, commit...
 git push -u origin HEAD          # the pre-push hook runs format, lint, typecheck, tests
 gh pr create --fill              # or run the pr skill, which fills the template
-gh pr merge --squash --delete-branch
+gh pr edit --add-label automerge # merges itself once CI passes
 ```
 
 The `push` and `pr` skills run the same steps with the full verification suite first.

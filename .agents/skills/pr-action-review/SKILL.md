@@ -10,12 +10,12 @@ Usage: `pr-action-review <pr-number> [--watch]` — pass the PR number as the ar
 
 **Issue number:** extract it from the PR's head branch, which follows `<issue-number>-<short-description>` (e.g. `42-add-shell-app` → `#42`). A `chore/` branch (or a Dependabot branch) has no issue — use an unscoped commit type such as `chore: ...` and skip the post-merge issue step.
 
-**Merge rule (solo):** a PR may merge when CI is green, the AI self-review and review comments have no unresolved blocking findings, and GitHub reports no conflicts. GitHub does not allow approving your own PR, so no human approval is required — see [ADR-0002](../../../docs/adr/0002-track-work-in-github-issues.md).
+**Merge rule (solo):** a PR may merge when CI is green, the AI self-review and review comments have no unresolved blocking findings, and GitHub reports no conflicts. GitHub does not allow approving your own PR, so no human approval is required — see [ADR-0002](../../../docs/adr/0002-track-work-in-github-issues.md). The `automerge` label marks a PR that meets this rule apart from CI; the auto-merge workflow merges it once CI passes ([ADR-0003](../../../docs/adr/0003-auto-merge-pull-requests-on-green-ci.md)).
 
 ## Step 1 — Find the PR and check out the branch
 
-Run `gh pr view <pr-number> --json number,url,headRefName,author` to look up the PR.
-If the PR does not exist, tell the user and stop.
+Run `gh pr view <pr-number> --json number,url,headRefName,author,state` to look up the PR.
+If the PR does not exist, tell the user and stop. If `state` is `MERGED` (usually the auto-merge workflow merged it), skip straight to **Post-merge issue action** in Step 8. If it is `CLOSED`, tell the user and stop.
 
 **Ownership check — do this before anything else:**
 
@@ -295,15 +295,23 @@ Confirm it merged (`gh pr view <pr-number> --json state` → `MERGED`), then app
 
 ### If there are no blocking findings but the PR is not yet fully mergeable (CI still running or mergeStateStatus not yet clean)
 
-Do **not** offer to merge — all status checks must pass before merging. Explain the current state concisely and stop:
+Do **not** merge now — all status checks must pass first. Add the `automerge` label so the auto-merge workflow merges the PR once CI passes (a no-op if it is already there), then explain the current state concisely and stop:
 
-> "CI is still running (or branch protection is not yet satisfied) — I'll leave this for you to merge once all checks pass."
+```bash
+gh pr edit <pr-number> --add-label automerge
+```
 
-If blocking findings remain, say so instead, and list them:
+> "CI is still running — the PR is labelled `automerge` and will merge itself once all checks pass."
+
+If blocking findings remain, say so instead, list them, and remove the label if the PR has it, so the workflow cannot merge past them:
+
+```bash
+gh pr edit <pr-number> --remove-label automerge
+```
 
 > "There are unresolved blocking findings — not merging until they are fixed or you decide they are not blockers: <list>."
 
-Do not enable GitHub's native auto-merge. The merge is always your decision (or pre-authorised with `--watch`) once the PR is green.
+Do not try GitHub's native auto-merge (`gh pr merge --auto`): it needs branch protection, which this repository's plan does not have. The `automerge` label and `.github/workflows/auto-merge.yml` replace it ([ADR-0003](../../../docs/adr/0003-auto-merge-pull-requests-on-green-ci.md)). Never add the label while a 🔴 finding is unresolved.
 
 ### Post-merge issue action
 

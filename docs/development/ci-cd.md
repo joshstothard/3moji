@@ -13,7 +13,7 @@ push / PR
   │
   ├── Stage 1 (parallel fast checks)
   │     lint · typecheck · unit-tests · integration-tests
-  │     i18n-check · code-health · openapi · adr-sync
+  │     i18n-check · code-health · openapi · adr-sync · script-tests
   │
   ├── Stage 2 (needs: all stage 1)
   │     build (artifact) · security (reusable workflow)
@@ -37,6 +37,7 @@ push / PR
 | File                                     | Trigger                                                         | Purpose                  |
 | ---------------------------------------- | --------------------------------------------------------------- | ------------------------ |
 | `.github/workflows/ci.yml`               | PR, push to `main`, `workflow_dispatch`                         | Full pipeline            |
+| `.github/workflows/auto-merge.yml`       | CI run completed, PR labelled `automerge`, `workflow_dispatch`  | Merge PRs once CI passes |
 | `.github/workflows/security.yml`         | `workflow_call`, `workflow_dispatch`                            | Reusable security job    |
 | `.github/workflows/nightly-security.yml` | `workflow_dispatch` only (daily 06:00 UTC schedule disabled)    | Calls `security.yml`     |
 | `.github/workflows/nightly-mutation.yml` | `workflow_dispatch` only (weekdays 02:00 UTC schedule disabled) | Stryker mutation testing |
@@ -52,6 +53,31 @@ gh workflow run nightly-mutation.yml
 ```
 
 To restore a schedule, uncomment its `schedule:` block. `morlock.yml` was already manual-only for a separate reason recorded in the workflow file (scheduled runs were being rejected by the Anthropic API); follow that note before re-enabling it. `security.yml` still runs as a blocking stage of `ci.yml` on every PR, so audit regressions are caught without the nightly run.
+
+## Auto-merge
+
+Per [ADR-0003](../adr/0003-auto-merge-pull-requests-on-green-ci.md), pull requests merge themselves. GitHub's native auto-merge and branch protection need GitHub Pro on a private repository, so `auto-merge.yml` does the job with the workflow's `GITHUB_TOKEN`. The decision is `scripts/auto-merge.mjs`, unit-tested in `scripts/auto-merge.test.mjs`.
+
+**Triggers:** a CI run completing on a PR branch, the `automerge` label being added, or a manual run (`gh workflow run auto-merge.yml -f pr=<number>`; leave `pr` out to evaluate every open PR, and add `-f dry_run=true` to log the decisions without acting). Every trigger runs the workflow and the script from `main` and never checks out PR code, so a pull request cannot steer the write token. Runs are serialised in one concurrency group, and each run evaluates every open PR, starting with the one that triggered it. GitHub keeps only the newest pending run in a group, so a replaced run loses nothing.
+
+A PR merges when every rule holds. Each run logs one line per PR with the reason code.
+
+| Rule                                                                                    | Otherwise                                                                                        |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Open, not a draft, based on `main`                                                      | skipped (`not-open`, `draft`, `base-not-main`)                                                   |
+| Labelled `automerge`, or opened by Dependabot with only semver-minor and -patch updates | skipped (`not-opted-in`, `dependabot-major`, `dependabot-no-metadata`)                           |
+| No reviewer's latest verdict is "changes requested"                                     | skipped (`changes-requested`)                                                                    |
+| The newest CI run on the PR's current head commit succeeded                             | skipped (`ci-missing`, `ci-stale`, `ci-running`, `ci-failed`)                                    |
+| No merge conflicts                                                                      | skipped (`conflicts`, or `mergeability-unknown` while GitHub is still computing it)              |
+| Up to date with `main`                                                                  | branch updated from `main` and CI dispatched on it; the next green run merges it (`behind-main`) |
+
+The merge is a squash with the branch deleted, or a merge commit when another open PR is stacked on the branch.
+
+**`GITHUB_TOKEN` side effects.** A merge or branch update made with `GITHUB_TOKEN` does not trigger `push` or `pull_request` workflows, so the script dispatches `ci.yml` itself (`workflow_dispatch` is exempt): on `main` after every merge, and on the PR branch after an update. After a merge it re-evaluates the other open PRs, so any left behind `main` are updated. The workflow's `actions: write` permission covers the dispatch, and is also what lets `GITHUB_TOKEN` merge a PR that changes files under `.github/workflows/`. `GITHUB_TOKEN` cannot reach the user-owned Project board, so `epic-sync` does not run for auto-merged PRs; issues still close through `Closes #N` and the board's built-in automation moves them to Done. When an epic's last issue auto-merges, run `node scripts/gh-workflow.mjs epic-sync <issue-number>`.
+
+**When it cannot merge:** a failed merge or branch update is posted as a comment on the PR, and the run fails so it shows in the Actions tab. Merge by hand with `gh pr merge <number> --squash --delete-branch`.
+
+**Holding a PR:** remove the `automerge` label, or convert the PR to a draft (`gh pr ready <number> --undo`). A Dependabot minor or patch PR has no label to remove, so convert it to a draft or close it.
 
 ## Versioning
 

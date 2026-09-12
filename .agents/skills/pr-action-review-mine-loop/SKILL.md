@@ -255,9 +255,10 @@ Then proceed to Step 11.
 
 **If NOT eligible**, record the reason and do not merge:
 
-- Failing/pending CI → leave open, note which checks are red. Do not re-request reviewers (nothing for them to do yet).
+- Pending CI, with every other condition met → add the `automerge` label (`gh pr edit <pr-number> --add-label automerge`) so the auto-merge workflow merges it when CI passes ([ADR-0003](../../../docs/adr/0003-auto-merge-pull-requests-on-green-ci.md)), and note it as "set to auto-merge".
+- Failing CI → leave open, note which checks are red. Do not re-request reviewers (nothing for them to do yet).
 - Mergeable + CI green but a reviewer's effective state is still `CHANGES_REQUESTED` after this pass pushed fixes → go to Step 10 (re-request reviewers), leave open.
-- Unresolved blocking AI self-review findings → leave open, list them.
+- Unresolved blocking AI self-review findings → leave open, list them, and remove the `automerge` label if present (`gh pr edit <pr-number> --remove-label automerge`).
 - Stacked PR whose base is not `main` → leave open until the parent merges and it is retargeted.
 - Conflicts / branch-protection block → note it, leave open. If protection is blocking because it requires an approving review, note that you cannot approve your own PR, so that rule has to be removed for the solo merge rule to work — do not try to work around it.
 - Pending discussion items → leave open until the user decides.

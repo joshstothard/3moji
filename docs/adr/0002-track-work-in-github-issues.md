@@ -1,7 +1,9 @@
 # ADR-0002: Track work in GitHub Issues and plan it in versioned documents
 
-**Status:** Accepted
+**Status:** Accepted, partially superseded by ADR-0003
 **Date:** 2026-09-11
+
+> Decision 5 (solo merge rule) superseded by [ADR-0003: Auto-merge pull requests once CI passes](./0003-auto-merge-pull-requests-on-green-ci.md) on 2026-09-11. The rest of this ADR still applies.
 
 ## Context
 
