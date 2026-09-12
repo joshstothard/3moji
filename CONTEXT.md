@@ -45,5 +45,5 @@ A Handle kept for an Account for 24 hours while it waits for that Account's emai
 _Avoid_: blocked handle, banned handle
 
 **Release**:
-Deleting an Account and giving up its Handle, which returns to the pool after a cooldown. There is no Account without a Handle, so Release and account deletion are the same act.
+Deleting an Account and giving up its Handle, which returns to the pool immediately — there is no cooldown in the MVP. There is no Account without a Handle, so Release and account deletion are the same act.
 _Avoid_: delete, unregister

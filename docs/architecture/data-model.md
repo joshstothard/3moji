@@ -33,7 +33,7 @@ Membership is checked left to right and the **leftmost** offender is reported, s
 
 **Alias stability is coupled to curation, which makes curation no longer cosmetic.** `displayName` is curated and mutable — 29 of 307 are overridden — so renaming one silently changes every alias containing it and breaks links already in people's bios. Deriving aliases from the immutable CLDR `spokenName` would avoid that at the cost of `/ice.ice.ice`, the exact defect the curated layer exists to fix. A display-name change is therefore a **breaking URL change** and needs the old alias retained as a redirect.
 
-**Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job. An expired hold frees the Handle and deletes the unverified Account. A released Handle returns to the pool after 30 days. Handles cannot be changed in the MVP.
+**Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job. An expired hold frees the Handle and deletes the unverified Account. **A released Handle returns to the pool immediately — there is no cooldown in the MVP** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). Handles cannot be changed in the MVP.
 
 ## Reserved Handles
 
@@ -81,7 +81,15 @@ The middle layer is deliberately not built: there is no claim path yet, and a tr
 
 **The owning Account is Better Auth's `user` row, not its `account` row.** The domain Account of `CONTEXT.md` is the login; Better Auth's `account` table is one row _per credential provider_ for a user, so a foreign key there would delete somebody's Handle when a provider row was removed.
 
-**Open: the 30-day cooldown has nowhere to live.** Release is account deletion and the Handle row cascades away with the Account, so a released Handle leaves nothing behind to date a cooldown from. The lifecycle above therefore describes a rule the schema does not yet record. Phase 3's release flow needs a deliberate decision — a tombstone row written at deletion is the obvious shape — and it was left out here rather than being invented as a table with nothing writing to it.
+### The release tombstone
+
+**Planned, not yet built** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). `handle.user_id` cascades on delete, so deleting an Account takes its Handle row with it and leaves nothing to date a cooldown from. That contradiction in ADR-0004 decision 5 is resolved by dropping the cooldown rather than by enforcing it: **a released Handle returns to the pool immediately.**
+
+Release will still write a `released_handle` row — the canonical key and a release timestamp, **and nothing else**. No `user_id`, no email, no Profile field, no foreign key to any Account: Release is account deletion, and a tombstone naming its former owner would make that promise true in letter and false in substance. The canonical key was a public URL already, so alone it identifies nobody. **That constraint belongs in the table's own comment when it is built** — adding a user reference later would silently undo account deletion.
+
+The row exists because **time cannot be backfilled**: a cooldown switched on later with no history behind it starts blind. The write goes in the delete use case inside the deletion transaction, not a database trigger, because `drizzle-kit generate` owns this schema — the same trade taken for the blocked-emoji `CHECK`. The cost is that the database cannot enforce it, so a direct `DELETE` on a `user` row leaves no tombstone; the tombstone is evidence, not an invariant.
+
+**Nothing reads it.** The claim path does not consult it, which is what makes "no cooldown" structural rather than asserted — there is no branch to get wrong and no stale row can block a legitimate claim. Turning a cooldown on is a new ADR plus a read in the claim gate.
 
 ## Profile
 
