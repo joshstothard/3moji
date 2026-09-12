@@ -95,6 +95,8 @@ Limits are enforced in `packages/core`, not only in the form. Links are shown in
 
 A visitor sees one of three states: the Profile itself; a claimed but unedited Handle, shown large with its Spoken Name; or a held Handle, which reveals neither who holds it nor when the hold expires. An **unclaimed** Handle is not a 404: it renders the home-page builder pre-filled with those three emoji and a call to claim it.
 
+**Built, minimally.** The route that resolves a Handle exists (see Routing in [system-overview.md](system-overview.md)), but the unclaimed state it renders is a placeholder — the Handle's emoji, its Spoken Name as the accessible name, and the line "This Handle is available." The builder described above is Phase 3 and the three visitor states are Phase 4; until the claim flow exists, nothing can be claimed, so the route needs no database read to know which state it is in. The four claimed/held/unclaimed distinctions above describe the target, not what ships today.
+
 ## Emoji Set
 
 **Built.** Versioned data in `packages/core/src/emoji/`, pinned to Emoji 12.0: 1,053 single-codepoint emoji ([ADR-0005](../adr/0005-the-emoji-set.md)).

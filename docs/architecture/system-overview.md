@@ -21,6 +21,29 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 **Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): that cross-process call disappears. The web app talks to `packages/core` in-process, and `packages/core` talks to Neon Postgres through Drizzle using the serverless HTTP driver. Migrations run from committed files in the Vercel build step against the unpooled connection, with a database branch per preview deployment. No schema change is applied by hand.
 
+## Routing
+
+**Partly built.** Three routes exist: the placeholder home page at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, and the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊`.
+
+`apps/web/src/app/[handle]/page.tsx` is a thin transport adapter: it hands the received path segment to `canonicalise` in `packages/core` and formats the answer. It holds no canonicalisation logic and reads no database.
+
+| `canonicalise` says           | The route answers                                              |
+| ----------------------------- | -------------------------------------------------------------- |
+| not a Handle, for any reason  | `notFound()` — 404. Junk is never redirected                   |
+| a Handle, spelled oddly       | `permanentRedirect("/" + encoded)` — 308 to the canonical path |
+| a Handle, spelled canonically | A minimal "this Handle is available" placeholder               |
+
+Two constraints from [the emoji URL report](../reports/2026-09-11-emoji-urls.md) bind any future work on this route, and both were re-confirmed against the pinned Next.js version:
+
+- **`params` arrives percent-encoded.** `/🧊🧊🧊` and `/%F0%9F%A7%8A…` reach the page as the same 36-character encoded string. Next.js also upper-cases the escapes, so a lower-case-hex request is already canonical; the spelling that genuinely differs is a stray variation selector.
+- **A redirect target is always the encoded form.** A raw emoji in a `Location` header fails Node's header validation with `ERR_INVALID_CHAR` and serves a 500.
+
+A malformed escape such as `/%F0%9F` never reaches the page: Next.js rejects it first, with 400 in dev and 500 in production.
+
+**The dynamic segment is one segment, not a catch-all**, so it cannot claim `/api/auth/...` or any other multi-segment path. An end-to-end test asserts that, because `[...handle]` would compile, match those paths and 404 them.
+
+The placeholder is deliberately the whole of the unclaimed state for now — see the Profile section of [data-model.md](data-model.md).
+
 ## Deployment
 
 **Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): Vercel on the Hobby plan, which forbids commercial use. Postgres is Neon via the Vercel Marketplace; transactional email is Resend, sending from a subdomain of `3moji.me`.

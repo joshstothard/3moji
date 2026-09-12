@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "lint": "eslint src",
+    "lint": "eslint src e2e",
     "typecheck": "tsc --noEmit",
     "test": "jest --coverage --passWithNoTests",
     "test:e2e": "playwright test --config ../../playwright.config.ts --pass-with-no-tests"

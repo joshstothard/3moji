@@ -1,0 +1,115 @@
+import { expect, test } from "@playwright/test";
+
+/**
+ * End-to-end proof of the Phase 2 outcome: a URL containing emoji resolves to
+ * exactly one canonical Handle.
+ *
+ * This is the only place the real `canonicalise` meets the real route — the
+ * page's unit test mocks `@template/core`, because that package pulls in
+ * ESM-only dependencies the web Jest suite cannot `require`. So the assertions
+ * below are about bytes on the wire, not about component output.
+ */
+
+/** 🧊 U+1F9CA, percent-encoded. Food & Drink, released at launch. */
+const ICE = "%F0%9F%A7%8A";
+/** U+FE0F, the emoji presentation selector. */
+const VS16 = "%EF%B8%8F";
+
+const CANONICAL = `/${ICE}${ICE}${ICE}`;
+/**
+ * The same Handle, spelled with a trailing variation selector. This is the
+ * spelling that discriminates: Next.js upper-cases percent-escapes before the
+ * page sees them, so a lower-case-hex request arrives already canonical, while
+ * a variation selector survives into the segment untouched (confirmed by curl
+ * against this Next.js version; see docs/reports/2026-09-11-emoji-urls.md).
+ */
+const NON_CANONICAL = `${CANONICAL}${VS16}`;
+
+test("a non-canonical spelling redirects permanently to the canonical path", async ({
+  request,
+}) => {
+  const response = await request.get(NON_CANONICAL, { maxRedirects: 0 });
+
+  expect(response.status()).toBe(308);
+  expect(response.headers().location).toBe(CANONICAL);
+});
+
+test("the Location header is percent-encoded, never raw emoji", async ({
+  request,
+}) => {
+  const response = await request.get(NON_CANONICAL, { maxRedirects: 0 });
+  const location = response.headers().location;
+
+  // A raw emoji in a Location header fails Node's header validation with
+  // ERR_INVALID_CHAR and serves a 500 instead of a redirect, so the bytes
+  // matter: ASCII escapes only.
+  expect(location).toMatch(/^\/(?:%[0-9A-F]{2})+$/);
+});
+
+test("a browser walking a non-canonical URL lands on the canonical Handle", async ({
+  page,
+}) => {
+  await page.goto(NON_CANONICAL);
+
+  // The browser displays the path decoded; compare decoded so the assertion
+  // does not depend on which form Chromium chooses to show.
+  const { pathname } = new URL(page.url());
+  expect(decodeURIComponent(pathname)).toBe("/\u{1F9CA}\u{1F9CA}\u{1F9CA}");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "three ice cubes" }),
+  ).toBeVisible();
+  await expect(page.getByText(/available/i)).toBeVisible();
+});
+
+test("the canonical URL is served directly, with no redirect", async ({
+  request,
+}) => {
+  const response = await request.get(CANONICAL, { maxRedirects: 0 });
+
+  expect(response.status()).toBe(200);
+});
+
+test("a segment that cannot be canonicalised is a 404", async ({ request }) => {
+  // Three ASCII code points: it clears the length gate and fails Emoji Set
+  // membership, so the page's own notFound() is what answers. A malformed
+  // escape such as /%F0%9F is deliberately not tested here — Next.js rejects
+  // it before the page runs (400 in dev, 500 in production), so it would prove
+  // nothing about this route.
+  const response = await request.get("/abc", { maxRedirects: 0 });
+
+  expect(response.status()).toBe(404);
+});
+
+test("a Handle of the wrong length is a 404", async ({ request }) => {
+  const response = await request.get(`/${ICE}${ICE}`, { maxRedirects: 0 });
+
+  expect(response.status()).toBe(404);
+});
+
+test("the root-level dynamic route does not swallow the auth API", async ({
+  request,
+}) => {
+  // A catch-all here — `[...handle]` instead of `[handle]` — would match
+  // `/api/auth/ok`, fail canonicalisation and answer 404. That 404 is the
+  // failure this asserts against.
+  //
+  // The status is deliberately not pinned: CI's E2E job sets DATABASE_URL but
+  // not BETTER_AUTH_SECRET or the Resend variables, so `lib/services.ts` throws
+  // and Better Auth's route answers 500. A 500 from the auth handler and a 200
+  // from a fully configured one are both proof that the auth route, not this
+  // one, received the request.
+  const response = await request.get("/api/auth/ok", { maxRedirects: 0 });
+
+  expect(response.status()).not.toBe(404);
+  expect(await response.text()).not.toContain("This Handle is available");
+});
+
+test("the root-level dynamic route does not swallow the home page", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "3moji" }),
+  ).toBeVisible();
+});

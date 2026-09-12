@@ -61,3 +61,12 @@ Web tests run under Jest + `jest-environment-jsdom` with React Testing Library. 
 - **Server-action helpers are never invoked in unit tests.** `next/cache` and `next/navigation` are mocked globally in `jest.setup.ts` so importing a page does not drag in the full Next server runtime; `TextEncoder` is polyfilled there for the same reason.
 - **jest-dom matcher types** (`toBeInTheDocument`, `toHaveAttribute`) are pulled into the TS program via `src/types/jest-dom.d.ts`, because `jest.setup.ts` lives outside `src` and its augmentation would otherwise be invisible to `tsc`/eslint.
 - The 70% coverage floor applies to the whole `apps/web` `src` tree — page/layout server components included — so new pages ship with tests.
+
+## End-to-end tests (`apps/web/e2e`)
+
+Specs run under Playwright from the root `playwright.config.ts`, against `npm run dev` on port 3000, in two projects (`chromium` and `Pixel 7`). `npm run test:e2e` passes `--pass-with-no-tests`.
+
+- **The `e2e` directory is inside the TypeScript project and is linted.** `apps/web/tsconfig.json` includes `e2e/**/*` and the package's lint script is `eslint src e2e`. Without the `include`, a spec is invisible to `tsc` _and_ unparseable by the type-aware linter, so the pre-commit hook — which lints every staged `.ts` file — fails with `"parserOptions.project" has been provided… file was not found`, which reads as a lint finding rather than the config gap it is. This is the same trap `packages/core`'s `drizzle.config.ts` hit.
+- **A spec asserts bytes, not markup, wherever a status code or header is the behaviour.** Use `request.get(url, { maxRedirects: 0 })` and assert the status and `Location`; a `page.goto` that silently follows a redirect cannot tell a 308 from a 200.
+- **E2E is where the real domain meets the real route.** Web unit tests mock `@template/core` (it cannot be `require`d under Jest), so the Handle route's unit test proves only which branch each canonicalisation result takes. `handle-url.spec.ts` is the only place the genuine `canonicalise` answers a genuine HTTP request.
+- **CI's E2E job sets `DATABASE_URL` and nothing else.** `lib/services.ts` requires five variables, so any route that resolves services answers 500 there. Do not write a spec that needs an authenticated session or a database read until that job provides them.
