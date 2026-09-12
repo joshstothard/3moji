@@ -17,12 +17,10 @@ Read ports from the env files before doing anything else:
 
 ```bash
 grep -E "^PORT=" apps/web/.env 2>/dev/null || echo "PORT=3000"   # web port  (default 3000)
-grep -E "^PORT=" apps/api/.env 2>/dev/null || echo "PORT=3001"   # API port  (default 3001)
 ```
 
 - If `apps/web/.env` is missing, copy `apps/web/.env.example` → `apps/web/.env.local` and fill in the required values, then re-read.
 - `WEB_PORT` = `PORT` value from `apps/web/.env` if present; otherwise default to `3000`.
-- `API_PORT` = `PORT` value from `apps/api/.env` if present; otherwise default to `3001`.
 
 **Every URL constructed in subsequent steps must use these values.** Using any other port is wrong.
 
@@ -118,10 +116,9 @@ If no auth is configured, skip this step.
 
 Navigate, click, and inspect as needed for the verification task. Key routes for this template:
 
-| Route  | What it shows       |
-| ------ | ------------------- |
-| `/`    | Landing / home page |
-| `/api` | API root (NestJS)   |
+| Route | What it shows       |
+| ----- | ------------------- |
+| `/`   | Landing / home page |
 
 Adjust routes to match the feature under test.
 
@@ -137,6 +134,5 @@ Adjust routes to match the feature under test.
 
 ## Notes
 
-- The API exposes `/healthz` and `/readyz` for readiness checks (NestJS default from this template).
-- Next.js dev server starts on port 3000 by default; NestJS starts on 3001. Override with `PORT=` in the respective `.env` file.
-- `npm run dev` at the repo root uses Turborepo and starts both `apps/web` and `apps/api` concurrently.
+- Next.js dev server starts on port 3000 by default. Override with `PORT=` in `apps/web/.env`.
+- `npm run dev` at the repo root uses Turborepo and starts `apps/web`. There is no separate backend process: route handlers and server actions are the backend ([ADR-0006](../../../docs/adr/0006-nextjs-on-vercel-is-the-whole-application.md)).

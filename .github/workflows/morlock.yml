@@ -54,7 +54,7 @@ jobs:
             Today's probe session. Your job:
             1. Read and understand the current codebase — focus on auth boundaries, data isolation, input validation, and error leakage.
             2. Identify the most interesting attack surfaces.
-            3. For each finding, write a proving test under `apps/api/integration/security/` (create the directory if needed).
+            3. For each finding, write a proving test under `apps/web/integration/security/` (create the directory if needed).
             4. Summarise your findings.
 
             After completing the probe:

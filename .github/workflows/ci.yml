@@ -117,20 +117,6 @@ jobs:
       - run: npm run check:unused --if-present
       - run: npm run check:dupes --if-present
 
-  openapi:
-    name: OpenAPI drift gate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-      - name: Generate OpenAPI spec
-        run: npm run generate:openapi --if-present
-      - name: Check for drift
-        run: git diff --exit-code
-        continue-on-error: true
-      - name: Spectral lint
-        run: npx @stoplight/spectral-cli lint --ruleset .spectral.yml openapi.json --if-present 2>/dev/null || true
-
   adr-sync:
     name: ADR sync check
     runs-on: ubuntu-latest
@@ -151,7 +137,6 @@ jobs:
       - integration-tests
       - i18n-check
       - code-health
-      - openapi
       - adr-sync
       - script-tests
     runs-on: ubuntu-latest
@@ -172,7 +157,6 @@ jobs:
           name: build-output
           path: |
             apps/web/.next/
-            apps/api/dist/
             packages/shared/dist/
           retention-days: 1
 
@@ -185,7 +169,6 @@ jobs:
       - integration-tests
       - i18n-check
       - code-health
-      - openapi
       - adr-sync
     uses: ./.github/workflows/security.yml
     permissions:
@@ -238,27 +221,12 @@ jobs:
           fi
         env:
           DATABASE_URL: postgresql://app:app@localhost:5432/app_test
-      - name: Start API
-        run: npm run start --workspace=apps/api &
-        env:
-          DATABASE_URL: postgresql://app:app@localhost:5432/app_test
-          REDIS_URL: redis://localhost:6379
-          PORT: 3001
-          NODE_ENV: test
-          # Replace with repo secrets for external services in your project:
-          # AUTH_SERVER_URL: ${{ secrets.AUTH_SERVER_URL }}
-          # THIRD_PARTY_API_KEY: ${{ secrets.THIRD_PARTY_API_KEY }}
-      - name: Wait for API health
-        run: |
-          timeout 30 bash -c 'until curl -sf http://localhost:3001/healthz; do sleep 1; done'
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run E2E tests
         run: npm run test:e2e
         env:
           DATABASE_URL: postgresql://app:app@localhost:5432/app_test
-          API_URL: http://localhost:3001
-          NEXT_PUBLIC_API_URL: http://localhost:3001
       - name: Upload Playwright report
         uses: actions/upload-artifact@v7
         if: always()
@@ -289,63 +257,6 @@ jobs:
           useConfigFile: true
 
   # ─── Stage 5: Docker image build, smoke test, Trivy scan ─────────────────────
-
-  image-api:
-    name: API image
-    needs: [e2e, security, version]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    env:
-      IMAGE_NAME: app-api
-      SEMVER: ${{ needs.version.outputs.semver }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build API image
-        run: |
-          docker build \
-            --build-arg APP_VERSION=${{ env.SEMVER }} \
-            -t ${{ env.IMAGE_NAME }}:${{ env.SEMVER }} \
-            -f apps/api/Dockerfile \
-            .
-      - name: Smoke test API image
-        run: bash scripts/ci-smoke-test.sh api ${{ env.IMAGE_NAME }}:${{ env.SEMVER }} ${{ env.SEMVER }}
-      - name: Trivy scan (blocking — fixable CRITICAL)
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ env.SEMVER }}
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL
-      - name: Trivy scan (SARIF — CRITICAL+HIGH)
-        uses: aquasecurity/trivy-action@master
-        if: always()
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ env.SEMVER }}
-          format: sarif
-          output: trivy-api.sarif
-          severity: CRITICAL,HIGH
-      # Code scanning uploads need GitHub Code Security on a private repo, so
-      # they run on public repos only. The blocking Trivy scan above still
-      # gates every image. See docs/development/ci-cd.md § Security pipeline.
-      - name: Upload Trivy SARIF
-        uses: github/codeql-action/upload-sarif@v4
-        if: always() && !github.event.repository.private
-        with:
-          sarif_file: trivy-api.sarif
-      # ─────────────────────────────────────────────────────────────────────
-      # IMAGE PUSH IS INTENTIONALLY DISABLED. This template builds, versions,
-      # smoke-tests and scans images but does NOT publish them.
-      # To enable: set `if:` to your branch condition, add registry login
-      # (GHCR default below), and provide the relevant secrets.
-      # ─────────────────────────────────────────────────────────────────────
-      - name: Push API image
-        if: false
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker tag ${{ env.IMAGE_NAME }}:${{ env.SEMVER }} ghcr.io/${{ github.repository }}/app-api:${{ env.SEMVER }}
-          docker push ghcr.io/${{ github.repository }}/app-api:${{ env.SEMVER }}
 
   image-web:
     name: Web image
