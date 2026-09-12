@@ -52,7 +52,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | ----- | ---------------------------------------------------------------------------- | ---------- | ----------- |
 | 1     | The app is live at `3moji.me` and a person can create an account and sign in | #26        | In progress |
 | 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | In progress |
-| 3     | You can claim a Handle end to end on the live site                           | —          | Not planned |
+| 3     | You can claim a Handle end to end on the live site                           | #76        | Planned     |
 | 4     | A claimed Handle shows a real page its owner controls                        | —          | Not planned |
 | 5     | It survives real people                                                      | —          | Not planned |
 
@@ -151,7 +151,14 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- _Not planned yet._
+- #77 Add the Handle repository port and its availability read
+- #78 Build the home-page Handle builder with live URL preview
+- #79 Add category tabs and search to the builder
+- #80 Render the availability states and swap suggestions
+- #81 Claim: sign-up and hold as one atomic act
+- #82 Finalise the Claim on verification, with the hold screen and resend
+- #83 Expire holds lazily and delete the unverified Account
+- #84 Release: account deletion and the released_handle tombstone
 
 ### Phase 4 — Profile
 
@@ -278,3 +285,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   Two open questions added. **Phase 3 is deliberately not split** even though it sits at the top of
   the 3-8 guidance: ADR-0008 is immutable and places the listing in "Phase 4 or 5", so renumbering
   would make an accepted decision false.
+- 2026-09-12 — Phase 3 planned: epic #76, issues #77–#84. #68 is folded into #80 (a reserved or
+  blocked Handle is an availability state, not a separate surface) and ADR-0004 decision 7's
+  in-transaction re-check into #81 (alone it would be a wrapper with nothing calling it). Noted on
+  the epic: the phase outcome says "on the live site", which cannot be demonstrated until #19
+  unblocks #32 — every issue is testable locally and in CI regardless.
