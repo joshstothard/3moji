@@ -99,8 +99,8 @@ describe("the handle table", () => {
 
   /**
    * A NULL `claimed_at` is what "still held" means, so the lazy expiry
-   * predicate of ADR-0004 decision 3 is `claimed_at IS NULL AND held_until <
-   * now()`. A NOT NULL default would erase the distinction.
+   * predicate of ADR-0004 decision 3 is `claimed_at IS NULL AND held_until <=
+   * now`. A NOT NULL default would erase the distinction.
    */
   it("leaves claimed_at nullable, because NULL is what still-held means", () => {
     expect(column("claimed_at").notNull).toBe(false);

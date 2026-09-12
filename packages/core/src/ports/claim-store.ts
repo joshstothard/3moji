@@ -42,12 +42,27 @@ export interface HoldToWrite {
 /**
  * Whether the hold was written.
  *
- * `key-taken` is the primary key having the last word: either a genuine race
- * lost, or a row still sitting there under an expired hold that nothing has
- * freed yet ([#83](https://github.com/joshstothard/3moji/issues/83)).
+ * `key-taken` is the primary key having the last word. Since
+ * [#83](https://github.com/joshstothard/3moji/issues/83) an expired hold is
+ * freed earlier in the same transaction, so this now means a **genuine race**:
+ * another Claim committed this key between the availability read and the
+ * insert.
  */
 export type HoldWritten =
   { readonly ok: true } | { readonly ok: false; readonly reason: "key-taken" };
+
+/**
+ * Whether an expired hold was found and freed.
+ *
+ * `freed: false` is the ordinary case — there was no row, or the row is a live
+ * hold or a finished Claim. It is not an error and carries no reason, because
+ * the caller has already read ownership and has nothing to decide on it; the
+ * flag exists so a test can tell "looked and found nothing" from "did not
+ * look".
+ */
+export interface ExpiredHoldFreed {
+  readonly freed: boolean;
+}
 
 /**
  * The reads and writes a Claim performs — **valid only inside its transaction**.
@@ -65,6 +80,27 @@ export interface ClaimTransaction {
    * expired hold reading as `available`.
    */
   availabilityOf(key: HandleKey, now: Date): Promise<HandleOwnership>;
+  /**
+   * Free an expired hold on this key, if that is what the row is — the **write
+   * side** of ADR-0004 decision 3's lazy expiry.
+   *
+   * Expiry is evaluated when someone next attempts the Handle and there is no
+   * sweep, so this is reachable only from inside a Claim's transaction, which
+   * is the whole reason it lives on this object rather than on a repository.
+   *
+   * **Freeing the Handle is deleting the unverified Account** (decision 5's
+   * last sentence): `handle.user_id` cascades from `user`, so the Account is
+   * what a delete has to name, and the Handle row goes with it.
+   *
+   * The row it may free is exactly the one {@link availabilityOf} reads as
+   * `available` while still being there: `claimed_at IS NULL AND held_until <=
+   * now`. **`claimed_at IS NULL` is what "still held" means**, so a verified
+   * Account is never freed whatever its `held_until` says — and the condition
+   * is restated here rather than inferred from the read, because an adapter
+   * that trusted the caller's verdict would delete a verified Account the
+   * moment that verdict was wrong.
+   */
+  freeExpiredHold(key: HandleKey, now: Date): Promise<ExpiredHoldFreed>;
   createAccount(input: AccountToCreate): Promise<AccountCreated>;
   holdHandle(input: HoldToWrite): Promise<HoldWritten>;
 }

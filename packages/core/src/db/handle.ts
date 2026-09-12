@@ -145,8 +145,11 @@ export const handle = pgTable(
      *
      * Holds expire **lazily** — there is no sweep — so this column is read by
      * whoever next attempts the Handle. With `claimed_at` it gives that reader
-     * its predicate: `claimed_at IS NULL AND held_until < now()` is a Handle
-     * free to take.
+     * its predicate: `claimed_at IS NULL AND held_until <= <injected now>` is a
+     * Handle free to take — `<=` rather than `<`, because a hold expires *at*
+     * `held_until` and not after it, and `<injected now>` rather than `now()`
+     * for the reason above. That is the predicate `freeExpiredHold` in
+     * `src/adapters/drizzle-claim-store.ts` deletes on.
      */
     heldUntil: timestamp("held_until", { withTimezone: true }).notNull(),
     /**
