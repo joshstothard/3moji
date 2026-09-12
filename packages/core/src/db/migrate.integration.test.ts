@@ -82,7 +82,7 @@ describeWithDatabase("the auth migration against a real Postgres", () => {
     const result = await db.execute<{ count: string }>(sql`
       SELECT count(*) AS count FROM drizzle.__drizzle_migrations
     `);
-    expect((result.rows as { count: string }[])[0]?.count).toBe("2");
+    expect((result.rows as { count: string }[])[0]?.count).toBe("3");
   });
 
   it("cascades a session delete when its user is removed", async () => {
