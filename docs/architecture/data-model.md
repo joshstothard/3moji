@@ -1,6 +1,6 @@
 # Data model
 
-**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, with their migration in `packages/core/migrations/`. The Emoji Set ships as data in `packages/core/src/emoji/`. Everything below about Handles, Profiles and Links is still planned. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
+**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, and the `handle` table — the first we design ourselves — in `packages/core/src/db/handle.ts`, with their migrations in `packages/core/migrations/`. The Emoji Set ships as data in `packages/core/src/emoji/`. The **table** a Handle lives in is built; the claim, hold-expiry and release **flows** that write to it are not, and neither are Profiles and Links. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
 
 ## Account
 
@@ -32,6 +32,28 @@ Membership is checked left to right and the **leftmost** offender is reported, s
 **Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job. An expired hold frees the Handle and deletes the unverified Account. A released Handle returns to the pool after 30 days. Handles cannot be changed in the MVP.
 
 **Reserved Handles** are enforced in three independent layers: the domain layer, again inside the claim transaction, and finally the database constraint, which decides races between simultaneous claims.
+
+### How it is stored
+
+`packages/core/src/db/handle.ts`, migration `0001_handle_table`.
+
+| Column       | Type                         | Why                                                                                                                                       |
+| ------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`        | `text collate "C"`, PK       | The canonical code-point sequence. Primary key, so uniqueness cannot be dropped without dropping the table                                |
+| `user_id`    | `text`, `UNIQUE`, FK cascade | The owning Account. Unique gives the _at most one Handle per Account_ half of ADR-0004 decision 4; cascade makes Release account deletion |
+| `held_until` | `timestamptz`, no default    | When the hold dies. Supplied from the injected `Clock`, never defaulted in SQL, or the 24-hour rule lives where no test can move time     |
+| `claimed_at` | `timestamptz`, nullable      | When the Claim became final. `NULL` **is** what "still held" means, so lazy expiry reads `claimed_at IS NULL AND held_until < now()`      |
+| `created_at` | `timestamptz`, `now()`       | An audit fact. There is no `updated_at`: decision 6 rules out changing a Handle, so the only mutation is `claimed_at` filling in          |
+
+**The collation is stated on the column, not only on an index.** A Postgres `UNIQUE` index is byte equality _under a collation_, and the database's default collation belongs to the deployment — Neon in production, `postgres:16` in CI. `"C"` is deterministic by definition and identical everywhere, and pinning it on the column means the primary key and every future index and `WHERE key = …` inherit it. Drizzle's `text` has no collation option, so the column is a `customType` whose `dataType` is the full `text collate "C"`.
+
+**The canonicalise-before-every-write rule is carried by the type system.** `packages/core/src/db/handle-key.ts` brands the key as `HandleKey`, and the only exported ways to obtain one — `toHandleKey(segment)` and `handleKeyOf(canonicalHandle)` — both run `canonicalise`. Writing a raw request parameter into the key column does not compile. It is a speed bump rather than a wall: a deliberate assertion still gets past any TypeScript brand, which is why the database keeps the last word.
+
+**`CHECK (char_length(key) = 3)`** is the third of decision 7's independent layers, in the place that decides. `char_length` counts code points and every Emoji Set entry is a single code point, so three code points is exactly three emoji — and it catches the specific bug ADR-0004 fears most, a stray U+FE0F surviving canonicalisation to the write, even when both earlier layers are wrong.
+
+**The owning Account is Better Auth's `user` row, not its `account` row.** The domain Account of `CONTEXT.md` is the login; Better Auth's `account` table is one row _per credential provider_ for a user, so a foreign key there would delete somebody's Handle when a provider row was removed.
+
+**Open: the 30-day cooldown has nowhere to live.** Release is account deletion and the Handle row cascades away with the Account, so a released Handle leaves nothing behind to date a cooldown from. The lifecycle above therefore describes a rule the schema does not yet record. Phase 3's release flow needs a deliberate decision — a tombstone row written at deletion is the obvious shape — and it was left out here rather than being invented as a table with nothing writing to it.
 
 ## Profile
 
