@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import en from "../../../packages/shared/messages/en.json";
 
 /**
  * End-to-end proof of the Phase 2 outcome: a URL containing emoji resolves to
@@ -12,6 +13,11 @@ import { expect, test } from "@playwright/test";
 
 /** 🧊 U+1F9CA, percent-encoded. Food & Drink, released at launch. */
 const ICE = "%F0%9F%A7%8A";
+/** 🍕 U+1F355 — the platform-owned demo Handle in `RESERVED_HANDLE_ENTRIES`. */
+const PIZZA = "%F0%9F%8D%95";
+/** 🔪 U+1F52A — a blocked emoji, and in a released category so it is reachable. */
+const KNIFE = "%F0%9F%94%AA";
+
 /** U+FE0F, the emoji presentation selector. */
 const VS16 = "%EF%B8%8F";
 
@@ -24,6 +30,10 @@ const CANONICAL = `/${ICE}${ICE}${ICE}`;
  * against this Next.js version; see docs/reports/2026-09-11-emoji-urls.md).
  */
 const NON_CANONICAL = `${CANONICAL}${VS16}`;
+
+const copy = en.HandlePage;
+/** Every honest answer the route can give about a Handle that resolves. */
+const EVERY_ANSWER: readonly string[] = Object.values(copy);
 
 test("a non-canonical spelling redirects permanently to the canonical path", async ({
   request,
@@ -58,7 +68,50 @@ test("a browser walking a non-canonical URL lands on the canonical Handle", asyn
   await expect(
     page.getByRole("heading", { level: 1, name: "three ice cubes" }),
   ).toBeVisible();
-  await expect(page.getByText(/available/i)).toBeVisible();
+
+  // Which answer 🧊🧊🧊 gets depends on the environment, and deliberately so:
+  // `lib/services.ts` needs five variables and this job sets one, so the read
+  // degrades to "we could not check" here and would say "available" against a
+  // configured database. What is environment-independent — and what this
+  // asserts — is that the route renders one of the five honest answers rather
+  // than assuming availability. The branch table itself is unit-tested in
+  // `src/app/[handle]/page.test.tsx`.
+  const body = await page.textContent("body");
+  expect(EVERY_ANSWER.some((answer) => body?.includes(answer))).toBe(true);
+});
+
+test("a platform-reserved Handle resolves, and is never called available", async ({
+  request,
+}) => {
+  // Issue #68, on the wire. 🍕🍕🍕 is the demo Profile in the Reserved Handle
+  // list: a real, well-formed Handle that nobody may own, so 404 would be a
+  // lie of the opposite kind. `claimableHandle` is pure, which is why this
+  // answer holds in a job with no database as well as against a real one.
+  const response = await request.get(`/${PIZZA}${PIZZA}${PIZZA}`, {
+    maxRedirects: 0,
+  });
+
+  expect(response.status()).toBe(200);
+  const body = await response.text();
+  expect(body).toContain(copy.stateNotClaimable);
+  expect(body).not.toContain(copy.stateAvailable);
+});
+
+test("a Handle carrying a blocked emoji resolves to the same answer, with no reason given", async ({
+  request,
+}) => {
+  const response = await request.get(`/${KNIFE}${KNIFE}${KNIFE}`, {
+    maxRedirects: 0,
+  });
+
+  expect(response.status()).toBe(200);
+  const body = await response.text();
+  expect(body).toContain(copy.stateNotClaimable);
+  expect(body).not.toContain(copy.stateAvailable);
+  // Naming the block would be a hint to go looking for the list, so the two
+  // reserved kinds are one message. The reason never leaves `packages/core`.
+  expect(body.toLowerCase()).not.toContain("threat");
+  expect(body.toLowerCase()).not.toContain("blocked");
 });
 
 test("the canonical URL is served directly, with no redirect", async ({

@@ -195,4 +195,37 @@ describe("handleAvailability", () => {
     if (result.state === "not-a-handle") throw new Error("narrowing");
     expect(result.handle.key).toBe(ICE);
   });
+
+  it("gives the held answer nowhere to carry the holder or the expiry", async () => {
+    // ADR-0004: a countdown is an information leak and an invitation to wait,
+    // and "we simply do not render it" is a promise one careless JSX edit
+    // breaks. The guarantee asserted here is structural instead — the `held`
+    // result has two fields, neither of which is a time or a person, so
+    // leaking either would require widening this type in `packages/core` and
+    // turning this test red on the way.
+    const rows = new Map([
+      [
+        ICE,
+        { heldUntil: new Date("2026-09-13T12:00:00.000Z"), claimedAt: null },
+      ],
+    ]);
+
+    const result = await handleAvailability({
+      segment: ICE,
+      repository: repositoryWith(rows),
+      clock: fixedClock(),
+    });
+
+    expect(result.state).toBe("held");
+    expect(Object.keys(result).sort()).toEqual(["handle", "state"]);
+    if (result.state !== "held") throw new Error("narrowing");
+    expect(Object.keys(result.handle).sort()).toEqual([
+      "emoji",
+      "encoded",
+      "isCanonical",
+      "key",
+      "ok",
+    ]);
+    expect(JSON.stringify(result)).not.toContain("2026-09-13");
+  });
 });

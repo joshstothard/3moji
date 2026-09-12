@@ -63,6 +63,14 @@ export type {
   ClaimabilityResult,
   ClaimableHandle,
 } from "./handle/claimable";
+export {
+  SWAP_SUGGESTION_LIMIT,
+  swapSuggestions,
+} from "./handle/swap-suggestions";
+export type {
+  SwapSuggestion,
+  SwapSuggestionsInput,
+} from "./handle/swap-suggestions";
 
 export { canonicalise, HANDLE_LENGTH } from "./handle/canonicalise";
 export type {

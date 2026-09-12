@@ -42,6 +42,14 @@ export type { CuratedEmoji } from "./emoji/emoji-name";
 export { spokenHandle } from "./emoji/spoken-handle";
 
 export { canonicalise, HANDLE_LENGTH } from "./handle/canonicalise";
+export {
+  SWAP_SUGGESTION_LIMIT,
+  swapSuggestions,
+} from "./handle/swap-suggestions";
+export type {
+  SwapSuggestion,
+  SwapSuggestionsInput,
+} from "./handle/swap-suggestions";
 export type {
   CanonicalHandle,
   CanonicalisationFailure,
