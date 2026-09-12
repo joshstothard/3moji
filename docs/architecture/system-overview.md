@@ -23,7 +23,21 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 ## Routing
 
-**Partly built.** Three routes exist: the placeholder home page at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, and the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊`.
+**Partly built.** Three routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, and the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊`.
+
+### The home page
+
+`apps/web/src/app/page.tsx` is a server component that holds no state and fetches nothing. Its whole job is composition: it hands `HandleBuilder` the availability read and lets the builder own the interaction.
+
+The builder is a client component, and it reaches the domain through **`@template/core/browser`** — a second entry point that exists because the root barrel re-exports `db/client` and so cannot be bundled for a browser (`next build` fails with `Can't resolve 'dns'`, `'fs'`, `'net'`, `'tls'` and `'util/types'`). That subpath is a deliberate allowlist of pure functions and frozen Emoji Set data; `packages/core/src/browser.test.ts` walks its transitive imports and fails if anything under `db/`, `auth/`, `ports/` or `adapters/` appears. Adding a name to it is a decision, not a convenience.
+
+The tagline and the URL preview come from the domain rather than from the UI: `spokenHandle` collapses runs in order, and `canonicalise` produces the percent-encoded segment the availability read is asked about — the same one `/[handle]` would receive.
+
+**Availability is read lazily, through a server action, and never on the render path.** `lib/services.ts` throws unless all five of `DATABASE_URL`, `RESEND_API_KEY`, `RESEND_FROM`, `BETTER_AUTH_URL` and `BETTER_AUTH_SECRET` are set, so a page that resolved services while rendering would 500 on a fresh clone and in CI's E2E job. Instead `/` prerenders as static content, and `checkAvailability` runs only once a visitor has filled three slots. Every failure on that path — a missing variable, a refused connection — answers `"unknown"`, which the builder renders as a line of copy rather than letting it reach the page as a rejection. Until an environment has those five variables, every complete Handle reads "We could not check this Handle just now."
+
+Every control in the builder is permanent: one button per slot for the life of the page, relabelled when it fills and when it clears. That is an accessibility requirement rather than a styling choice — swapping the control unmounts the focused node and drops focus to `<body>` — and `aria-disabled` is used throughout in place of `disabled`, which would take a button out of the tab order under a keyboard user's feet.
+
+### The Handle route
 
 `apps/web/src/app/[handle]/page.tsx` is a thin transport adapter: it hands the received path segment to `canonicalise` in `packages/core` and formats the answer. It holds no canonicalisation logic and reads no database.
 
@@ -42,7 +56,7 @@ A malformed escape such as `/%F0%9F` never reaches the page: Next.js rejects it 
 
 **The dynamic segment is one segment, not a catch-all**, so it cannot claim `/api/auth/...` or any other multi-segment path. An end-to-end test asserts that, because `[...handle]` would compile, match those paths and 404 them.
 
-The placeholder is deliberately the whole of the unclaimed state for now — see the Profile section of [data-model.md](data-model.md).
+The `/[handle]` placeholder is deliberately the whole of the unclaimed state for now — see the Profile section of [data-model.md](data-model.md). The builder on `/` shows availability but offers no Claim: claiming is Phase 3's own issue, with its own transaction.
 
 ### The word alias
 
