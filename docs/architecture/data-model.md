@@ -40,6 +40,16 @@ A visitor sees one of three states: the Profile itself; a claimed but unedited H
 
 Versioned data in `packages/core`, pinned to Emoji 12.0: 1,053 single-codepoint emoji ([ADR-0005](../adr/0005-the-emoji-set.md)).
 
+**A Handle may only use emoji from a _released category_** ([ADR-0007](../adr/0007-release-the-emoji-set-in-category-drops.md)). The candidate list stays at 1,053; what is claimable is the released subset.
+
+|                          |                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Released at launch       | **Food & Drink** (113), **Animals & Nature** (126), **Activities** (68) — 307 emoji, 28,934,443 three-emoji Handles |
+| Deferred, needs curation | Objects (183)                                                                                                       |
+| Not scheduled            | Smileys & Emotion, People & Body, Travel & Places, Symbols                                                          |
+
+Categories are released as **data, not code**: a drop is an edit to the released-category list plus a curation pass. A released category is **never withdrawn**, because withdrawing one could orphan a Handle somebody already owns.
+
 | Field         | Source                            | Purpose                                      |
 | ------------- | --------------------------------- | -------------------------------------------- |
 | `spokenName`  | CLDR short name, immutable        | Canonical identity                           |
