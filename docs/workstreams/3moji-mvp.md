@@ -122,13 +122,16 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 ### Phase 3 — Claim
 
-**Outcome:** A visitor can pick three emoji and claim the Handle end to end on the live site.
+**Outcome:** A visitor can pick three emoji and claim the Handle end to end on the live site, and can give it up again.
 
 **Deliverables:**
 
-- The home-page builder: the hero, spoken tagline, live URL preview, three slots, then category tabs and search.
+- The home-page builder: the hero, spoken tagline, live URL preview, three slots, then category tabs and search over the curated term index.
 - The three availability states, with theme-based swap suggestions when a pick is taken.
 - Sign-up, hold, verification, and claim, as one atomic act for Account and Hold.
+- **Release: account deletion, the `released_handle` tombstone, and its migration** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)).
+- **The re-check inside the claim transaction** — ADR-0004 decision 7's third layer, deferred from #52 because there was no claim path to put it in.
+- **Honest states for a Handle that resolves but cannot be claimed** ([#68](https://github.com/joshstothard/3moji/issues/68)).
 - Every failure path recorded on issue #15, including resend with its rate limit.
 
 **Acceptance criteria:**
@@ -137,8 +140,14 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - [ ] Claiming holds the Handle for 24 hours, sends the email, and finalises on verification.
 - [ ] Each failure path on issue #15 has a test.
 - [ ] An expired hold frees the Handle and deletes the unverified Account, evaluated lazily with no scheduled job.
+- [ ] Releasing deletes the Account and writes a tombstone carrying **no user reference** — the row is the canonical key and a timestamp, nothing more ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md) decision 3).
+- [ ] A Handle released moments ago **can** be claimed immediately, asserted against a real Postgres. This is [#63](https://github.com/joshstothard/3moji/issues/63)'s outstanding criterion: "no cooldown" is satisfied by accident unless a test makes it deliberate.
+- [ ] The claim transaction re-checks reservations inside its own transaction, proven by a test that reserves a Handle mid-flight.
+- [ ] A reserved or blocked Handle never renders "This Handle is available".
 
-**Dependencies:** Phases 1 and 2. ADR-0004 accepted.
+**Dependencies:** Phases 1 and 2. ADR-0004 **as amended by** [ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md), which resolved the cooldown contradiction that blocked this phase; [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
+
+**Note on size.** This phase carries roughly eight issues, at the top of the 3-8 guidance, and splitting Claim from Release would be the natural cut. It is deliberately **not** split: [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) is accepted and therefore immutable, and it places the alias listing "Phase 4 or 5, not Phase 3", while `docs/architecture/data-model.md` pins the builder to Phase 3 and the visitor states to Phase 4. Inserting a phase would renumber those and make an immutable document false. The phase numbers are fixed; the epic can be planned in two passes if it proves unwieldy.
 
 **Issues:**
 
@@ -154,6 +163,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - Inline editing with drag-to-reorder Links.
 - The unclaimed Handle rendering the builder pre-filled from the path.
 - Field limits enforced in the domain, not only in the form.
+- **The word alias resolver and the listing page** ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md)): the ASCII address a Handle can actually be shared at, and the page shown when one alias matches more than one claimed Handle.
 
 **Acceptance criteria:**
 
@@ -162,8 +172,10 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - [ ] A held Handle reveals nothing about who holds it, and shows no expiry timestamp.
 - [ ] Limits are enforced in `packages/core`: 30, 160, 10, and 40 characters, with `http` and `https` URLs only.
 - [ ] A mutation revalidates the cache before redirecting, so the change is visible immediately.
+- [ ] A dot-separated word alias resolves: one claimed match renders that Profile **in place** rather than redirecting, several render the listing, none renders the claim call to action.
+- [ ] Dotted path segments survive the deployed environment, not only `next dev` — ADR-0008's evidence for this was measured locally only, and Vercel's CDN may treat a dotted segment as a static-file request.
 
-**Dependencies:** Phase 3.
+**Dependencies:** Phase 3. [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
 
 **Issues:**
 
@@ -176,7 +188,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 **Deliverables:**
 
 - A WCAG AA pass over the picker and the Profile.
-- Share affordances that also offer the percent-encoded URL, plus an Open Graph image per Profile.
+- Share affordances built on the **word alias**, plus an Open Graph image per Profile. ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) rejected offering the percent-encoded URL as the shareable form: it is 45 characters of `%F0%9F…` and destroys the thing the product is for.)
 - Structured JSON logging with a correlation id across every API boundary, and error tracking.
 - Rate limits and abuse protection on claims and on every email-sending endpoint.
 
@@ -211,6 +223,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - Is three resends an hour the right limit? It is a starting value to tune, not a principle.
 - Should 🍑 and 🍆 stay claimable? Both were left in ([#18](https://github.com/joshstothard/3moji/issues/18)) on the grounds that context makes them rude. ADR-0007 makes Food & Drink a launch category, so they are now prominent rather than buried among a thousand.
 - Which order do later category drops go in, and what triggers one? ADR-0007 defers Objects and schedules nothing else.
+- Should the **canonical** word alias prefer a shorter unambiguous synonym where one exists? [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3 joins the `displayName` slugs, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` is accepted on input but names eight Handles.
+- Are 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 the right platform-owned Reserved Handles? They were chosen while implementing [#52](https://github.com/joshstothard/3moji/issues/52) and have never been confirmed as a product decision. 🧊🧊🧊 is deliberately not among them, because ADR-0004 decision 2 names it freely claimable.
 
 ## Decision log
 
@@ -254,3 +268,13 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   enforcement layers, not three, because the in-transaction re-check has no claim path to sit in
   until Phase 3; and seven of the nine blocked emoji are unreachable today, since only 🔫 (Activities)
   and 🔪 (Food & Drink) fall in a released category.
+- 2026-09-12 — Synced from GitHub: Phase 1 In progress (epic #26, 5 of 6 closed; #32 blocked on #19);
+  Phase 2 In progress (epic #48, 6 of 7 closed; #55 blocked on #23). Both already matched the
+  document, so no status changed. **Phase 3 rescoped** for the two ADRs accepted today: it now
+  carries Release with its tombstone and migration ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)),
+  the claim-transaction re-check deferred from #52, and #68. Phase 4 gains the word alias resolver
+  and the listing page, and Phase 5's share affordance is rebuilt on the alias rather than the
+  percent-encoded URL ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md)).
+  Two open questions added. **Phase 3 is deliberately not split** even though it sits at the top of
+  the 3-8 guidance: ADR-0008 is immutable and places the listing in "Phase 4 or 5", so renumbering
+  would make an accepted decision false.
