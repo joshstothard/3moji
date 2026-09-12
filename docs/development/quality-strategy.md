@@ -43,7 +43,8 @@ Domain tests run under Jest + ts-jest in the `node` environment, from `@template
 Integration tests are named `*.integration.test.ts` and run under `jest.integration.config.mjs`, separate from the unit suite. CI's `integration-tests` job provides a `postgres:16` service and sets `DATABASE_URL`.
 
 - **They never drop a schema or a table.** Resetting the database is how such suites usually start, and it turns a misaimed `DATABASE_URL` into data loss. Drizzle's migrator is idempotent, which is the property worth asserting anyway, so the suite works against a fresh database and an already-migrated one alike.
-- **A missing `DATABASE_URL` skips locally but throws in CI.** A green run that tested nothing is worse than a red one, so the suite fails loudly when `CI` is set and no database is configured.
+- **A missing `DATABASE_URL` skips locally but throws in CI.** A green run that tested nothing is worse than a red one, so the suite fails loudly when `CI` is set and no database is configured. That guard earned its place immediately: it caught the next bullet.
+- **Turborepo runs tasks in strict environment mode, so a variable CI sets does not reach the test.** Turbo 2.x passes only the variables declared in a task's `env` (plus its own allowlist), so `DATABASE_URL` set on the CI step was silently stripped and every integration test skipped. `turbo.json` now declares `env: ["DATABASE_URL", "REDIS_URL"]` on `test:integration`. **Any future task that needs a new variable must declare it there**, or it will read as undefined with no error. Verify the plumbing without a database by pointing `DATABASE_URL` at a closed port: the tests should fail to connect, not skip.
 - **The unit suite excludes them** via `testPathIgnorePatterns`, and `collectCoverageFrom` excludes test files — otherwise an integration test that does not run in the unit suite is counted as 0% and drags the package under its coverage threshold.
 
 ## Web unit tests (`apps/web`)
