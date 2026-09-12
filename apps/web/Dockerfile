@@ -5,7 +5,9 @@ COPY package*.json package-lock.json turbo.json ./
 COPY apps/web/package*.json apps/web/
 COPY packages/ packages/
 
-RUN npm ci --ignore-scripts --workspace=apps/web --workspace=packages/shared --workspace=packages/ui --include-workspace-root
+# Every workspace apps/web imports must be listed here, or its dependencies are
+# absent from the image and `next build` fails with module-not-found.
+RUN npm ci --ignore-scripts --workspace=apps/web --workspace=packages/core --workspace=packages/shared --workspace=packages/ui --include-workspace-root
 
 COPY apps/web/ apps/web/
 COPY packages/ packages/
@@ -16,7 +18,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV COREPACK_ENABLE_STRICT=0
 ENV SKIP_YARN_COREPACK_CHECK=1
 
+# Local packages must be built before the app that imports them: apps/web
+# resolves @template/core to its dist output, which does not exist until now.
 RUN npm run build --workspace=packages/shared
+RUN npm run build --workspace=packages/core
 RUN npm run build --workspace=apps/web
 
 # ── Production image ──────────────────────────────────────────────────────────

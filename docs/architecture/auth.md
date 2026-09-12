@@ -1,6 +1,19 @@
 # Authentication
 
-**Partly built.** The tables and their migration exist in `packages/core`; the sign-in, verification and reset flows are not wired yet (#31). The shape is decided in [ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md).
+**Built, not yet deployed.** The tables, the auth instance and the HTTP routes all exist; nothing is running against a real database until #32 provisions one. The shape is decided in [ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md).
+
+## Where each piece lives
+
+| Piece                               | Lives in                                                                   |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| The auth instance and its settings  | `packages/core/src/auth/create-auth.ts`                                    |
+| The email port and its two adapters | `packages/core/src/auth/ports/`, `packages/core/src/auth/adapters/`        |
+| The wiring                          | `apps/web/src/lib/services.ts`, the only module that reads the environment |
+| The HTTP surface                    | `apps/web/src/app/api/auth/[...all]/route.ts`                              |
+
+**The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
+
+**Services are built on first request, not at module scope.** `next build` imports route handlers, and the factories throw on a missing secret or connection string, so eager construction would fail the build on any machine without a full environment — including CI. Deferring keeps the build honest while still failing loudly when a request needs a misconfigured service.
 
 ## Shape
 

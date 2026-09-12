@@ -14,3 +14,11 @@ export type {
   NeonDatabase,
   NodePostgresDatabase,
 } from "./db/client";
+
+export type { EmailSender, OutboundEmail } from "./auth/ports/email-sender";
+export { createRecordingEmailSender } from "./auth/adapters/recording-email-sender";
+export type { RecordingEmailSender } from "./auth/adapters/recording-email-sender";
+export { createResendEmailSender } from "./auth/adapters/resend-email-sender";
+export type { ResendEmailSenderInput } from "./auth/adapters/resend-email-sender";
+export { createAuth } from "./auth/create-auth";
+export type { CreateAuthInput } from "./auth/create-auth";

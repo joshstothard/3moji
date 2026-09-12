@@ -107,7 +107,9 @@ The image build jobs contain a commented-out push step guarded with `if: false`.
 3. Add a registry login step (GHCR default is shown, commented out).
 4. Provide the relevant secrets (`GITHUB_TOKEN` is already available for GHCR).
 
-Default image name: `app-web`. Default registry: `ghcr.io/${{ github.repository }}`.
+Default image name: `app-web`.
+
+**Adding a workspace package means editing `apps/web/Dockerfile`.** It has its own dependency install and its own build sequence, neither of which uses Turborepo's task graph, so a new local package must be added to both: the `npm ci --workspace=` list, or its dependencies are missing from the image, and the build sequence before `apps/web`, or the app cannot resolve its `dist`. Nothing else in the pipeline catches this — lint, typecheck, unit tests, the Turbo build and the E2E suite all pass, and only the image build fails. Default registry: `ghcr.io/${{ github.repository }}`.
 
 ## Smoke test
 

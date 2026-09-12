@@ -2,6 +2,8 @@ import {
   authSchema,
   createCoreServices,
   createDatabase,
+  createRecordingEmailSender,
+  createResendEmailSender,
   createSystemClock,
   resolveDriver,
 } from "./index";
@@ -19,6 +21,11 @@ describe("package entry point", () => {
   it("exports the database factory and driver resolver", () => {
     expect(typeof createDatabase).toBe("function");
     expect(typeof resolveDriver).toBe("function");
+  });
+
+  it("exports both email sender adapters", () => {
+    expect(typeof createRecordingEmailSender).toBe("function");
+    expect(typeof createResendEmailSender).toBe("function");
   });
 
   it("exports the auth schema keyed the way Better Auth expects", () => {
@@ -39,11 +46,28 @@ describe("package entry point", () => {
     await handle.close();
   });
 
-  it("wires a usable domain surface through the public API alone", () => {
+  it("wires a usable domain surface through the public API alone", async () => {
     const clock: Clock = { now: () => new Date("2026-09-12T00:00:00.000Z") };
-    const deps: CoreDependencies = { clock };
+    const handle = createDatabase({
+      url: "postgresql://app:app@localhost:5432/app_test",
+      nodeEnv: "test",
+    });
+    const deps: CoreDependencies = {
+      clock,
+      auth: {
+        db: handle.db,
+        emailSender: createRecordingEmailSender(),
+        baseUrl: "http://localhost:3000",
+        secret: "a".repeat(32),
+        from: "3moji <no-reply@mail.3moji.me>",
+      },
+    };
     const services: CoreServices = createCoreServices(deps);
 
     expect(services.clock.now().toISOString()).toBe("2026-09-12T00:00:00.000Z");
+    expect(
+      services.auth.options.emailAndPassword.requireEmailVerification,
+    ).toBe(true);
+    await handle.close();
   });
 });
