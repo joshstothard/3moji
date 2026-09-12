@@ -75,7 +75,7 @@ export async function runWithTransactionalAuth<T>(
     if (!(error instanceof ClaimRolledBack)) {
       // Nothing was committed, so nothing may be sent.
       deferred.discard();
-      throw interactiveTransactionsUnsupported(error) ?? error;
+      throw error;
     }
   }
 
@@ -93,30 +93,4 @@ export async function runWithTransactionalAuth<T>(
   }
 
   return outcome.value;
-}
-
-/**
- * Turns the neon-http driver's refusal into something a reader can act on.
- *
- * Matching on the driver's message is not a load-bearing decision — the error
- * propagates either way, and only the wording of the diagnosis depends on it.
- * A silent 500 saying "No transactions support in neon-http driver" would send
- * whoever reads it looking for a bug in this file rather than at the driver
- * ADR-0006 decision 6 selected
- * ([#89](https://github.com/joshstothard/3moji/issues/89)).
- */
-function interactiveTransactionsUnsupported(error: unknown): Error | undefined {
-  if (
-    !(error instanceof Error) ||
-    !error.message.includes("No transactions support")
-  ) {
-    return undefined;
-  }
-  return new Error(
-    "The Claim needs an interactive transaction, which the neon-http driver does not provide. " +
-      "ADR-0006 decision 6 selects that driver for production; switching this deployment to " +
-      "drizzle-orm/neon-serverless (WebSockets, still Neon) is the documented remedy and needs a new ADR. " +
-      "Locally and in CI, resolveDriver gives node-postgres, which does support it.",
-    { cause: error },
-  );
 }
