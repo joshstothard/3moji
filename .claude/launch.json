@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "3moji web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["turbo", "dev", "--filter=@template/web"],
+      "port": 3000
+    }
+  ]
+}
