@@ -116,7 +116,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - #50 Add Handle canonicalisation with property-based tests
 - #51 Add the handle table, its canonical-key unique index and migration
 - #52 Add the Reserved Handle list and its three-layer domain guard
-- #53 Resolve an emoji URL to a canonical Handle
+- #53 Resolve an emoji URL to a canonical Handle — done
 - #54 Curate display names, synonyms and plurals for the launch set — done
 - #55 Apply the render-check verdict to the launch categories — blocked by #23 (needs two physical phones)
 
@@ -236,3 +236,9 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   curated name layer over it (#54): 307 rows of `displayName`, `synonyms`, plural and
   article, with 29 display names overridden and the rest defaulting to the CLDR name. 🧊 now
   says "three ice cubes" and answers a search for "ice cube".
+- 2026-09-12 — An emoji URL now resolves to exactly one canonical Handle (#53). The root-level
+  `[handle]` route is a thin adapter over `canonicalise`: 404 when a segment is not a Handle,
+  308 to the percent-encoded canonical path when it is spelled otherwise, and a deliberately
+  minimal "this Handle is available" placeholder when it is canonical. Confirmed against the
+  pinned Next.js version that `params` arrives percent-encoded **and upper-cased**, so a stray
+  variation selector — not lower-case hex — is the spelling that needs the redirect.

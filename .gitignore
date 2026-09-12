@@ -21,6 +21,10 @@ reports/
 .DS_Store
 Thumbs.db
 
+# Playwright test output — traces, screenshots and the HTML reporter
+test-results/
+playwright-report/
+
 # Playwright MCP output — screenshots saved to repo root by /run skill
 .playwright-mcp/
 /*.png
