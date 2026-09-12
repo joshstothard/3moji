@@ -1,5 +1,28 @@
 {
   "Footer": {
     "ui": "UI: v{version}"
+  },
+  "Home": {
+    "heading": "3moji",
+    "tagline": "A web address you can say out loud."
+  },
+  "HandleBuilder": {
+    "builderHeading": "Build your Handle",
+    "slotsLabel": "Your Handle",
+    "slotEmpty": "Slot {position}: empty",
+    "slotFilled": "Slot {position}: {name}. Activate to clear it.",
+    "spokenEmpty": "Pick three emoji, and this is how you will say your Handle.",
+    "spoken": "Say it: {spoken}",
+    "urlLabel": "Your URL",
+    "urlHost": "3moji.me/",
+    "pickerHeading": "Pick an emoji",
+    "pickerFull": "All three slots are full. Clear one to swap an emoji.",
+    "checking": "Checking whether this Handle is free…",
+    "stateAvailable": "This Handle is available.",
+    "stateHeld": "This Handle is on hold.",
+    "stateClaimed": "This Handle is taken.",
+    "stateNotClaimable": "This Handle cannot be claimed.",
+    "stateNotAHandle": "That is not a Handle.",
+    "stateUnknown": "We could not check this Handle just now."
   }
 }
