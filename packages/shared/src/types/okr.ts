@@ -37,12 +37,12 @@ export interface ProgressSummary {
   title: string;
   status: ObjectiveStatus;
   progressPercent: number;
-  keyResults: Array<{
+  keyResults: {
     id: string;
     title: string;
     progressPercent: number;
     currentValue: number;
     targetValue: number;
     unit: KeyResultUnit;
-  }>;
+  }[];
 }

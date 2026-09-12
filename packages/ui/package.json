@@ -6,12 +6,17 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "lint": "eslint src"
+  },
   "peerDependencies": {
     "react": ">=19.0.0",
     "react-dom": ">=19.0.0"
   },
   "devDependencies": {
+    "@template/eslint-config": "*",
     "@template/tsconfig": "*",
+    "eslint": "^10.8.1",
     "typescript": "^6.0.3"
   }
 }
