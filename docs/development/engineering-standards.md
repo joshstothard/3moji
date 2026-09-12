@@ -139,6 +139,7 @@ Refer to [quality-strategy.md](quality-strategy.md) for all testing standards an
 - **Input validation at all system boundaries** — validate API requests and third-party responses before use. Do not trust external input.
 - **Parameterised queries only** — never interpolate variables into SQL strings.
 - **No secrets in code or committed files** — all config comes from environment variables.
+- **The repository is public, so a leak is immediate and permanent.** Bots scan public pushes within seconds, git history cannot be reliably erased, and forks keep what they cloned. The response to a leaked credential is to **rotate it at the source** and then tidy the history — never the other way round, and never tidying alone. Remember that Actions logs, issues and pull requests are public too: GitHub masks values registered as repository secrets in logs, but not a connection string a command happened to print. See `AGENTS.md` § This Repository Is Public.
 - **Principle of Least Privilege** — IAM roles, database users, and API scopes get minimum required access.
 - **Defence in depth for access control** — auth enforced at multiple independent layers (middleware, service, query). A defect in one layer must not leak data.
 
