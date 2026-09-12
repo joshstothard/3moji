@@ -130,14 +130,25 @@ The branch's issue plus that list is the set of issues this PR closes; wherever 
 
     If the user says **yes** (or `--watch` was passed), keep this workflow active. Wait in no more than 60-second chunks for a total of 120 seconds, then check **all three** sources for activity. Prefer the current runtime's non-blocking delayed-continuation tool when it has one:
 
-    **Source 1 — CI checks** (`gh pr checks`):
+    **Source 1 — CI checks** (the head commit's check runs):
 
     ```bash
-    gh pr checks <number> --json name,bucket \
-      --jq '[.[] | select(.bucket == "pending")] | length'
+    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+    SHA=$(gh pr view <number> --json headRefOid -q .headRefOid)
+    gh api "repos/$REPO/commits/$SHA/check-runs" \
+      --jq '{total: .total_count, incomplete: [.check_runs[] | select(.status != "completed")] | length}'
     ```
 
-    `0` means every check has finished (passed, failed, skipped, or cancelled). `gh pr checks` exits non-zero while checks are pending or failing, so read the output rather than the exit code. If `gh` reports that no checks exist for the PR, treat CI as finished.
+    CI has finished when `total` is greater than zero **and** `incomplete` is zero.
+
+    **Do not use `gh pr checks` for this.** It has been observed printing "no checks reported on the
+    branch" for a PR whose head commit had ten check runs in flight, and the older form here
+    (`[.[] | select(.bucket == "pending")] | length`) then returns `0` — because `length` of an empty
+    list is `0` — so a watcher reads "CI finished" instantly and hands a PR with running CI straight to
+    the merge gate. Requiring `total > 0` is what separates "finished" from "nothing known yet".
+
+    If `total` stays `0` across several passes, the PR may genuinely have no CI configured; say so to
+    the user rather than treating silence as success.
 
     **Source 2 — formal reviews** (`/pulls/{pr}/reviews`), from a review bot such as Copilot or CodeRabbit, or a review you left on the PR yourself:
 

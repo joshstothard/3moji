@@ -222,13 +222,29 @@ The solo merge rule ([ADR-0002](../../../docs/adr/0002-track-work-in-github-issu
 
 ```bash
 gh pr view <pr-number> --json baseRefName,headRefName,body,closingIssuesReferences,mergeable,mergeStateStatus,reviews,statusCheckRollup
-gh pr checks <pr-number>
+
+# Check state comes from the commit, not from `gh pr checks`. See the warning below.
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+SHA=$(gh pr view <pr-number> --json headRefOid -q .headRefOid)
+gh api "repos/$REPO/commits/$SHA/check-runs" \
+  --jq '{total: .total_count, incomplete: [.check_runs[] | select(.status != "completed")] | length,
+         bad: [.check_runs[] | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral") | .name]}'
 ```
+
+> **Never decide eligibility from `gh pr checks` alone, and never treat an empty check set as green.**
+> `gh pr checks` has been observed printing "no checks reported on the branch" for a PR whose head
+> commit had ten check runs in flight, and `statusCheckRollup` came back empty for the same commit.
+> Both `[.[] | select(.bucket == "pending")] | length == 0` and "every check is SUCCESS" are
+> **satisfied vacuously by an empty list**, so that combination reads a PR with running or failing CI
+> as ready to merge. Read the commit's check runs, and require `total > 0`.
+> (`scripts/auto-merge.mjs` already gets this right — its `ciProblem()` returns `ci-missing`,
+> `ci-stale` or `ci-running` rather than falling through to success. This gate is the manual
+> equivalent and must match it.)
 
 A PR is **eligible to merge** when ALL of the following hold:
 
 1. **Mergeable** — `mergeable` is `MERGEABLE` and `mergeStateStatus` is not `DIRTY`/`BLOCKED` (no conflicts, no branch-protection block).
-2. **CI green** — every check in `gh pr checks` / `statusCheckRollup` is `SUCCESS` or neutral/skipped. Any `FAILURE`/`PENDING`/`ERROR` → not eligible yet.
+2. **CI green, and known to be green** — the head commit reports **at least one** check run (`total > 0`), every run is `completed`, and every conclusion is `success`, `skipped` or `neutral`. Any `FAILURE`/`PENDING`/`ERROR` → not eligible yet. **An empty or missing check set is "unknown", not "green"** → not eligible; re-read the commit's check runs rather than merging. A repository that genuinely runs no CI has to opt out of this condition explicitly, because otherwise "no evidence" and "good evidence" are indistinguishable.
 3. **No unresolved blocking findings** — no 🔴 AI self-review finding is still unresolved (Step 3 and the Step 7 follow-up comment).
 4. **Nothing left to action** — no NEEDS-DISCUSSION items are still awaiting the user's decision, and no reviewer's effective state (Step 8) is `CHANGES_REQUESTED`.
 5. **Targets `main`** — `baseRefName` is `main`. A stacked PR must not merge into its parent branch; once the parent has merged, retarget it with `gh pr edit <pr-number> --base main` and re-evaluate on the next pass.
