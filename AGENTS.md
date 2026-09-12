@@ -7,13 +7,13 @@
 
 ## Project Overview
 
-This is a Turborepo monorepo template with a **Next.js** frontend (`apps/web`, port 3000) and a **NestJS** backend (`apps/api`, port 3001). Shared configuration is centralised in `packages/` — TypeScript compiler options, ESLint rules, Jest presets, and a stub shared library. The entire stack is TypeScript strict-mode. When adopting this template, rename the `@template` namespace to your own project scope throughout all `package.json` files. Architecture decisions live in `docs/adr/`; research reports in `docs/reports/`; workstream plans in `docs/workstreams/`. Work is tracked in GitHub Issues on a GitHub Project board — see [docs/development/github-workflow.md](docs/development/github-workflow.md).
+This is a Turborepo monorepo with **Next.js** as the whole application (`apps/web`, port 3000): route handlers and server actions are thin adapters over the framework-free domain in `packages/core` ([ADR-0006](docs/adr/0006-nextjs-on-vercel-is-the-whole-application.md)). There is no separate backend process. Shared configuration is centralised in `packages/` — TypeScript compiler options, ESLint rules, Jest presets, and a stub shared library. The entire stack is TypeScript strict-mode. When adopting this template, rename the `@template` namespace to your own project scope throughout all `package.json` files. Architecture decisions live in `docs/adr/`; research reports in `docs/reports/`; workstream plans in `docs/workstreams/`. Work is tracked in GitHub Issues on a GitHub Project board — see [docs/development/github-workflow.md](docs/development/github-workflow.md).
 
 ## Repo Map
 
 ```
-apps/web/              — Next.js 15 (App Router) frontend
-apps/api/              — NestJS backend
+apps/web/              — Next.js (App Router): UI, route handlers, server actions
+packages/core/         — The domain: entities, use cases, ports. Framework-free, lint-enforced
 packages/shared/       — Shared types, validation schemas, utilities
 packages/ui/           — Shared React component library (stub)
 packages/eslint-config/ — Centralised ESLint rules (base / nextjs / nestjs)

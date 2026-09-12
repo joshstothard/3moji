@@ -813,8 +813,8 @@ for (const handler of commandHandlers(copilotHooks)) {
 
 // Any nested directory proves the hook resolves paths from the Git root rather
 // than the working directory. Do not hard-code one an adopter may have deleted.
-const nestedProbeDir = ["apps/api", "apps/web", "packages/shared"].find((dir) =>
-  fs.existsSync(at(dir)),
+const nestedProbeDir = ["apps/web", "packages/shared", "packages/core"].find(
+  (dir) => fs.existsSync(at(dir)),
 );
 assert(
   nestedProbeDir,

@@ -103,7 +103,7 @@ Based on the issue's domain (frontend, backend, infrastructure, shared), read th
 - Architecture changes: `docs/architecture/` (start with `README.md` and `system-overview.md`), and specific ADRs in `docs/adr/` only when those docs cite them
 - Planned work: the workstream in `docs/workstreams/` and any report in `docs/reports/` the issue or its epic links
 - Frontend work: `docs/development/engineering-standards.md` § Frontend, `apps/web/`
-- Backend work: `docs/development/engineering-standards.md` § Architecture and § Data Patterns, `apps/api/`
+- Backend work: `docs/development/engineering-standards.md` § Architecture and § Data Patterns, `packages/core/` (the domain) and the route handlers in `apps/web/`
 - Quality/testing: `docs/development/quality-strategy.md`
 
 ## Step 6 — Analyse the issue

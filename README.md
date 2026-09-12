@@ -23,15 +23,15 @@ The decision tickets are closed. [Issue #8](https://github.com/joshstothard/3moj
 
 **Decided, not yet built.** None of the following is installed in the repo today:
 
-| Area        | Decision                                                                                                                                                | Evidence                                               |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Shape       | Next.js on Vercel is the whole app; route handlers and server actions are thin adapters over a framework-free `packages/core`. `apps/api` gets deleted. | [#17](https://github.com/joshstothard/3moji/issues/17) |
-| Auth        | Better Auth with its Drizzle adapter; email and password only, tables in our own Postgres; `emailVerified` is the Claim gate                            | [report](docs/reports/2026-09-11-auth-library.md)      |
-| Data        | Drizzle ORM on Neon Postgres via the Vercel Marketplace; migrations run in the build step                                                               | [report](docs/reports/2026-09-11-hosting-and-email.md) |
-| Email       | Resend, from a `3moji.me` subdomain                                                                                                                     | [report](docs/reports/2026-09-11-hosting-and-email.md) |
-| Emoji Set   | Pinned to Emoji 12.0 — 1,053 single-codepoint emoji that render on iOS 13.2+ and Android 10+, giving ~1.17 billion three-emoji Handles                  | [report](docs/reports/2026-09-11-emoji-set.md)         |
-| Handle URLs | Browsers always percent-encode the path; canonicalise to a bare code-point sequence, 308 other spellings, 404 the rest                                  | [report](docs/reports/2026-09-11-emoji-urls.md)        |
-| Hosting     | Vercel Hobby and free tiers — which forbids commercial use                                                                                              | [report](docs/reports/2026-09-11-hosting-and-email.md) |
+| Area        | Decision                                                                                                                                              | Evidence                                               |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Shape       | Next.js on Vercel is the whole app; route handlers and server actions are thin adapters over a framework-free `packages/core`. `apps/api` is deleted. | [#17](https://github.com/joshstothard/3moji/issues/17) |
+| Auth        | Better Auth with its Drizzle adapter; email and password only, tables in our own Postgres; `emailVerified` is the Claim gate                          | [report](docs/reports/2026-09-11-auth-library.md)      |
+| Data        | Drizzle ORM on Neon Postgres via the Vercel Marketplace; migrations run in the build step                                                             | [report](docs/reports/2026-09-11-hosting-and-email.md) |
+| Email       | Resend, from a `3moji.me` subdomain                                                                                                                   | [report](docs/reports/2026-09-11-hosting-and-email.md) |
+| Emoji Set   | Pinned to Emoji 12.0 — 1,053 single-codepoint emoji that render on iOS 13.2+ and Android 10+, giving ~1.17 billion three-emoji Handles                | [report](docs/reports/2026-09-11-emoji-set.md)         |
+| Handle URLs | Browsers always percent-encode the path; canonicalise to a bare code-point sequence, 308 other spellings, 404 the rest                                | [report](docs/reports/2026-09-11-emoji-urls.md)        |
+| Hosting     | Vercel Hobby and free tiers — which forbids commercial use                                                                                            | [report](docs/reports/2026-09-11-hosting-and-email.md) |
 
 The reports are dated snapshots and still carry `Status: Draft`; where a report and an ADR disagree, the ADR wins.
 
@@ -40,8 +40,8 @@ The reports are dated snapshots and still carry `Status: Draft`; where a report 
 A Turborepo monorepo on npm workspaces, TypeScript in strict mode throughout — adopted from the template this repo grew out of, and still carrying its demo app:
 
 ```
-apps/web/        Next.js 16 (App Router) — demo OKR pages, to be replaced
-apps/api/        NestJS — demo OKR module over an in-memory store; deleted in Phase 1
+apps/web/        Next.js 16 (App Router) — the whole app: UI, route handlers, server actions
+packages/core/   the domain — entities, use cases, ports. Framework-free, enforced by lint
 packages/        shared types, UI, test-utils, and the tsconfig/eslint/jest presets
 docs/            reports, ADRs, architecture, workstreams, engineering standards
 scripts/         verify.sh and the GitHub Issues/Project helper
@@ -53,7 +53,7 @@ Packages are still published under the `@template/*` scope. [`docs/architecture/
 
 ```bash
 npm install          # also installs the git hooks
-npm run dev          # web on :3000, api on :3001
+npm run dev          # web on :3000
 scripts/verify.sh    # the full CI suite, locally
 ```
 
