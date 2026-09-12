@@ -160,8 +160,13 @@ const FOOD_AND_DRINK: CurationTable = {
   },
   "🍆": {
     spokenName: "eggplant",
-    plural: "eggplants",
-    synonyms: ["aubergine"],
+    // ADR-0007's consequences call this the aubergine, and an accepted ADR is
+    // immutable — so the data follows the decision, not the other way round.
+    // 3moji is a British product; "eggplant" survives as a synonym so a search
+    // for it still works.
+    displayName: "aubergine",
+    plural: "aubergines",
+    synonyms: ["eggplant"],
   },
   "🥔": {
     spokenName: "potato",
