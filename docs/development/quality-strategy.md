@@ -24,6 +24,15 @@
 - **Flakes are defects:** a test that fails non-deterministically more than twice in 7 days gets a GitHub issue (see `nightly-check`).
 - **No hard-coded credentials in tests:** tests read credentials from environment variables and throw clearly when absent. The only exception is a mocked secrets provider returning fixture values.
 
+## API unit tests (`apps/api`)
+
+API tests run under Jest 30 + ts-jest against CommonJS test files. NestJS 12 packages are ESM-only (`"type": "module"`), and the API deliberately stays CommonJS, so every spec `require()`s an ES module.
+
+- **Jest loads ESM through `require()` only when Node exposes `vm.SourceTextModule.prototype.hasAsyncGraph`** — Node 24.9+, and only with `--experimental-vm-modules`. Without the flag every suite fails before any test runs with `Must use import to load ES Module: …/@nestjs/testing/index.js`.
+- The flag therefore lives in the `apps/api` `test` script itself: `node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --coverage` (Jest's documented form, and portable to Windows `cmd.exe`, unlike an inline `NODE_OPTIONS=` prefix). Run the tests through `npm test`, not bare `npx jest`.
+- Each Jest worker prints a `VM Modules is an experimental feature` warning. It is expected; do not suppress it.
+- Anything that spawns Jest itself (a Stryker Jest runner, an IDE test runner) does not inherit the script's flag and must pass `--experimental-vm-modules` (e.g. via `NODE_OPTIONS`) on its own.
+
 ## Web unit tests (`apps/web`)
 
 Web tests run under Jest + `jest-environment-jsdom` with React Testing Library. Conventions:

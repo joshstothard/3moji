@@ -8,10 +8,25 @@ updates:
       time: "06:00"
       timezone: Europe/London
     groups:
+      # Every @nestjs/* package must move to a new major together — core 12
+      # imports @nestjs/common/internal, which common 11 lacks — so a split
+      # per-package major PR can never pass CI on its own.
+      nestjs:
+        patterns:
+          - "@nestjs/*"
+        update-types:
+          - major
       minor-and-patch:
         update-types:
           - minor
           - patch
+    ignore:
+      # TypeScript 7 is not yet supported by our toolchain: ts-jest 29 peers
+      # `typescript >=4.3 <7` and typescript-eslint 8 peers `<6.1.0`. Remove this
+      # once both widen their peer ranges.
+      - dependency-name: typescript
+        versions:
+          - ">=7.0.0"
     labels:
       - dependencies
     open-pull-requests-limit: 5
