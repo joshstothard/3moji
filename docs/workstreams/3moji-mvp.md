@@ -143,7 +143,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - [ ] Releasing deletes the Account and writes a tombstone carrying **no user reference** — the row is the canonical key and a timestamp, nothing more ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md) decision 3).
 - [ ] A Handle released moments ago **can** be claimed immediately, asserted against a real Postgres. This is [#63](https://github.com/joshstothard/3moji/issues/63)'s outstanding criterion: "no cooldown" is satisfied by accident unless a test makes it deliberate.
 - [ ] The claim transaction re-checks reservations inside its own transaction, proven by a test that reserves a Handle mid-flight.
-- [ ] A reserved or blocked Handle never renders "This Handle is available".
+- [x] A reserved or blocked Handle never renders "This Handle is available". Done by #80: `/🍕🍕🍕` and `/🔪🔪🔪` resolve 200 and read "This Handle is reserved.", with no reason given.
 
 **Dependencies:** Phases 1 and 2. ADR-0004 **as amended by** [ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md), which resolved the cooldown contradiction that blocked this phase; [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
 
@@ -154,7 +154,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - #77 Add the Handle repository port and its availability read
 - #78 Build the home-page Handle builder with live URL preview
 - #79 Add category tabs and search to the builder
-- #80 Render the availability states and swap suggestions
+- #80 Render the availability states and swap suggestions — done (also closed #68)
 - #81 Claim: sign-up and hold as one atomic act
 - #82 Finalise the Claim on verification, with the hold screen and resend
 - #83 Expire holds lazily and delete the unverified Account

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   canonicalise,
   findCuratedEmoji,
   HANDLE_LENGTH,
   spokenHandle,
+  swapSuggestions,
+  type SwapSuggestion,
 } from "@template/core/browser";
 import { EmojiPicker } from "./emoji-picker";
 import type { AvailabilityState } from "./availability-state";
@@ -47,9 +49,14 @@ const copy = en.HandleBuilder;
 /**
  * One line per answer, and a `Record` over the union rather than a `switch`, so
  * a sixth state cannot be added to the domain without this failing to compile.
- * The copy is deliberately flat: the taken and held states get their real
- * treatment, with swap suggestions, in
- * [#80](https://github.com/joshstothard/3moji/issues/80).
+ *
+ * Two of them say deliberately little. **Held names no holder and no expiry**
+ * ([ADR-0004](../../../../docs/adr/0004-the-handle-model.md): a countdown is an
+ * information leak and an invitation to wait), and **reserved does not say
+ * why** — naming the block would be a hint to go looking for the list. Neither
+ * is a matter of restraint in the JSX: the answer arriving from the server is a
+ * state name, so the expiry and the `Reservation` carrying the reason never
+ * cross into the browser at all.
  */
 const AVAILABILITY_COPY: Readonly<Record<AvailabilityView, string>> = {
   checking: copy.checking,
@@ -76,6 +83,16 @@ function format(
   );
 }
 
+/**
+ * How a whole Handle is said, or its glyphs if the domain has no form for it.
+ * `spokenHandle` owns the run-collapsing rules, so a suggestion reads "two
+ * pizzas and some grapes" rather than three names in a row.
+ */
+function spokenOf(entries: readonly { readonly emoji: string }[]): string {
+  const emoji = entries.map((entry) => entry.emoji);
+  return spokenHandle(emoji) ?? emoji.join("");
+}
+
 /** The curated display name of an emoji, or the glyph if it has none. */
 function nameOf(emoji: string): string {
   return findCuratedEmoji(emoji)?.displayName ?? emoji;
@@ -84,6 +101,20 @@ function nameOf(emoji: string): string {
 function isFilled(slot: string | undefined): slot is string {
   return slot !== undefined;
 }
+
+/**
+ * The answers a visitor cannot have the Handle under, and is therefore owed
+ * something better than a dead end.
+ *
+ * `unknown` is not one of them: it means the read failed, not that the Handle
+ * is gone, and suggesting swaps away from a Handle that may well be free would
+ * be its own small lie.
+ */
+const UNAVAILABLE: readonly AvailabilityView[] = [
+  "claimed",
+  "held",
+  "not-claimable",
+];
 
 /**
  * The path segment to ask the server about: the canonical percent-encoded form,
@@ -102,6 +133,17 @@ function segmentOf(filled: readonly string[]): string | undefined {
 export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
   const [slots, setSlots] =
     useState<readonly (string | undefined)[]>(EMPTY_SLOTS);
+  /**
+   * The slot controls, so applying a swap can put focus on the slot that
+   * changed.
+   *
+   * A suggestion button disappears the moment it is used — the Handle is no
+   * longer the taken one — and an unmounted focused node drops focus to
+   * `<body>`, the regression this component's permanent controls exist to
+   * avoid. Moving focus deliberately, to a control that is never unmounted, is
+   * the fix; leaving it to React is how focus gets lost.
+   */
+  const slotControls = useRef(new Map<number, HTMLButtonElement>());
   /**
    * The last answer received, **with the Handle it answers about**.
    *
@@ -153,6 +195,18 @@ export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
         ? answer.state
         : "checking";
 
+  /**
+   * Derived, not stored: the suggestions are a pure function of the pick and
+   * the answer about it, so there is no second piece of state to fall out of
+   * step with the first. `swapSuggestions` is domain — same group, never
+   * Reserved, deterministic — and it promises "well-formed and not Reserved",
+   * not "free": proving free would be one database read per suggestion.
+   */
+  const suggestions =
+    availability !== undefined && UNAVAILABLE.includes(availability)
+      ? swapSuggestions({ emoji: filled })
+      : [];
+
   function fill(emoji: string) {
     setSlots((current) => {
       const next = [...current];
@@ -163,6 +217,17 @@ export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
       next[index] = emoji;
       return next;
     });
+  }
+
+  /**
+   * Take a suggestion: the whole Handle is replaced, because a suggestion is a
+   * Handle rather than an emoji, and focus follows the emoji that changed.
+   */
+  function applySwap({ handle, position }: SwapSuggestion) {
+    setSlots(handle.emoji.map((entry) => entry.emoji));
+    // The slot is a permanent control, already in the document, so this lands
+    // before the suggestion that had focus is unmounted.
+    slotControls.current.get(position)?.focus();
   }
 
   function clear(index: number) {
@@ -194,6 +259,13 @@ export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
             // button — the focus loss this component exists to avoid.
             <button
               key={index}
+              ref={(node) => {
+                if (node === null) {
+                  slotControls.current.delete(index);
+                } else {
+                  slotControls.current.set(index, node);
+                }
+              }}
               type="button"
               aria-disabled={emoji === undefined}
               aria-label={
@@ -243,6 +315,38 @@ export function HandleBuilder({ checkAvailability }: HandleBuilderProps) {
         >
           {availability === undefined ? "" : AVAILABILITY_COPY[availability]}
         </p>
+
+        {suggestions.length === 0 ? null : (
+          <div className="mt-6">
+            <h3
+              id="handle-swaps-heading"
+              className="text-center text-sm text-slate-500"
+            >
+              {copy.swapHeading}
+            </h3>
+            <div
+              role="group"
+              aria-labelledby="handle-swaps-heading"
+              className="mt-3 flex justify-center gap-3"
+            >
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.handle.key}
+                  type="button"
+                  aria-label={format(copy.swapSuggestion, {
+                    spoken: spokenOf(suggestion.handle.emoji),
+                  })}
+                  onClick={() => {
+                    applySwap(suggestion);
+                  }}
+                  className="px-3 h-12 text-2xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  <span aria-hidden="true">{suggestion.handle.key}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <EmojiPicker onPick={fill} full={full} />

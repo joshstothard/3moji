@@ -4,6 +4,9 @@ import {
   spokenHandle,
   type CanonicalHandle,
 } from "@template/core";
+import { readAvailability } from "../../lib/availability";
+import type { AvailabilityState } from "../../components/availability-state";
+import en from "../../../../../packages/shared/messages/en.json";
 
 /**
  * The Handle route: `3moji.me/🧊🧊🧊`.
@@ -58,22 +61,80 @@ export default async function HandlePage({ params }: HandlePageProps) {
     permanentRedirect(`/${result.encoded}`);
   }
 
-  return <AvailableHandle handle={result} />;
+  // Both early exits are above, and deliberately so: `notFound` and
+  // `permanentRedirect` signal by throwing, so anything that catches around
+  // them — and the read below has a `try/catch` inside it — would swallow the
+  // 404 and the 308 and answer 200 with an availability line for junk.
+  const state = await readAvailability(result.encoded);
+
+  return <ResolvedHandle handle={result} state={state} />;
 }
 
+const copy = en.HandlePage;
+
 /**
- * **Deliberately minimal.** Nothing can be claimed yet — the claim flow is
- * Phase 3 and the Profile is Phase 4 — so every Handle that resolves is
- * unclaimed, and this page says exactly that and stops. It reads no database,
- * which also keeps it honest: a read would go through `lib/services.ts`, whose
- * five required environment variables are not all set in CI's E2E job.
+ * What a visitor can be told about a Handle that resolves.
+ *
+ * `not-a-handle` is excluded because this component cannot be reached with
+ * one: the route canonicalised the segment itself and 404'd every rejection
+ * before the read. Excluding it is better than inventing copy that can never
+ * be shown — a string a translator would have to translate and nobody would
+ * ever read.
+ */
+type ResolvedState = Exclude<AvailabilityState, "not-a-handle">;
+
+/**
+ * One line per answer, and a `Record` over the union rather than a `switch`, so
+ * a sixth state cannot be added to the domain without this failing to compile.
+ *
+ * Two of the five are the point of
+ * [#68](https://github.com/joshstothard/3moji/issues/68):
+ *
+ * - **Reserved says nothing about why.** `/🍕🍕🍕` is platform-owned and
+ *   `/🔪🔪🔪` carries a blocked emoji, and both read the same line. Naming the
+ *   block would be a hint to go looking for the list — and the page could not
+ *   name it even carelessly, because `readAvailability` answers with a state
+ *   name and the `Reservation` carrying the reason never leaves the domain.
+ * - **Held says nothing about who or until when.** ADR-0004 treats a countdown
+ *   as an information leak and an invitation to wait. Same mechanism: there is
+ *   no expiry in a state name to render.
+ */
+const AVAILABILITY_COPY: Readonly<Record<ResolvedState, string>> = {
+  available: copy.stateAvailable,
+  held: copy.stateHeld,
+  claimed: copy.stateClaimed,
+  "not-claimable": copy.stateNotClaimable,
+  unknown: copy.stateUnknown,
+};
+
+/**
+ * A Handle that resolves, and what is true about it.
+ *
+ * **It resolves whatever that answer is.** A Reserved Handle is a real,
+ * well-formed Handle that nobody may own, so 404 would be a lie of the opposite
+ * kind to the one #68 reported; a claimed one gets its Profile in Phase 4.
  *
  * The emoji carry the meaning, so they are the heading, and `role="img"` with
  * the Spoken Name as the accessible name is what makes the heading announce as
  * "three ice cubes" rather than as three code points read out one by one.
+ *
+ * Swap suggestions are deliberately **not** here. They are offered where a
+ * visitor is picking — the builder on `/` — and a Handle somebody typed into
+ * the address bar is not a pick. It also keeps this page free of controls,
+ * which its own test asserts as the tripwire for growing past its remit.
  */
-function AvailableHandle({ handle }: { readonly handle: CanonicalHandle }) {
+function ResolvedHandle({
+  handle,
+  state,
+}: {
+  readonly handle: CanonicalHandle;
+  readonly state: AvailabilityState;
+}) {
   const spoken = spokenHandle(handle.emoji.map((entry) => entry.emoji));
+  // The route canonicalised this segment, so the domain cannot honestly answer
+  // `not-a-handle` about it. If it somehow does, say so honestly rather than
+  // guessing "available" — which is the defect #68 reported.
+  const resolved: ResolvedState = state === "not-a-handle" ? "unknown" : state;
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
@@ -83,7 +144,7 @@ function AvailableHandle({ handle }: { readonly handle: CanonicalHandle }) {
             {handle.key}
           </span>
         </h1>
-        <p className="text-lg text-slate-500">This Handle is available.</p>
+        <p className="text-lg text-slate-500">{AVAILABILITY_COPY[resolved]}</p>
       </div>
     </main>
   );

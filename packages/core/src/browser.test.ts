@@ -13,11 +13,14 @@ import {
   RELEASED_CATEGORIES,
   searchEmoji,
   spokenHandle,
+  SWAP_SUGGESTION_LIMIT,
+  swapSuggestions,
 } from "./browser";
 import type {
   CanonicalisationResult,
   CuratedEmoji,
   EmojiSetEntry,
+  SwapSuggestion,
 } from "./browser";
 
 /**
@@ -172,6 +175,19 @@ describe("what the browser entry point exports", () => {
     expect(result.ok ? result.encoded : undefined).toBe(
       "%F0%9F%A7%8A%F0%9F%A7%8A%F0%9F%A7%8A",
     );
+  });
+
+  it("exports the swap suggestions the builder offers for a taken pick", () => {
+    // The builder runs in the browser, so this function has to be reachable
+    // from a client component without dragging the claim path in with it.
+    const suggestions: readonly SwapSuggestion[] = swapSuggestions({
+      emoji: ["\u{1F355}", "\u{1F355}", "\u{1F355}"],
+    });
+
+    expect(suggestions).toHaveLength(SWAP_SUGGESTION_LIMIT);
+    expect(
+      suggestions.map((suggestion) => suggestion.handle.key),
+    ).not.toContain("\u{1F355}\u{1F355}\u{1F355}");
   });
 
   it("exports the categories, so a picker can tell a drop from the rest", () => {

@@ -28,6 +28,15 @@
     "stateClaimed": "This Handle is taken.",
     "stateNotClaimable": "This Handle cannot be claimed.",
     "stateNotAHandle": "That is not a Handle.",
+    "stateUnknown": "We could not check this Handle just now.",
+    "swapHeading": "Try one of these instead",
+    "swapSuggestion": "Use {spoken}"
+  },
+  "HandlePage": {
+    "stateAvailable": "This Handle is available.",
+    "stateHeld": "This Handle is on hold.",
+    "stateClaimed": "This Handle is taken.",
+    "stateNotClaimable": "This Handle is reserved.",
     "stateUnknown": "We could not check this Handle just now."
   },
   "Claim": {
