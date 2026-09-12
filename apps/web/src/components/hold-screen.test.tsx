@@ -189,12 +189,24 @@ describe("HoldScreen", () => {
       );
     });
 
-    it("rounds the hour limit up, because 'in 0 minutes' is not an instruction", () => {
+    it("rounds the hour limit up, and says it in English", () => {
+      // Rounded up, because "try again in 0 minutes" is not an instruction —
+      // and a singular form, because "1 minutes" is not English.
       renderScreen("pending", { notice: "too-many", retrySeconds: 20 });
 
       expect(screen.getByRole("status")).toHaveTextContent(
-        /try again in 1 minutes/i,
+        /try again in a minute/i,
       );
+      expect(screen.getByRole("status")).not.toHaveTextContent(/1 minutes/);
+    });
+
+    it("says a single second in the singular too", () => {
+      renderScreen("pending", { notice: "too-soon", retrySeconds: 1 });
+
+      expect(screen.getByRole("status")).toHaveTextContent(
+        /try again in a second/i,
+      );
+      expect(screen.getByRole("status")).not.toHaveTextContent(/1 seconds/);
     });
 
     it("reports minutes for a long wait", () => {

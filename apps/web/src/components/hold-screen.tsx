@@ -82,15 +82,22 @@ function noticeText(
   switch (notice) {
     case "sent":
       return copy.resendSent;
-    case "too-soon":
-      return format(copy.resendTooSoon, {
-        seconds: String(retrySeconds ?? 60),
-      });
-    case "too-many":
-      return format(copy.resendTooMany, {
-        // Rounded up: "try again in 0 minutes" is not an instruction.
-        minutes: String(Math.max(1, Math.ceil((retrySeconds ?? 3600) / 60))),
-      });
+    case "too-soon": {
+      const seconds = retrySeconds ?? 60;
+      // A singular key rather than "1 seconds". There is no plural machinery
+      // here yet and one extra string is cheaper than inventing some; a
+      // locale needing more forms will need that machinery anyway.
+      return seconds === 1
+        ? copy.resendTooSoonOne
+        : format(copy.resendTooSoon, { seconds: String(seconds) });
+    }
+    case "too-many": {
+      // Rounded up: "try again in 0 minutes" is not an instruction.
+      const minutes = Math.max(1, Math.ceil((retrySeconds ?? 3600) / 60));
+      return minutes === 1
+        ? copy.resendTooManyOne
+        : format(copy.resendTooMany, { minutes: String(minutes) });
+    }
     case "invalid":
       return copy.resendInvalid;
     case "failed":
