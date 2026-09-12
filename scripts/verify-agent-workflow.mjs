@@ -1216,6 +1216,48 @@ try {
   fs.rmSync(formatterFixture, { recursive: true, force: true });
 }
 
+// `gh pr checks` can print "no checks reported on the branch" for a PR whose head
+// commit has check runs in flight (observed on PR #64, ten runs, four in progress),
+// and `statusCheckRollup` came back empty for the same commit. Every "are the checks
+// done?" idiom built on it is then satisfied **vacuously by an empty list** --
+// `[.[] | select(.bucket == "pending")] | length` is `0`, and "every check is
+// SUCCESS" is true of no checks -- so a gate reads a PR with running or failing CI
+// as ready to merge. `scripts/auto-merge.mjs` avoids this by returning `ci-missing`
+// rather than falling through to success; issue #71 fixed the skills to match.
+//
+// This asserts the unsafe idiom does not come back. It is a text check because the
+// decision lives in skill instructions rather than in code, so there is no pure
+// function to unit-test -- which is exactly why it needs a guard here.
+// Only **runnable** occurrences count. Prose that quotes the idiom in order to
+// forbid it is the opposite of the defect, and an earlier version of this check
+// failed on exactly that -- the warning text added by #71 -- so it reads fenced
+// code blocks rather than the whole document.
+const pendingBucketIdiom = /select\(\s*\.bucket\s*==\s*"pending"\s*\)/;
+// Fences are matched with optional leading whitespace: the blocks in `pr/SKILL.md`
+// are indented four spaces inside a numbered list, and a line-start-anchored fence
+// pattern silently matched none of them -- so the first version of this check
+// passed while the defect it exists to catch was sitting in the file.
+const fencedBlocks = (markdown) =>
+  [...markdown.matchAll(/^[ \t]*```[^\n]*\n([\s\S]*?)^[ \t]*```/gm)].map(
+    (m) => m[1],
+  );
+for (const skill of [...manualSkills, ...automaticSkills]) {
+  const file = path.join(".agents", "skills", skill, "SKILL.md");
+  if (!fs.existsSync(at(file))) continue;
+  const offending = fencedBlocks(read(file)).filter((block) =>
+    pendingBucketIdiom.test(block),
+  );
+  assert.equal(
+    offending.length,
+    0,
+    `${file} has a runnable block counting pending checks via ` +
+      `\`gh pr checks ... select(.bucket == "pending")\`. That returns 0 for an empty check set, ` +
+      `so "no checks reported" reads as "CI finished" (see issue #71). Read the head commit's ` +
+      `check runs instead and require total_count > 0. Quoting the idiom in prose is fine; ` +
+      `this only inspects fenced code blocks.`,
+  );
+}
+
 console.log(
   `Agent workflow parity passed for ${manualSkills.length} manual workflows, ${automaticSkills.length} automatic skills, and ${roleSkills.length} shared roles.`,
 );
