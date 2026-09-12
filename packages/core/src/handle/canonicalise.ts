@@ -27,25 +27,6 @@ function isPresentationSelector(codePoint: string): boolean {
   return PRESENTATION_SELECTORS.includes(codePoint);
 }
 
-/**
- * Why a segment is not a Handle. The caller branches on this, so the four are
- * deliberately different answers rather than one "invalid":
- *
- * - `malformed-encoding` — `decodeURIComponent` threw; the path is not even text.
- * - `wrong-length` — not exactly {@link HANDLE_LENGTH} code points. Covers the
- *   Reserved one- and two-emoji lengths.
- * - `unknown-codepoint` — not in the pinned candidate list at all: a letter, a
- *   ZWJ, a skin-tone modifier, an emoji the Emoji Set excludes.
- * - `unreleased-category` — a real Emoji Set entry whose category has not
- *   dropped yet (ADR-0007). "Not claimable yet" is a different answer from
- *   "not an emoji we know", and the interface may want to say so.
- */
-export type CanonicalisationFailureReason =
-  | "malformed-encoding"
-  | "wrong-length"
-  | "unknown-codepoint"
-  | "unreleased-category";
-
 /** A segment that is a Handle, with the canonical key it resolves to. */
 export interface CanonicalHandle {
   readonly ok: true;
@@ -94,6 +75,23 @@ export type CanonicalisationFailure =
       readonly codepoint: string;
       readonly category: EmojiCategory;
     };
+
+/**
+ * Why a segment is not a Handle. Derived from {@link CanonicalisationFailure}
+ * rather than spelled out, so a fifth variant cannot be added to the union
+ * without appearing here. The caller branches on this, so the four are
+ * deliberately different answers rather than one "invalid":
+ *
+ * - `malformed-encoding` — `decodeURIComponent` threw; the path is not even text.
+ * - `wrong-length` — not exactly {@link HANDLE_LENGTH} code points. Covers the
+ *   Reserved one- and two-emoji lengths.
+ * - `unknown-codepoint` — not in the pinned candidate list at all: a letter, a
+ *   ZWJ, a skin-tone modifier, an emoji the Emoji Set excludes.
+ * - `unreleased-category` — a real Emoji Set entry whose category has not
+ *   dropped yet (ADR-0007). "Not claimable yet" is a different answer from
+ *   "not an emoji we know", and the interface may want to say so.
+ */
+export type CanonicalisationFailureReason = CanonicalisationFailure["reason"];
 
 export type CanonicalisationResult = CanonicalHandle | CanonicalisationFailure;
 
