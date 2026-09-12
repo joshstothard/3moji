@@ -57,7 +57,7 @@ npm run dev          # web on :3000, api on :3001
 scripts/verify.sh    # the full CI suite, locally
 ```
 
-Node 20+ and npm 10+. More in [docs/development/local-setup.md](docs/development/local-setup.md).
+Node 24.15+ and npm 10+ — `.nvmrc` pins the major. More in [docs/development/local-setup.md](docs/development/local-setup.md).
 
 ## How this repo is run
 
