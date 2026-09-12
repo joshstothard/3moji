@@ -26,6 +26,16 @@ If there are no open Dependabot PRs, output: "✅ No open Dependabot PRs." and s
 gh pr checks <number> --json name,state,conclusion,link
 ```
 
+> If that prints nothing, or "no checks reported on the branch", **do not read it as "CI passed"** —
+> `gh pr checks` has been observed returning nothing for a commit with checks in flight. Fall back to
+> the commit's own check runs, which is also what the merge gate in `pr-action-review-mine-loop` uses:
+>
+> ```bash
+> REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+> SHA=$(gh pr view <number> --json headRefOid -q .headRefOid)
+> gh api "repos/$REPO/commits/$SHA/check-runs" --jq '.total_count, (.check_runs[] | "\(.name): \(.status) \(.conclusion // "")")'
+> ```
+
 Classify each PR as:
 
 - **Green** — all checks passed
