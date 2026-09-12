@@ -46,11 +46,61 @@ function renderBuilder(
   checkAvailability: (segment: string) => Promise<AvailabilityState> = jest.fn(
     (_segment: string) => Promise.resolve("available" as const),
   ),
+  initialEmoji?: readonly string[],
 ) {
   const user = userEvent.setup();
-  render(<HandleBuilder checkAvailability={checkAvailability} />);
+  render(
+    <HandleBuilder
+      checkAvailability={checkAvailability}
+      initialEmoji={initialEmoji}
+    />,
+  );
   return { user, checkAvailability };
 }
+
+describe("the builder opened on a Handle already picked", () => {
+  /**
+   * What `/[handle]` does with an unclaimed Handle
+   * ([#105](https://github.com/joshstothard/3moji/issues/105)): the same
+   * builder, handed the three emoji from the path. One optional prop rather
+   * than a second builder, so the focus behaviour above cannot drift apart
+   * between the two surfaces.
+   */
+  it("opens with those emoji in the slots, in order", async () => {
+    renderBuilder(undefined, [ICE, "\u{1F355}", ICE]);
+
+    expect(filledSlot(1, "ice cube")).toBeInTheDocument();
+    expect(filledSlot(2, "pizza")).toBeInTheDocument();
+    expect(filledSlot(3, "ice cube")).toBeInTheDocument();
+    // A full Handle is asked about on mount; let the answer land inside the
+    // test rather than after it.
+    await screen.findByText(copy.stateAvailable);
+  });
+
+  it("asks about that Handle straight away, with no pick to wait for", async () => {
+    const checkAvailability = jest.fn((_segment: string) =>
+      Promise.resolve("available" as const),
+    );
+
+    renderBuilder(checkAvailability, [ICE, ICE, ICE]);
+
+    await waitFor(() => {
+      expect(checkAvailability).toHaveBeenCalledWith(ENCODED_ICE_TRIPLE);
+    });
+    expect(await screen.findByText(copy.stateAvailable)).toBeInTheDocument();
+  });
+
+  it("still clears a slot to an empty one, exactly as a picked slot does", async () => {
+    const { user } = renderBuilder(undefined, [ICE, ICE, ICE]);
+    // The pre-filled builder asks about the Handle on mount, so let that answer
+    // land before clicking: what is being asserted is the clear, not a race.
+    await screen.findByText(copy.stateAvailable);
+
+    await user.click(filledSlot(2, "ice cube"));
+
+    expect(slot(2)).toBeInTheDocument();
+  });
+});
 
 describe("the Handle builder", () => {
   it("starts with three empty slots", () => {

@@ -1,9 +1,18 @@
 import type { ReactElement } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { UserEvent } from "@testing-library/user-event";
 import type { AvailabilityState } from "../../components/availability-state";
 import en from "../../../../../packages/shared/messages/en.json";
 
 const copy = en.HandlePage;
+/**
+ * The builder's own namespace. An unclaimed Handle renders the builder, so the
+ * wording a visitor reads below the heading is the builder's — including the
+ * live availability line, which is why "This Handle is available." no longer
+ * belongs to this page at all.
+ */
+const builderCopy = en.HandleBuilder;
 
 /**
  * What the page reads off a canonicalisation result. Spelled out here rather
@@ -85,6 +94,26 @@ jest.mock("../../lib/availability", () => ({
   readAvailability: (segment: string) => readAvailability(segment),
 }));
 
+/**
+ * The builder's availability read is a **server action** — `"use server"`, and
+ * `lib/services.ts` behind it — so importing the real module would drag the
+ * server runtime into a jsdom suite. It is faked here for the same reason the
+ * page's own read is, and for the same reason the builder takes it as a prop:
+ * it is the one collaborator that leaves the browser.
+ *
+ * The builder itself is **not** faked. It is the component under test as much
+ * as the route is: the acceptance criteria are about what a visitor can do at
+ * `/🧊🧊🧊`, and a stubbed builder would assert nothing about focus, the
+ * category tabs, or the live availability line.
+ */
+const checkAvailability = jest.fn(
+  (_segment: string): Promise<AvailabilityState> =>
+    Promise.resolve("available"),
+);
+jest.mock("../../components/availability-action", () => ({
+  checkAvailability: (segment: string) => checkAvailability(segment),
+}));
+
 import HandlePage from "./page";
 
 function visit(handle: string): Promise<ReactElement> {
@@ -96,7 +125,12 @@ describe("the Handle route", () => {
     jest.clearAllMocks();
     canonicalise.mockReturnValue(resolved);
     spokenHandle.mockReturnValue(SPOKEN);
-    readAvailability.mockResolvedValue("available");
+    // Claimed, not available, because available is now the one answer that
+    // renders the whole builder. A test about redirects or accessible names
+    // should not be dragging 307 emoji buttons into the document to get there;
+    // the unclaimed state has its own describe block below.
+    readAvailability.mockResolvedValue("claimed");
+    checkAvailability.mockResolvedValue("available");
   });
 
   it("hands the segment to the domain exactly as Next.js gave it, still encoded", async () => {
@@ -153,7 +187,7 @@ describe("the Handle route", () => {
     expect(screen.getByRole("img", { name: SPOKEN })).toHaveTextContent(
       `${ICE}${ICE}${ICE}`,
     );
-    expect(screen.getByText(copy.stateAvailable)).toBeInTheDocument();
+    expect(screen.getByText(copy.stateClaimed)).toBeInTheDocument();
     expect(notFound).not.toHaveBeenCalled();
     expect(permanentRedirect).not.toHaveBeenCalled();
   });
@@ -165,7 +199,6 @@ describe("the Handle route", () => {
   });
 
   it.each([
-    ["available", copy.stateAvailable],
     ["held", copy.stateHeld],
     ["claimed", copy.stateClaimed],
     ["not-claimable", copy.stateNotClaimable],
@@ -187,7 +220,9 @@ describe("the Handle route", () => {
 
       render(await visit(ENCODED));
 
-      expect(screen.queryByText(copy.stateAvailable)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(builderCopy.stateAvailable),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -259,12 +294,180 @@ describe("the Handle route", () => {
     ).toBeInTheDocument();
   });
 
-  it("is a placeholder only: it offers no builder and no profile links", async () => {
-    // The builder is Phase 3 and the Profile is Phase 4 (issue #53). A link
-    // appearing here is the signal that this page has grown past its remit.
+  it.each(["held", "claimed", "not-claimable", "unknown"] as const)(
+    "offers a %s Handle no builder and no controls at all",
+    async (state) => {
+      // The load-bearing assertion of #105, and the reason it is counted in
+      // buttons rather than in copy: the builder *is* buttons — three slots and
+      // 307 emoji — so zero of them is proof the builder is absent however its
+      // wording changes.
+      //
+      // Two of these four are defects if they ever render it. **Reserved** can
+      // never be claimed, so inviting a claim would be
+      // [#68](https://github.com/joshstothard/3moji/issues/68) in a new form,
+      // and **unknown** means the read failed — it cannot know the Handle is
+      // free, so it must not offer it.
+      readAvailability.mockResolvedValue(state);
+
+      render(await visit(ENCODED));
+
+      expect(screen.queryAllByRole("button")).toHaveLength(0);
+      expect(screen.queryAllByRole("link")).toHaveLength(0);
+      expect(
+        screen.queryByRole("heading", { name: builderCopy.builderHeading }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(copy.unclaimed)).not.toBeInTheDocument();
+    },
+  );
+});
+
+/**
+ * The unclaimed state, which is the whole of
+ * [#105](https://github.com/joshstothard/3moji/issues/105).
+ *
+ * Somebody who typed a Handle into the address bar has already told us what
+ * they want, so the answer is not a line saying they may have it — it is the
+ * builder, holding exactly those three emoji, with the claim still to make.
+ * `docs/architecture/data-model.md` § Profile has said so since Phase 2.
+ *
+ * The builder here is the **real** one, imported by the route. That is the
+ * point of the reuse: if it were forked, or stubbed in this suite, the focus
+ * and keyboard assertions below would be measuring a copy nobody ships.
+ */
+describe("an unclaimed Handle", () => {
+  const ICE_NAME = "ice cube";
+
+  function filledSlot(position: number, name: string): HTMLElement {
+    return screen.getByRole("button", {
+      name: builderCopy.slotFilled
+        .replace("{position}", String(position))
+        .replace("{name}", name),
+    });
+  }
+
+  function emptySlot(position: number): HTMLElement {
+    return screen.getByRole("button", {
+      name: builderCopy.slotEmpty.replace("{position}", String(position)),
+    });
+  }
+
+  function categoryTabs(): HTMLElement {
+    return screen.getByRole("group", {
+      name: builderCopy.pickerCategoriesLabel,
+    });
+  }
+
+  /**
+   * Render the page and wait for the builder's own read to land.
+   *
+   * The builder checks availability on mount — it opens with three slots
+   * already full, so there is something to ask about immediately — and settling
+   * that before asserting is what keeps a state update from arriving outside
+   * `act`. It also means every assertion below is made against the page a
+   * visitor actually ends up looking at.
+   */
+  async function renderUnclaimed(
+    settled: string = builderCopy.stateAvailable,
+  ): Promise<UserEvent> {
+    const user = userEvent.setup();
+    render(await visit(ENCODED));
+    await screen.findByText(settled);
+    return user;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    canonicalise.mockReturnValue(resolved);
+    spokenHandle.mockReturnValue(SPOKEN);
+    readAvailability.mockResolvedValue("available");
+    checkAvailability.mockResolvedValue("available");
+  });
+
+  it("renders the builder with those three emoji already picked", async () => {
+    await renderUnclaimed();
+
+    expect(
+      screen.getByRole("heading", { name: builderCopy.builderHeading }),
+    ).toBeInTheDocument();
+    expect(filledSlot(1, ICE_NAME)).toBeInTheDocument();
+    expect(filledSlot(2, ICE_NAME)).toBeInTheDocument();
+    expect(filledSlot(3, ICE_NAME)).toBeInTheDocument();
+  });
+
+  it("invites the visitor to claim it rather than stating a fact and stopping", async () => {
+    await renderUnclaimed();
+
+    expect(screen.getByText(copy.unclaimed)).toBeInTheDocument();
+  });
+
+  it("asks the builder's own read about the same segment the route asked about", async () => {
+    // Both surfaces go through `lib/availability.ts`, so the live line under
+    // the slots agrees with the answer that put the builder on the page.
     render(await visit(ENCODED));
 
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    await waitFor(() => {
+      expect(checkAvailability).toHaveBeenCalledWith(ENCODED);
+    });
+    expect(
+      await screen.findByText(builderCopy.stateAvailable),
+    ).toBeInTheDocument();
+  });
+
+  it("behaves exactly as on the home page when a slot is changed", async () => {
+    checkAvailability.mockResolvedValue("claimed");
+    const user = await renderUnclaimed(builderCopy.stateClaimed);
+
+    await user.click(filledSlot(3, ICE_NAME));
+
+    expect(emptySlot(3)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "pizza" }));
+    expect(filledSlot(3, "pizza")).toBeInTheDocument();
+    expect(
+      await screen.findByText(builderCopy.stateClaimed),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps focus on the very same slot control when the slot is cleared", async () => {
+    // #78's regression, re-asserted from this route: the prototype swapped the
+    // control when a slot changed, which unmounted the focused node and dropped
+    // focus to <body>. Asserting on node identity is what catches it.
+    const user = await renderUnclaimed();
+
+    const before = filledSlot(1, ICE_NAME);
+    before.focus();
+    await user.keyboard("{Enter}");
+
+    expect(document.activeElement).toBe(before);
+    expect(before).toBe(emptySlot(1));
+    expect(document.body).not.toHaveFocus();
+  });
+
+  it("keeps focus on the slot when it is filled again", async () => {
+    const user = await renderUnclaimed();
+
+    await user.click(filledSlot(2, ICE_NAME));
+    const picked = screen.getByRole("button", { name: "pizza" });
+    picked.focus();
+    await user.keyboard("{Enter}");
+
+    expect(picked).toHaveFocus();
+    expect(filledSlot(2, "pizza")).toBeInTheDocument();
+  });
+
+  it("offers the keyboard-reachable category tabs, as the home page does", async () => {
+    // #79's category tabs, from this route. They are toggle buttons rather
+    // than a tablist on purpose (system-overview.md § The home page).
+    const user = await renderUnclaimed();
+
+    const tab = within(categoryTabs()).getByRole("button", {
+      name: "Animals & Nature",
+    });
+    tab.focus();
+    expect(tab).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+
+    expect(tab).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "gorilla" })).toBeInTheDocument();
   });
 });

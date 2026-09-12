@@ -175,7 +175,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 **Acceptance criteria:**
 
 - [ ] A visitor at a claimed Handle sees the display name, bio, and ordered Links.
-- [ ] An unclaimed Handle renders the builder pre-filled with those three emoji and a claim call to action.
+- [x] An unclaimed Handle renders the builder pre-filled with those three emoji and a claim call to action. Done by [#105](https://github.com/joshstothard/3moji/issues/105): the same `HandleBuilder`, given `initialEmoji` from the path. Reserved and `unknown` deliberately do **not** render it.
 - [ ] A held Handle reveals nothing about who holds it, and shows no expiry timestamp.
 - [ ] Limits are enforced in `packages/core`: 30, 160, 10, and 40 characters, with `http` and `https` URLs only.
 - [ ] A mutation revalidates the cache before redirecting, so the change is visible immediately.
@@ -193,7 +193,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - #102 Add the profile and link tables with their migration and read path
 - #103 Enforce the Profile field limits in the domain
 - #104 Render the Profile at a claimed Handle
-- #105 Render the builder pre-filled at an unclaimed Handle
+- #105 Render the builder pre-filled at an unclaimed Handle — done
 - #106 Edit the Profile in place
 - #107 Reorder Links by dragging, and by keyboard
 - #108 Resolve a dot-separated word alias to a Handle
