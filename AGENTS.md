@@ -184,6 +184,18 @@ Two orders satisfy this:
 
 This applies to unit, integration, and E2E tests.
 
+## Working Files and Parallel Agents
+
+**A sub-agent's scratchpad directory is keyed on the parent session, so sibling agents share it.** Two agents launched from one session get the _same_ directory, not one each. This is not hypothetical: on 2026-09-12 two agents each wrote their pre-review to `review.md`, one overwrote the other between writing and posting, and **the wrong review was posted onto a pull request** ([#66](https://github.com/joshstothard/3moji/issues/66)).
+
+Three rules follow, and they apply to every agent that writes a file it later reads back:
+
+1. **Never use a generic basename for a file you will read back.** Not `review.md`, `pr.md`, `body.md`, `notes.md`. Either take a unique path from `mktemp`, as most workflow skills already do, or scope the name to the work: `review-81.md`, `pr-78.md`.
+2. **Verify a body before you post it.** Anything read from a file and sent to GitHub must be checked against its target first — the issue or PR number should appear in the body. A clobbered file is silent otherwise, and the failure lands in public.
+3. **Never assume the scratchpad is private.** Treat it as shared with work you cannot see, because it is.
+
+The near-miss was worse than the miss: the PR _body_ survived only because the two agents happened not to write it at the same moment.
+
 ## Absolute Rules
 
 These are non-negotiable. No exceptions, no workarounds.

@@ -199,7 +199,19 @@ When the user responds with their decisions:
 
 After all decisions are actioned, run `scripts/verify.sh` once more and push.
 
-If any AI self-review findings were actioned, post one follow-up comment with `gh pr comment <pr-number> --body-file <file>` recording each finding's outcome, so the next run (and the merge gate) can tell which blocking findings are resolved:
+If any AI self-review findings were actioned, post one follow-up comment recording each finding's outcome, so the next run (and the merge gate) can tell which blocking findings are resolved. **Write the body to a `mktemp` path, never a fixed name like `review.md`** — a sub-agent's scratchpad is shared with its siblings, and a clobbered body has already been posted to the wrong PR once (see `AGENTS.md` § Working Files and Parallel Agents). Check the body names this PR before sending it:
+
+```bash
+BODY_FILE=$(mktemp)
+cat > "$BODY_FILE" <<'MDEOF'
+<the findings-actioned comment>
+MDEOF
+
+# A clobbered file is silent otherwise, and the mistake lands in public.
+grep -q "<pr-number>" "$BODY_FILE" || { echo "body does not mention this PR — do not post"; exit 1; }
+gh pr comment <pr-number> --body-file "$BODY_FILE"
+rm -f "$BODY_FILE"
+```
 
 ```
 ## AI Review — findings actioned
