@@ -37,7 +37,9 @@
     "stateHeld": "This Handle is on hold.",
     "stateClaimed": "This Handle is taken.",
     "stateNotClaimable": "This Handle is reserved.",
-    "stateUnknown": "We could not check this Handle just now."
+    "stateUnknown": "We could not check this Handle just now.",
+    "aliasSeveralHeading": "More than one Handle",
+    "aliasSeveral": "Those words name more than one Handle, so there is no single page to show you."
   },
   "Claim": {
     "spoken": "Say it: {spoken}",

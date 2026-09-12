@@ -45,7 +45,29 @@ const resolved: StubResult = {
   emoji: [{ emoji: ICE }, { emoji: ICE }, { emoji: ICE }],
 };
 
+/**
+ * What the page reads off an alias resolution. Same reasoning as `StubResult`:
+ * a candidate is the three fields the route uses, and the real shape is
+ * asserted by `packages/core/src/handle/alias.test.ts`.
+ *
+ * It deliberately has **no `isCanonical`**, because an alias candidate does not
+ * have one — a 308 answer about an emoji segment is meaningless for an alias,
+ * and a page that must not redirect must not be handed one.
+ */
+interface StubCandidate {
+  readonly key: string;
+  readonly encoded: string;
+  readonly emoji: readonly StubEmoji[];
+}
+type StubAlias =
+  | { readonly ok: true; readonly candidates: readonly StubCandidate[] }
+  | { readonly ok: false; readonly reason: string };
+
 const canonicalise = jest.fn((_segment: string): StubResult => resolved);
+const resolveAlias = jest.fn((_segment: string): StubAlias => ({
+  ok: false,
+  reason: "not-an-alias",
+}));
 const spokenHandle = jest.fn(
   (_codepoints: readonly string[]): string | undefined => SPOKEN,
 );
@@ -57,6 +79,7 @@ const spokenHandle = jest.fn(
 // real route in `apps/web/e2e/handle-url.spec.ts`.
 jest.mock("@template/core", () => ({
   canonicalise: (segment: string) => canonicalise(segment),
+  resolveAlias: (segment: string) => resolveAlias(segment),
   spokenHandle: (codepoints: readonly string[]) => spokenHandle(codepoints),
 }));
 
@@ -124,6 +147,10 @@ describe("the Handle route", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     canonicalise.mockReturnValue(resolved);
+    // The default for this block: nothing here is an alias, so a rejected
+    // segment still 404s exactly as it did before ADR-0008 added the second
+    // grammar. The alias path has its own block below.
+    resolveAlias.mockReturnValue({ ok: false, reason: "not-an-alias" });
     spokenHandle.mockReturnValue(SPOKEN);
     // Claimed, not available, because available is now the one answer that
     // renders the whole builder. A test about redirects or accessible names
@@ -469,5 +496,210 @@ describe("an unclaimed Handle", () => {
 
     expect(tab).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "gorilla" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The word alias, which is
+ * [#108](https://github.com/joshstothard/3moji/issues/108) and
+ * [ADR-0008](../../../../../docs/adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md).
+ *
+ * `3moji.me/🧊🧊🧊` cannot be shared — an autolinker truncates the path at the
+ * first non-ASCII byte — so the same Handle answers at
+ * `3moji.me/ice-cube.ice-cube.ice-cube` too. The resolver itself is the
+ * domain's and is tested there; what belongs here is the dispatch: which
+ * grammar runs first, and what the **count** of claimed matches makes the route
+ * do (decision 4).
+ */
+describe("a word alias", () => {
+  const RED = "\u{1F34E}";
+  const GREEN = "\u{1F34F}";
+  const RED_KEY = `${RED}${RED}${RED}`;
+  const GREEN_KEY = `${GREEN}${GREEN}${GREEN}`;
+  const RED_ENCODED = encodeURIComponent(RED_KEY);
+  const GREEN_ENCODED = encodeURIComponent(GREEN_KEY);
+
+  const iceCandidate: StubCandidate = {
+    key: `${ICE}${ICE}${ICE}`,
+    encoded: ENCODED,
+    emoji: [{ emoji: ICE }, { emoji: ICE }, { emoji: ICE }],
+  };
+  const redCandidate: StubCandidate = {
+    key: RED_KEY,
+    encoded: RED_ENCODED,
+    emoji: [{ emoji: RED }, { emoji: RED }, { emoji: RED }],
+  };
+  const greenCandidate: StubCandidate = {
+    key: GREEN_KEY,
+    encoded: GREEN_ENCODED,
+    emoji: [{ emoji: GREEN }, { emoji: GREEN }, { emoji: GREEN }],
+  };
+
+  /**
+   * Read from `document.head` rather than from the render container on
+   * purpose: React hoists a `<link>` rendered inside a component into the
+   * document head, and a canonical URL left in the body is not a canonical URL
+   * at all. Asserting the hoist is asserting the behaviour.
+   */
+  function canonicalLink(): HTMLLinkElement | null {
+    return document.head.querySelector('link[rel="canonical"]');
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // An ASCII segment is never an emoji Handle, so this is what the emoji
+    // grammar says about every alias below.
+    canonicalise.mockReturnValue({ ok: false, reason: "unknown-codepoint" });
+    resolveAlias.mockReturnValue({ ok: true, candidates: [iceCandidate] });
+    spokenHandle.mockReturnValue(SPOKEN);
+    readAvailability.mockResolvedValue("claimed");
+    checkAvailability.mockResolvedValue("available");
+  });
+
+  it("tries the emoji grammar first, and never reaches the alias when it wins", async () => {
+    // ADR-0008 decision 7: the emoji path is untouched. It is not enough that
+    // it still works — it must still run *first*, and on its own.
+    canonicalise.mockReturnValue(resolved);
+
+    render(await visit(ENCODED));
+
+    expect(resolveAlias).not.toHaveBeenCalled();
+    expect(canonicalLink()).toBeNull();
+  });
+
+  it("leaves the 308 to the emoji grammar", async () => {
+    canonicalise.mockReturnValue({ ...resolved, isCanonical: false });
+
+    await expect(visit(`${ENCODED}%EF%B8%8F`)).rejects.toThrow(REDIRECT);
+    expect(resolveAlias).not.toHaveBeenCalled();
+  });
+
+  it("hands the resolver the segment exactly as Next.js gave it", async () => {
+    await visit("ice-cube.ice-cube.ice-cube");
+
+    expect(resolveAlias).toHaveBeenCalledWith("ice-cube.ice-cube.ice-cube");
+  });
+
+  it.each([
+    ["is not three dot-separated terms", "not-an-alias"],
+    ["holds a word we do not know", "unknown-term"],
+  ])("404s a segment that %s", async (_name, reason) => {
+    resolveAlias.mockReturnValue({ ok: false, reason });
+
+    await expect(visit("whatever.at.all")).rejects.toThrow(NOT_FOUND);
+    expect(notFound).toHaveBeenCalledTimes(1);
+    expect(permanentRedirect).not.toHaveBeenCalled();
+    expect(readAvailability).not.toHaveBeenCalled();
+  });
+
+  it("asks about the emoji path of every candidate", async () => {
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [redCandidate, greenCandidate],
+    });
+
+    await visit("apple.apple.apple");
+
+    expect(readAvailability).toHaveBeenCalledWith(RED_ENCODED);
+    expect(readAvailability).toHaveBeenCalledWith(GREEN_ENCODED);
+  });
+
+  it("renders the one claimed Profile in place, and never redirects to it", async () => {
+    // The load-bearing assertion of ADR-0008. A 308 to the emoji path would
+    // replace the shared ASCII link in the address bar with 45 characters of
+    // percent-escapes, which is the entire defect the alias exists to avoid.
+    render(await visit("ice-cube.ice-cube.ice-cube"));
+
+    expect(permanentRedirect).not.toHaveBeenCalled();
+    expect(notFound).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { level: 1, name: SPOKEN }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: SPOKEN })).toHaveTextContent(
+      `${ICE}${ICE}${ICE}`,
+    );
+    expect(screen.getByText(copy.stateClaimed)).toBeInTheDocument();
+  });
+
+  it("points rel=canonical at the emoji path, never at the alias", async () => {
+    // An alias is ambiguous by construction and so can never be canonical
+    // (decision 5): one indexable URL per Profile, and it is the emoji one.
+    render(await visit("ice-cube.ice-cube.ice-cube"));
+
+    expect(canonicalLink()).toHaveAttribute("href", `/${ENCODED}`);
+  });
+
+  it("shows the single claimed Handle out of several candidates", async () => {
+    // `apple` names both 🍎 and 🍏, so the alias names eight Handles. Exactly
+    // one of them being claimed is what makes a page answerable.
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [redCandidate, greenCandidate],
+    });
+    readAvailability.mockImplementation((segment: string) =>
+      Promise.resolve(segment === GREEN_ENCODED ? "claimed" : "available"),
+    );
+
+    render(await visit("apple.apple.apple"));
+
+    expect(screen.getByRole("img", { name: SPOKEN })).toHaveTextContent(
+      GREEN_KEY,
+    );
+    expect(canonicalLink()).toHaveAttribute("href", `/${GREEN_ENCODED}`);
+    expect(permanentRedirect).not.toHaveBeenCalled();
+  });
+
+  it("renders the claim call to action when nothing is claimed", async () => {
+    readAvailability.mockResolvedValue("available");
+
+    render(await visit("ice-cube.ice-cube.ice-cube"));
+    await screen.findByText(builderCopy.stateAvailable);
+
+    expect(screen.getByText(copy.unclaimed)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: builderCopy.builderHeading }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["several are claimed", "claimed"],
+    ["none is claimed", "available"],
+  ] as const)("says so and shows no listing when %s", async (_name, state) => {
+    // The listing is [#109](https://github.com/joshstothard/3moji/issues/109),
+    // and improvising one here would answer its privacy and ranking questions
+    // by accident. Counted in controls and in emoji rather than in copy: an
+    // accidental listing is buttons and Handles however it is worded.
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [redCandidate, greenCandidate],
+    });
+    readAvailability.mockResolvedValue(state);
+
+    render(await visit("apple.apple.apple"));
+
+    expect(screen.getByText(copy.aliasSeveral)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: copy.aliasSeveralHeading }),
+    ).toBeInTheDocument();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(document.body.textContent).not.toMatch(
+      new RegExp(`${RED}|${GREEN}`, "u"),
+    );
+    expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it("declares no canonical URL when it is showing no Handle", async () => {
+    // There is no single emoji path to point at, and inventing one would be a
+    // claim that this alias means that Handle.
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [redCandidate, greenCandidate],
+    });
+    readAvailability.mockResolvedValue("claimed");
+
+    render(await visit("apple.apple.apple"));
+
+    expect(canonicalLink()).toBeNull();
   });
 });
