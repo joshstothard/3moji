@@ -112,12 +112,12 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- #49 Ship the released Emoji Set into packages/core
+- #49 Ship the released Emoji Set into packages/core — done
 - #50 Add Handle canonicalisation with property-based tests
 - #51 Add the handle table, its canonical-key unique index and migration
 - #52 Add the Reserved Handle list and its three-layer domain guard
 - #53 Resolve an emoji URL to a canonical Handle
-- #54 Curate display names, synonyms and plurals for the launch set
+- #54 Curate display names, synonyms and plurals for the launch set — done
 - #55 Apply the render-check verdict to the launch categories — blocked by #23 (needs two physical phones)
 
 ### Phase 3 — Claim
@@ -232,3 +232,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - 2026-09-12 — Status Proposed → Active. Phase 1 is five-sixths done: #27, #28, #29, #30 and #31 are closed. #32 is the only remaining item and is blocked on #19, which needs accounts, a payment method and DNS access.
 - 2026-09-12 — The Emoji Set is released in category drops; a Handle may only use emoji from a released category, starting with Food & Drink, Animals & Nature and Activities ([ADR-0007](../adr/0007-release-the-emoji-set-in-category-drops.md), partially superseding ADR-0005 decision 1)
 - 2026-09-12 — Phase 2 planned: epic #48, issues #49–#55.
+- 2026-09-12 — The released Emoji Set shipped as data in `packages/core` (#49), then the
+  curated name layer over it (#54): 307 rows of `displayName`, `synonyms`, plural and
+  article, with 29 display names overridden and the rest defaulting to the CLDR name. 🧊 now
+  says "three ice cubes" and answers a search for "ice cube".

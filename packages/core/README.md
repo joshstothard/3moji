@@ -24,3 +24,5 @@ Ports live in `src/ports/` as interfaces the domain needs. Adapters implementing
 ## Generated data
 
 `src/emoji/emoji-candidates.generated.ts` is produced by `scripts/generate-emoji-set.mjs` (`npm run generate:emoji`) from the Emoji Set candidate report — never edit it by hand. Which of those emoji are claimable is decided by `RELEASED_CATEGORIES` in `src/emoji/emoji-category.ts`, which is hand-written: a category drop is a line there and needs no regeneration. The layout is documented in [`docs/architecture/data-model.md`](../../docs/architecture/data-model.md) § Emoji Set.
+
+The curated names — `displayName`, `synonyms`, plural, article — are the deliberate counterpart: `src/emoji/emoji-curation.ts` is **hand-authored** and lives in its own module precisely so that regenerating the candidate data cannot touch it, and so that a curation pass cannot be lost to a regeneration. There is one row per released emoji and only for released emoji, so releasing a category means adding its rows there as well as the line in `emoji-category.ts`; a test turns a half-finished drop red.

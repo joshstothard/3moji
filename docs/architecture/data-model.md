@@ -71,6 +71,9 @@ Categories are released as **data, not code**: a drop is an edit to the released
 | `emoji-candidates.generated.ts` | All 1,053 candidates. **Generated — never hand-edited**                                                     |
 | `emoji-category.ts`             | `EMOJI_CATEGORIES` and `RELEASED_CATEGORIES`. **The released list is the drop**: one line per new category  |
 | `emoji-set.ts`                  | Derives `candidateEmojiSet` and `releasedEmojiSet`, and exposes `findEmojiByCodepoint` / `isClaimableEmoji` |
+| `emoji-curation.ts`             | The curated names, one row per released emoji. **Hand-authored — the counterpart to the generated file**    |
+| `emoji-name.ts`                 | Resolves curation onto the released set into `CuratedEmoji`, and exposes `findCuratedEmoji` / `searchEmoji` |
+| `spoken-handle.ts`              | `spokenHandle`, the collapsed spoken form — "three ice cubes"                                               |
 
 `scripts/generate-emoji-set.mjs` (`npm run generate:emoji`) generates the candidate module from [the candidate report](../reports/2026-09-11-emoji-set.candidates.json), so the shipped data is derived rather than retyped; a domain test reparses the report and fails if the two drift. Releasing a category needs **no regeneration**: `released` is derived from `RELEASED_CATEGORIES` at load, so a drop is the one-line edit ADR-0007 decision 5 asks for.
 
@@ -81,8 +84,47 @@ Categories are released as **data, not code**: a drop is an edit to the released
 | `spokenName`  | CLDR short name, immutable        | Canonical identity                           |
 | `displayName` | curated, defaults to `spokenName` | What the product says and shows              |
 | `synonyms`    | curated, may be empty             | Search only                                  |
-| plural        | curated, stored                   | The collapsed spoken form, "three ice cubes" |
+| `plural`      | curated, stored                   | The collapsed spoken form, "three ice cubes" |
+| `article`     | curated, defaults to a vowel rule | "an ice cube", not "a ice cube"              |
 | `group`       | Unicode                           | Theme, used for swap suggestions             |
+
+### The curated name layer
+
+**Built**, for the three released categories: 307 rows in `emoji-curation.ts`, keyed by code point.
+ADR-0005 decision 3 puts a curated layer over the immutable CLDR names, because 🧊 is officially
+called `ice` — so the product's own line, "three ice cubes", was neither its Spoken Name nor
+findable by search.
+
+`spokenName` stays exactly as Unicode gives it and is asserted against the candidate report; the
+curated fields sit beside it on `CuratedEmoji` rather than widening `EmojiSetEntry`.
+
+**Curation is per-drop, not per-set.** There is one row per _released_ emoji and only for released
+emoji, so releasing a category is the one-line edit to `RELEASED_CATEGORIES` **plus** its rows here.
+A test asserts the row set equals the released set exactly, which makes a half-finished drop red
+rather than silent. Each row also repeats the CLDR name it is curating, because the set contains
+near-identical glyph pairs (🐵/🐒, 🐶/🐕, 🐱/🐈) and a mis-keyed row would otherwise satisfy every
+other assertion while making the product say the wrong name.
+
+**Overriding is the exception.** 29 of the 307 display names are overridden; the rest default to the
+CLDR name. The shapes that earn an override are a single word that is not an object (`ice`,
+`cooking`, `tennis`), a name that is a category rather than a thing (`hot beverage`, `video game`,
+`performing arts`), and a mass noun that cannot take a count (`bread` → "loaf of bread"). A name
+being merely _plural_ is not one of them: `article` carries `"none"` instead, so 🥢 reads
+"chopsticks" rather than "a pair of chopsticks".
+
+**The plural is stored, never derived** (ADR-0005): a suffix rule gives "cherrys" and "three ices".
+The `article` defaults to a vowel-letter rule and is overridden only where pronunciation disagrees
+with spelling — "a unicorn", "a ewe".
+
+### Saying a Handle aloud
+
+`spokenHandle` takes the code points of a Handle, in order, and returns the collapsed spoken form,
+or `undefined` if any of them is not claimable.
+
+Runs collapse **only when consecutive**, because a Handle is an ordered sequence and two Handles
+differ if their order differs: 🧊🧊🍕 is "two ice cubes and a pizza" while 🧊🍕🧊 is "an ice cube, a
+pizza and an ice cube". The all-same triple the product pitch is built on is just a run of three, so
+"three ice cubes" falls out of the same rule rather than being a special case.
 
 There is deliberately no colour field: colour differs between Apple and Google and could never be verified.
 
