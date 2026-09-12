@@ -83,7 +83,7 @@ Treat the built-in tool as the ambient second opinion — it needs no instructio
 
 **The fresh-context property is Claude Code's, not the contract's.** Codex propagates context with `fork_turns`: omitted or `"all"` means the spawned role sees the parent's whole conversation, which is the opposite of the fresh, independently-grounded read the role exists to give. A Codex delegation that wants the role's actual behaviour has to ask for it — `fork_turns: "none"`, or a small number of turns. **The role's pinned model does not bind on Codex either** — measured, not inferred: a `consultant` spawned from a `gpt-5.6-luna` parent recorded `gpt-5.6-luna` in its own session rollout, both with `fork_turns` omitted and with `fork_turns: "none"` passed explicitly. Codex documents that a full-history fork inherits the parent's model and reasoning effort and _does not accept overrides_. `verify:agents` asserts the pin is written down, which is not the same as it taking effect, so on Codex treat the model promise as instruction-level only — the same status as the role's `sandbox_mode` — and set what you need on the session instead.
 
-**Do not read the "read-only" promise as stronger than it is.** It is a hard tool restriction only on Claude Code, and even there the declared `tools` list is not exhaustive — Claude Code injects the built-in `advisor` tool into subagents on top of it, so a `consultant` delegation can itself call the advisor and bill another uncached full-transcript read. On Codex it is instruction-level only: a role's `sandbox_mode` is overwritten by the parent's; see README. What `verify:agents` actually asserts is narrower than "read-only": that the Claude and Copilot adapters declare exactly the tool lists recorded in the verifier, so a capability cannot be added to either without an explicit edit there.
+**Do not read the "read-only" promise as stronger than it is.** It is a hard tool restriction only on Claude Code, and even there the declared `tools` list is not exhaustive — Claude Code injects the built-in `advisor` tool into subagents on top of it, so a `consultant` delegation can itself call the advisor and bill another uncached full-transcript read. On Codex it is instruction-level only: a role's `sandbox_mode` is overwritten by the parent's; see README. What `verify:agents` actually asserts about the roles is narrower than "read-only": that the Claude and Copilot adapters declare exactly the tool lists recorded in the verifier, so a capability cannot be added to either without an explicit edit there. (It asserts two further things unrelated to the roles, both regression guards for defects that reached `main`: that no skill's runnable code block counts pending checks through `gh pr checks` ([#71](https://github.com/joshstothard/3moji/issues/71)), and that no skill posts a body from an unnamed `--body-file <file>` placeholder ([#66](https://github.com/joshstothard/3moji/issues/66)). Anything added to that script should be listed here, or this sentence becomes wrong again.)
 
 Never write "consult the advisor" in a prompt, skill, or commit message and expect the role. On Claude Code that phrase resolves to the built-in tool, which silently bypasses every model and tool guarantee the role description promises — the same false-guarantee failure as loading a role body directly.
 
@@ -183,6 +183,35 @@ Two orders satisfy this:
 **A failing test is a finding, not an obstacle.** When one blocks a change: fix the code, or say the test is wrong and why and let the human decide. Rewriting an assertion to reach green is the human's call.
 
 This applies to unit, integration, and E2E tests.
+
+## Working Files and Parallel Agents
+
+**A sub-agent's scratchpad directory is keyed on the parent session, so sibling agents share it.** Two agents launched from one session get the _same_ directory, not one each. This is not hypothetical: on 2026-09-12 two agents each wrote their pre-review to `review.md`, one overwrote the other between writing and posting, and **the wrong review was posted onto a pull request** ([#66](https://github.com/joshstothard/3moji/issues/66)).
+
+Three rules follow, and they apply to every agent that writes a file it later reads back:
+
+1. **Never use a generic basename for a file you will read back.** Not `review.md`, `pr.md`, `body.md`, `notes.md`. Either take a unique path from `mktemp`, as most workflow skills already do, or scope the name to the work: `review-81.md`, `pr-78.md`.
+2. **Verify a body before you post it.** Anything read from a file and sent to GitHub must be checked against its target first — the issue or PR number should appear in the body. A clobbered file is silent otherwise, and the failure lands in public.
+3. **Never assume the scratchpad is private.** Treat it as shared with work you cannot see, because it is.
+
+The near-miss was worse than the miss: the PR _body_ survived only because the two agents happened not to write it at the same moment.
+
+### A shared working tree is worse than a shared scratchpad
+
+A sub-agent launched **without worktree isolation runs in the parent's working directory**, so it shares the checkout, the index, `HEAD`, and the stash. Measured on 2026-09-12, within about twenty minutes of launching two agents that way:
+
+- One agent switched `HEAD` to its own branch, moving the checkout for everyone in it.
+- A branch belonging to the parent session was reset to `main`'s tip and **two commits were dropped from it**. They survived only as dangling objects and had to be recovered by SHA; the branch's reflog showed nothing but `branch: Created from origin/main`.
+- `scripts/verify.sh` and `format:check` failed on another agent's half-finished files, twice producing a red signal that belonged to nobody's diff.
+- `git push` became impossible without bypassing the pre-push hook, because the hook validates the **working tree** rather than the commit being pushed.
+
+So, when launching parallel agents:
+
+1. **Pass `isolation: "worktree"`.** It fixes everything in this subsection — and **nothing in the one above it.** Measured on 2026-09-12: two agents launched _with_ isolation got genuinely separate worktrees and still shared one scratchpad directory, where one overwrote the other's `prereview.md` and `pr-body.md` mid-task. Isolation separates git state, not working files. **The unique-basename rule is therefore not a fallback for forgetting isolation; it applies always.**
+2. **Never `git add -A`, `git add .` or `git commit -a` in a shared tree** — stage every path explicitly, or you commit another agent's half-finished work and your own reviewer will be the one to find it.
+3. **Never bare `git stash` / `git stash pop`**: the stash is shared across worktrees, so you can pop work that is not yours. Prefer a temporary commit.
+4. **Treat a red `verify.sh` sceptically** before assuming it is yours; check whether the failing files are in your diff at all.
+5. **To rescue a commit from a shared tree**, create a branch at its SHA (`git branch <name> <sha>`) — it touches neither `HEAD` nor the working tree — and check it out in a worktree of its own, which is also what stops another worktree force-moving it again.
 
 ## Absolute Rules
 

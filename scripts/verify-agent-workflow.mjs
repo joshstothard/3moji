@@ -1258,6 +1258,27 @@ for (const skill of [...manualSkills, ...automaticSkills]) {
   );
 }
 
+// A sub-agent's scratchpad directory is keyed on the parent session, so sibling
+// agents share it. Two agents each writing `review.md` clobbered one another on
+// 2026-09-12 and the wrong review was posted to a pull request (#66). Every
+// skill that posts a body read from a file must therefore name how that file is
+// made unique -- `mktemp`, or a name scoped to the issue or PR.
+//
+// `--body-file <file>` is the shape that caused it: an unnamed placeholder that
+// leaves the choice to the agent, which picks something generic. This asserts
+// the placeholder does not come back.
+const bareBodyFilePlaceholder = /--body-file\s+<file>/;
+for (const skill of [...manualSkills, ...automaticSkills]) {
+  const file = path.join(".agents", "skills", skill, "SKILL.md");
+  if (!fs.existsSync(at(file))) continue;
+  assert(
+    !bareBodyFilePlaceholder.test(read(file)),
+    `${file} says \`--body-file <file>\` without naming how the file is made unique. ` +
+      `A sibling agent shares the scratchpad, so a generic basename gets clobbered and the ` +
+      `wrong body is posted (#66). Use a \`mktemp\` path, or scope the name to the issue or PR.`,
+  );
+}
+
 console.log(
   `Agent workflow parity passed for ${manualSkills.length} manual workflows, ${automaticSkills.length} automatic skills, and ${roleSkills.length} shared roles.`,
 );
