@@ -34,6 +34,9 @@
   },
   "HandlePage": {
     "unclaimed": "Nobody has this Handle yet. Make it yours below.",
+    "spoken": "Say it: {spoken}",
+    "unedited": "Nobody has added anything here yet.",
+    "linksLabel": "Links",
     "stateHeld": "This Handle is on hold.",
     "stateClaimed": "This Handle is taken.",
     "stateNotClaimable": "This Handle is reserved.",

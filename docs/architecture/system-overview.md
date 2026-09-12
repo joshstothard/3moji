@@ -47,11 +47,11 @@ A swap suggestion is the one control that **cannot** be permanent: taking it mak
 
 `apps/web/src/app/[handle]/page.tsx` is a thin transport adapter: it hands the received path segment to `canonicalise` in `packages/core`, asks `lib/availability.ts` what is true about the Handle, and formats the answer. It holds no canonicalisation logic and decides nothing about availability itself.
 
-| `canonicalise` says           | The route answers                                              |
-| ----------------------------- | -------------------------------------------------------------- |
-| not a Handle, for any reason  | `notFound()` — 404. Junk is never redirected                   |
-| a Handle, spelled oddly       | `permanentRedirect("/" + encoded)` — 308 to the canonical path |
-| a Handle, spelled canonically | 200, and one honest line about its availability                |
+| `canonicalise` says           | The route answers                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------- |
+| not a Handle, for any reason  | `notFound()` — 404. Junk is never redirected                                           |
+| a Handle, spelled oddly       | `permanentRedirect("/" + encoded)` — 308 to the canonical path                         |
+| a Handle, spelled canonically | 200: the Profile if it is claimed, the builder if it is free, an honest line otherwise |
 
 Two constraints from [the emoji URL report](../reports/2026-09-11-emoji-urls.md) bind any future work on this route, and both were re-confirmed against the pinned Next.js version:
 
@@ -62,7 +62,7 @@ A malformed escape such as `/%F0%9F` never reaches the page: Next.js rejects it 
 
 **The dynamic segment is one segment, not a catch-all**, so it cannot claim `/api/auth/...` or any other multi-segment path. An end-to-end test asserts that, because `[...handle]` would compile, match those paths and 404 them.
 
-That line comes from `lib/availability.ts`, the one availability read, shared with the builder's server action so the two surfaces cannot drift. It is a Handle's state and nothing more: **available, taken, on hold, reserved, or "we could not check this Handle just now"**. A reserved Handle — `/🍕🍕🍕`, `/🔪🔪🔪` — resolves rather than 404ing, and says neither which kind of reservation it is nor, when held, who holds it or until when: the read answers with a state name, so neither the `Reservation` nor an expiry ever crosses out of `packages/core` to be rendered by accident ([#68](https://github.com/joshstothard/3moji/issues/68), ADR-0004). The unclaimed state is the exception, and the one answer that is not a line: it renders the builder, holding those three emoji ([#105](https://github.com/joshstothard/3moji/issues/105)) — see § The unclaimed Handle below.
+That line comes from `lib/availability.ts`, the one availability read, shared with the builder's server action so the two surfaces cannot drift. It is a Handle's state and nothing more: **available, taken, on hold, reserved, or "we could not check this Handle just now"**. A reserved Handle — `/🍕🍕🍕`, `/🔪🔪🔪` — resolves rather than 404ing, and says neither which kind of reservation it is nor, when held, who holds it or until when: the read answers with a state name, so neither the `Reservation` nor an expiry ever crosses out of `packages/core` to be rendered by accident ([#68](https://github.com/joshstothard/3moji/issues/68), ADR-0004). Two states are the exception, and neither is a line. **Unclaimed** renders the builder, holding those three emoji ([#105](https://github.com/joshstothard/3moji/issues/105)) — see § The unclaimed Handle below. **Claimed** renders the Profile ([#104](https://github.com/joshstothard/3moji/issues/104)) — see § The claimed Handle below.
 
 **The read runs after both early exits, and degrades rather than failing.** `notFound()` and `permanentRedirect()` signal by throwing, so the read — which has a `try/catch` of its own — sits below them; catching around them would swallow the 404 and the 308. When `lib/services.ts` cannot be built (a clone with no environment, CI's E2E job with one variable of five), the read falls back to `claimableHandle`, which is pure: _reserved_ and _not a Handle_ still answer with certainty, and only the three ownership-dependent states degrade to "unknown".
 
@@ -77,6 +77,16 @@ That line comes from `lib/availability.ts`, the one availability read, shared wi
 The availability read is the same `checkAvailability` server action the home page injects, over the same `lib/availability.ts` the route just called, so the live line under the slots cannot disagree with the answer that put the builder on the page.
 
 **Four answers must not render it, and two of those are defects if they ever do.** Taken and held are somebody else's Handle. **Reserved** can never be claimed, so inviting a claim would be [#68](https://github.com/joshstothard/3moji/issues/68) in a new form. **`unknown`** means the read failed — it cannot know the Handle is free, and on a machine with no database _every_ claimable Handle answers `unknown`, so a builder rendered there would be an invitation issued on no evidence at all. The route holds this in the type: its copy `Record` is keyed on the resolved states **with `available` excluded**, and "This Handle is available." has left the `HandlePage` namespace entirely — the wording now belongs to the builder, which owns the live line. The unit suite counts controls rather than copy (the builder _is_ buttons: three slots and 307 emoji), and asserts zero of them for all four.
+
+### The claimed Handle
+
+`/🧊🧊🧊` with an owner behind it renders **the Profile** — the page the product exists to show ([#104](https://github.com/joshstothard/3moji/issues/104)). The shape of the three states, the field-by-field rules and the Link safety are in [data-model.md](data-model.md) § Profile; what belongs here is the routing.
+
+**It is a second read, and it runs only when the first answered `claimed`.** `lib/availability.ts` stays exactly what it was — one state name, shared with the builder's server action — and `lib/profile.ts` sits beside it, composing that answer with `ProfileRepository.profileOf` through the pure `profileStateOf`. Both reads are handed the **same percent-encoded segment**, so the two answers cannot be about different Handles. The 404 and the 308 still run before either of them.
+
+**Nothing widened to carry a Profile through.** `AvailabilityState` is still `HandleAvailability["state"] | "unknown"`, so the `Reservation` and the hold expiry still never leave `packages/core` ([#80](https://github.com/joshstothard/3moji/issues/80)). The Profile arrives as its own value, on its own read, gated on `claimed` three times over: `readProfile` issues no query otherwise, `profileStateOf` composes nothing otherwise, and the route's branch is nested under `claimed`. The unit suite forces the hostile case — a fully-populated Profile pushed at the page for a held, reserved and unknown Handle — and asserts the page still shows nothing but its line, because "I did not render it" is not evidence and a future debug view is exactly how this leaks.
+
+**A failed Profile read degrades to the line, not to an empty page.** `lib/services.ts` needs five environment variables, so on a clone with none the availability read already answers `unknown` and no Profile is ever fetched; when the Handle _is_ claimed and the Profile read fails anyway, the answer is `none` and the route falls back to "This Handle is taken." — never `unedited`, which would be a statement about an owner the query never reached.
 
 ### The word alias
 
