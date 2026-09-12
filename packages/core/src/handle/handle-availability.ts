@@ -2,7 +2,7 @@ import type { Clock } from "../ports/clock";
 import type { HandleRepository } from "../ports/handle-repository";
 import { handleKeyOf } from "../db/handle-key";
 import type { CanonicalHandle, CanonicalisationFailure } from "./canonicalise";
-import { claimableHandle } from "./claimable";
+import { canonicalHandleOf, claimableHandle } from "./claimable";
 import type { Reservation, ReservedHandleList } from "./reserved-handles";
 
 /**
@@ -92,23 +92,4 @@ export async function handleAvailability(
   }
 
   return { state: "available", handle };
-}
-
-/**
- * Recover the canonical handle for a reserved segment.
- *
- * {@link claimableHandle}'s `reserved` branch does not carry the handle, and
- * widening its result type is a change to a function three other call sites
- * already depend on. Canonicalising again is cheap — a few string operations
- * over three code points — and keeps that contract untouched.
- */
-function canonicalHandleOf(segment: string): CanonicalHandle {
-  const emptyList: ReservedHandleList = { blocked: [], entries: [] };
-  const result = claimableHandle(segment, emptyList);
-  if (!result.ok) {
-    throw new Error(
-      `expected a canonical Handle for a reserved segment, got ${result.reason}`,
-    );
-  }
-  return result.handle;
 }

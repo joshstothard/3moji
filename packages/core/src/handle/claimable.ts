@@ -56,22 +56,20 @@ export type ClaimabilityResult = ClaimableHandle | ClaimabilityFailure;
  * It returns a result rather than throwing, for the reason `canonicalise` does:
  * every rejection here is an ordinary answer to a public request.
  *
- * ## The three layers, and which exist today
+ * ## The three layers, and where each one lives
  *
  * | Layer | Where | Status |
  * | --- | --- | --- |
  * | Domain, before any write | **this function** | built |
- * | Re-check inside the claim transaction | the claim use case | **deferred to Phase 3** |
+ * | Re-check inside the claim transaction | `reservationOf` inside {@link ../handle/claim-handle.claimHandle}'s transaction | built |
  * | Database constraint | `handle_key_no_blocked_emoji` in `src/db/handle.ts` | built |
  *
- * **The middle layer is not built, and is not pretended to be.** There is no
- * claim path yet — it is Phase 3 — and a transaction wrapper with nothing
- * calling it would be a third layer on paper only. This doc comment is the
- * seam instead: **the claim transaction must call {@link claimableHandle}, or
- * at minimum `reservationOf`, on the canonical key inside its own transaction**
- * before inserting, so a list read before the transaction opened cannot be
- * stale by the time the row is written. The database CHECK is what decides a
- * genuine race in the meantime.
+ * **All three are built.** The middle one was deferred while there was no claim
+ * path to put it in — a transaction wrapper with nothing calling it would have
+ * been a layer on paper only — and `claimHandle` closed it: it calls
+ * `reservationOf` on the canonical key **inside its own transaction**, before
+ * the insert, so a list read before the transaction opened cannot be stale by
+ * the time the row is written. The database CHECK still decides a genuine race.
  *
  * Never middleware alone, per ADR-0004 decision 7 and the defence-in-depth rule
  * in the engineering standards. Middleware is not one of the three.
@@ -96,4 +94,29 @@ export function claimableHandle(
   }
 
   return { ok: true, handle: result };
+}
+
+/**
+ * Recover the canonical handle for a segment {@link claimableHandle} refused as
+ * `reserved`.
+ *
+ * The `reserved` branch does not carry the handle, and widening its result type
+ * is a change to a function several call sites already depend on.
+ * Canonicalising again against an empty list is cheap — a few string operations
+ * over three code points — and keeps that contract untouched. Both readers need
+ * it for the same reason: a reserved Handle is a real Handle, and the answer
+ * about it has to name it.
+ *
+ * @throws if the segment does not canonicalise. Callers reach this only from
+ * the `reserved` branch, which is proof that it does.
+ */
+export function canonicalHandleOf(segment: string): CanonicalHandle {
+  const emptyList: ReservedHandleList = { blocked: [], entries: [] };
+  const result = claimableHandle(segment, emptyList);
+  if (!result.ok) {
+    throw new Error(
+      `expected a canonical Handle for a reserved segment, got ${result.reason}`,
+    );
+  }
+  return result.handle;
 }

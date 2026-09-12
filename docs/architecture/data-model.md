@@ -1,6 +1,6 @@
 # Data model
 
-**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, and the `handle` table — the first we design ourselves — in `packages/core/src/db/handle.ts`, with their migrations in `packages/core/migrations/`. The Emoji Set ships as data in `packages/core/src/emoji/`. The **table** a Handle lives in is built; the claim, hold-expiry and release **flows** that write to it are not, and neither are Profiles and Links. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
+**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, and the `handle` table — the first we design ourselves — in `packages/core/src/db/handle.ts`, with their migrations in `packages/core/migrations/`. The Emoji Set ships as data in `packages/core/src/emoji/`. The **table** a Handle lives in is built, and so is [the Claim](#the-claim) that writes to it — as a domain path, with no user interface in front of it yet. The hold-expiry and release **flows** are not built, and neither are Profiles and Links. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
 
 ## Account
 
@@ -33,19 +33,19 @@ Membership is checked left to right and the **leftmost** offender is reported, s
 
 **Alias stability is coupled to curation, which makes curation no longer cosmetic.** `displayName` is curated and mutable — 29 of 307 are overridden — so renaming one silently changes every alias containing it and breaks links already in people's bios. Deriving aliases from the immutable CLDR `spokenName` would avoid that at the cost of `/ice.ice.ice`, the exact defect the curated layer exists to fix. A display-name change is therefore a **breaking URL change** and needs the old alias retained as a redirect.
 
-**Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job. An expired hold frees the Handle and deletes the unverified Account. **A released Handle returns to the pool immediately — there is no cooldown in the MVP** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). Handles cannot be changed in the MVP.
+**Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. The first step of that is built — see [the Claim](#the-claim) below. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job. An expired hold frees the Handle and deletes the unverified Account. **A released Handle returns to the pool immediately — there is no cooldown in the MVP** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). Handles cannot be changed in the MVP.
 
 ## Reserved Handles
 
 **Partly built.** The list is versioned data in `packages/core/src/handle/reserved-handles.ts`, and its domain guard is `claimableHandle` in `packages/core/src/handle/claimable.ts`. [ADR-0004](../adr/0004-the-handle-model.md) decision 7 requires **three independent layers**. Two exist today:
 
-| Layer                                 | Where                                                                        | Status                       |
-| ------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------- |
-| Domain, before any write              | `claimableHandle` (`src/handle/claimable.ts`)                                | **Built**                    |
-| Re-check inside the claim transaction | the claim use case                                                           | **Deferred to Phase 3**      |
-| Database constraint                   | `handle_key_no_blocked_emoji` on `handle.key` (`src/db/handle.ts`, `0002_…`) | **Built**, for the nine only |
+| Layer                                 | Where                                                                              | Status                       |
+| ------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------- |
+| Domain, before any write              | `claimableHandle` (`src/handle/claimable.ts`)                                      | **Built**                    |
+| Re-check inside the claim transaction | `reservationOf`, inside `claimHandle`'s transaction (`src/handle/claim-handle.ts`) | **Built**                    |
+| Database constraint                   | `handle_key_no_blocked_emoji` on `handle.key` (`src/db/handle.ts`, `0002_…`)       | **Built**, for the nine only |
 
-The middle layer is deliberately not built: there is no claim path yet, and a transaction wrapper with nothing calling it would be a third layer on paper only. The seam is named in `claimableHandle`'s doc comment — **the claim transaction must call `reservationOf` on the canonical key inside its own transaction** before inserting. Until it does, the database `CHECK` and the primary key are what decide a race.
+**All three layers exist.** The middle one was deferred while there was no claim path to put it in — a transaction wrapper with nothing calling it would have been a layer on paper only — and the Claim closed it: `claimHandle` calls `reservationOf` on the canonical key **inside its own transaction**, before the insert, so a list read before the transaction opened cannot be stale by the time the row is written. Its test reserves the Handle _after_ the point a naive implementation would have checked, in the unit suite by flipping the list the instant the transaction opens and in `claim.integration.test.ts` by flipping it after a real `BEGIN` and then asserting neither row is there. The database `CHECK` and the primary key still decide a genuine race.
 
 [Issue #18](https://github.com/joshstothard/3moji/issues/18) settled the list as **three mechanisms, not one list**:
 
@@ -90,6 +90,36 @@ Release will still write a `released_handle` row — the canonical key and a rel
 The row exists because **time cannot be backfilled**: a cooldown switched on later with no history behind it starts blind. The write goes in the delete use case inside the deletion transaction, not a database trigger, because `drizzle-kit generate` owns this schema — the same trade taken for the blocked-emoji `CHECK`. The cost is that the database cannot enforce it, so a direct `DELETE` on a `user` row leaves no tombstone; the tombstone is evidence, not an invariant.
 
 **Nothing reads it.** The claim path does not consult it, which is what makes "no cooldown" structural rather than asserted — there is no branch to get wrong and no stale row can block a legitimate claim. Turning a cooldown on is a new ADR plus a read in the claim gate.
+
+## The Claim
+
+**Built as a domain path, with no user interface in front of it and not runnable on the production driver.** `claimHandle` in `packages/core/src/handle/claim-handle.ts`; the picker, the hold screen and the server action that would call it are #78-#82.
+
+ADR-0004 decision 4 — _every live Account owns exactly one Handle_ — is an invariant about two rows in two tables, so it holds only if they are written together. Account creation and the hold are therefore **one transaction**, and every rejection rolls all of it back: a Claim that fails for any reason creates nothing, never an Account waiting for a Handle.
+
+| Piece                            | Lives in                                                   |
+| -------------------------------- | ---------------------------------------------------------- |
+| The use case and its result type | `packages/core/src/handle/claim-handle.ts`                 |
+| The unit-of-work port            | `packages/core/src/ports/claim-store.ts`                   |
+| Its Drizzle adapter              | `packages/core/src/adapters/drizzle-claim-store.ts`        |
+| Holding email until commit       | `packages/core/src/auth/adapters/deferred-email-sender.ts` |
+| The wiring                       | `createCoreServices`, as `services.claims`                 |
+
+**The writes exist only inside the transaction, structurally.** `HandleRepository` was deliberately read-only so that no caller could write a hold without a transaction, and `ClaimStore` keeps that property rather than restating it as a convention: it exposes one method, `runInTransaction`, and `createAccount` and `holdHandle` are reachable only on the object handed to its callback. The callback returns its verdict beside a commit decision instead of throwing, because a rejected Claim is an ordinary answer — the same argument `canonicalise` makes — while still having to roll back.
+
+**Better Auth is rebound to the transaction.** Its Drizzle adapter issues every statement through the client it was constructed with, so the only way to get its `user` and `account` rows into our transaction is to construct an instance against the transaction. The composition root supplies that as a closure already holding the secret, base URL and sender address, so it stays the only place that calls `createAuth`. Signing up first and deleting the Account if the hold failed was rejected: that is a compensating write, and a process that dies between the two steps leaves exactly the handle-less Account the invariant forbids.
+
+**An email cannot be rolled back.** Better Auth sends the verification email from inside sign-up, which is inside the transaction, so the Claim wraps the sender for the duration: emails are held, flushed after the commit, and discarded after a rollback. Without it every rejected Claim — a Handle lost to a race included — would send "verify your email to claim your handle" for an Account that never existed.
+
+**`held_until` comes from the injected `Clock`** and the 24 hours is `HOLD_DURATION_MS`, a domain constant. The column has no SQL default on purpose; see its row in the table above.
+
+An already-registered email is decided by a read **inside the transaction**, not from the sign-up response: Better Auth returns a synthetic success for one to prevent account enumeration ([#15](https://github.com/joshstothard/3moji/issues/15)), so its return value cannot distinguish the two. The domain answers `already-registered` and nothing is written — neither a second Account nor a hold that would take the Handle away from the person submitting. **The transport owes the submitter the same hold screen a new sign-up gets**, and the email to the existing address naming the Handle they already own is #82's.
+
+### The production driver cannot run it
+
+`drizzle-orm/neon-http` has **no interactive transactions** — it throws "No transactions support in neon-http driver" — and [ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md) decision 6 selects that driver for production. Local development and CI resolve to `node-postgres`, which does support them, so the Claim is exercised in CI against `postgres:16` and would fail on Vercel as configured today.
+
+Nothing calls it in production yet — there is no server action and no claim UI — so this is a gap to close before #78-#82 ship, not a live defect. [The hosting report](../reports/2026-09-11-hosting-and-email.md) named this exact trigger in advance: needing interactive transactions in request handlers is the condition under which the driver becomes `drizzle-orm/neon-serverless` over WebSockets, still Neon. **That is a change to an accepted ADR's decision and needs a new ADR**, so it is recorded here rather than made quietly. In the meantime the adapter translates the driver's refusal into a diagnosis naming the driver and the decision, so the failure cannot be mistaken for a bug in the claim path.
 
 ## Profile
 

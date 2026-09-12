@@ -50,6 +50,27 @@ describe("createCoreServices", () => {
     await close();
   });
 
+  it("wires the Claim's unit of work", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(typeof services.claims.runInTransaction).toBe("function");
+    await close();
+  });
+
+  /**
+   * The read/write split, asserted rather than described. The Handle repository
+   * is read-only on purpose — ADR-0004's claim is a transaction, and a port
+   * that could also write would let a caller write without one. The writes live
+   * only on the object `runInTransaction` hands to its callback, so a new write
+   * method appearing here is a design change that has to turn this red first.
+   */
+  it("keeps the Handle repository read-only, so nothing can write a hold without a transaction", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(Object.keys(services.handles)).toEqual(["availabilityOf"]);
+    await close();
+  });
+
   it("passes transport plugins through to auth", async () => {
     const handle = createDatabase({
       url: "postgresql://app:app@localhost:5432/app_test",
