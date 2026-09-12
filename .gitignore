@@ -44,3 +44,9 @@ next-env.d.ts
 # CLAUDE.md at the root stay tracked.
 /apps/web/AGENTS.md
 /apps/web/CLAUDE.md
+
+# Throwaway fixtures written by packages/core's framework-free boundary test
+# (src/architecture/framework-free-boundary.test.ts). The test removes them in
+# `afterAll` and sweeps stale ones on the next run; this only stops a
+# killed-mid-run survivor from being committed.
+/packages/core/eslint-boundary-fixtures-*/
