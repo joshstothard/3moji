@@ -171,6 +171,14 @@ describe("resolveAlias", () => {
     ["nothing but separators", ".."],
     ["a malformed escape", "%F0%9F.ice-cube.ice-cube"],
     ["an emoji Handle", `${ICE}${ICE}${ICE}`],
+    // The shape an autolinker could plausibly produce out of a mangled share:
+    // emoji in the alias grammar's own separators. It reaches here rather than
+    // `canonicalise` — the dots make it five code points, so the length gate
+    // rejects it — and each position slugs away to nothing.
+    [
+      "emoji separated by dots",
+      `${encodeURIComponent(ICE)}%2E${encodeURIComponent(ICE)}%2E${encodeURIComponent(ICE)}`,
+    ],
   ])("rejects %s as not an alias", (_name, segment) => {
     expect(resolveAlias(segment)).toEqual({
       ok: false,
