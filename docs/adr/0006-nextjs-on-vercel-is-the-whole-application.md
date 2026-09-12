@@ -1,4 +1,4 @@
-# ADR-0003: Next.js on Vercel is the whole application
+# ADR-0006: Next.js on Vercel is the whole application
 
 **Status:** Accepted
 **Date:** 2026-09-12

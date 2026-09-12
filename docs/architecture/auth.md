@@ -1,6 +1,6 @@
 # Authentication
 
-**Planned, not yet built.** This describes the shape decided in [ADR-0003](../adr/0003-nextjs-on-vercel-is-the-whole-application.md). The PR that builds it removes this wording.
+**Planned, not yet built.** This describes the shape decided in [ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md). The PR that builds it removes this wording.
 
 ## Shape
 
