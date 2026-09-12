@@ -208,6 +208,32 @@ npm install
 npm run dev
 ```
 
+`npm run dev` goes through Turborepo, and `@template/web#dev` declares `dependsOn: ["^build"]`, so
+`packages/core` and `packages/shared` are built for you first. Do not reach for
+`npm run dev --workspace=apps/web` — it skips the graph, and `apps/web` resolves `@template/core` to
+its `dist` output, so on a clean checkout it fails with module-not-found.
+
+### What runs without a database
+
+Most of the app needs no infrastructure, which is worth knowing before provisioning anything:
+
+| Route                                | Needs                                                        |
+| ------------------------------------ | ------------------------------------------------------------ |
+| `/` — the home page                  | nothing                                                      |
+| `/<three emoji>` — Handle resolution | nothing; `canonicalise` is pure and reads no database        |
+| `/api/auth/*`                        | Postgres, plus the five variables in `apps/web/.env.example` |
+
+So emoji URLs can be exercised on a fresh clone with no `.env` at all: `/🧊🧊🧊` renders, a
+mis-spelled Handle 308s to its canonical percent-encoded path, and anything that is not a Handle
+404s. `lib/services.ts` is the only module that reads the environment and it throws on the first
+request that needs it — so an unconfigured checkout fails at `/api/auth/*` and nowhere else.
+
+### Previewing from a coding agent
+
+`.claude/launch.json` defines a `3moji web` configuration, so an agent can start the dev server by
+name rather than shelling out a long command. It runs `npx turbo dev --filter=@template/web` for the
+reason above.
+
 ## Useful Commands
 
 ```bash
