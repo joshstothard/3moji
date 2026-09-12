@@ -46,6 +46,31 @@ const BASE_URL = "http://localhost:3000";
 /** Far enough in the past that no clock skew makes a hold look alive. */
 const LONG_PAST = new Date("2020-01-01T00:00:00.000Z");
 
+/**
+ * Waits for the **real** clock to cross a second boundary.
+ *
+ * **The one place in this suite where the injected `Clock` is not enough, and
+ * the reason is worth spelling out because it cost a CI run.**
+ *
+ * Better Auth signs its verification token with `signJWT`, which stamps `iat`
+ * and `exp` from `Date.now()` at one-second resolution and adds no nonce. So
+ * the token's identity comes from the *system* clock, not from the `Clock` this
+ * suite injects — and two links issued for one address inside the same real
+ * second are **byte-identical**. That is not a bug: it is exactly the fact
+ * `verification_dispatch.token_hash` is deliberately not `UNIQUE` for, and in
+ * production it is unreachable, because the one-a-minute floor is measured on
+ * the real clock too (`createSystemClock`).
+ *
+ * A test that moves only the injected clock reaches it in a few milliseconds,
+ * which makes an invalidation assertion vacuous: the "older" link *is* the
+ * newest one, because it is the same string. Advancing both is what makes the
+ * test ask its question honestly.
+ */
+const letARealSecondPass = (): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 1_100);
+  });
+
 /** Every Account this suite creates carries this tag, and only these are deleted. */
 const SUITE_TAG = `verify-int-${String(Date.now())}`;
 const addressFor = (name: string): string => `${SUITE_TAG}-${name}@example.com`;
@@ -307,9 +332,13 @@ describeWithDatabase("verification against a real Postgres", () => {
     const firstToken = tokenFrom(emailSender.lastSent()?.text);
     emailSender.clear();
 
-    // A minute later, so the one-a-minute floor allows it and the new JWT's
-    // `iat` differs from the old one's.
+    // A minute later on the injected clock, so the one-a-minute floor genuinely
+    // allows the resend rather than being bypassed…
     now = new Date(now.getTime() + 61 * 1000);
+    // …and a real second too, because the *token* is stamped from `Date.now()`
+    // at one-second resolution. Without this the resend returns a byte-identical
+    // JWT and the assertion below compares a string with itself.
+    await letARealSecondPass();
     const outcome = await resendVerification({
       email,
       directory,
@@ -320,6 +349,9 @@ describeWithDatabase("verification against a real Postgres", () => {
     expect(outcome).toEqual({ state: "sent" });
 
     const secondToken = tokenFrom(emailSender.lastSent()?.text);
+    // Guards the rest of the test: if these were equal there would be only one
+    // link, and "the older one is refused" would be comparing a string with
+    // itself. See `letARealSecondPass` for how that happens.
     expect(secondToken).not.toBe(firstToken);
 
     // The older link is refused, and the answer still names the Handle so the
@@ -376,6 +408,14 @@ describeWithDatabase("verification against a real Postgres", () => {
     expect(tooMany.state).toBe("too-many");
 
     // Three rows, so the refusals really did send nothing.
+    //
+    // **These three tokens are byte-identical to each other**, because only the
+    // injected clock moved and `signJWT` stamps `iat` from `Date.now()`. That
+    // is deliberate here rather than tolerated: it is the one scenario
+    // `verification_dispatch.token_hash` is left non-`UNIQUE` for, so this
+    // counting assertion is also the test that three rows sharing one
+    // fingerprint insert cleanly instead of raising a constraint violation on a
+    // bookkeeping row.
     expect(await dispatchCount(userId)).toBe(3);
 
     // Once the oldest ages out of the window, a link is allowed again.
