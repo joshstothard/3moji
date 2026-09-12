@@ -129,6 +129,16 @@ export type {
   ReleaseResult,
 } from "./handle/release-handle";
 export { releasedHandle } from "./db/released-handle";
+export { profile } from "./db/profile";
+export { link } from "./db/link";
+export type {
+  Profile,
+  ProfileLink,
+  ProfileRepository,
+} from "./ports/profile-repository";
+export { createDrizzleProfileRepository } from "./adapters/drizzle-profile-repository";
+export { profileStateOf } from "./profile/profile-state";
+export type { ProfileState } from "./profile/profile-state";
 export { submitClaim } from "./handle/submit-claim";
 export type { ClaimSubmission, SubmitClaimInput } from "./handle/submit-claim";
 
@@ -191,3 +201,20 @@ export type {
   ClaimCollisionEmailInput,
   ClaimCollisionInput,
 } from "./auth/claim-collision";
+
+export {
+  ALLOWED_LINK_SCHEMES,
+  BIO_MAX_LENGTH,
+  DISPLAY_NAME_MAX_LENGTH,
+  LINK_LIMIT,
+  LINK_TITLE_MAX_LENGTH,
+  validateProfile,
+} from "./profile/validate-profile";
+export type {
+  ProfileDraft,
+  ProfileLinkDraft,
+  ProfileValidationResult,
+  ProfileViolation,
+  ProfileViolationField,
+  ProfileViolationRule,
+} from "./profile/validate-profile";

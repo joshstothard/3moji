@@ -52,8 +52,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | ----- | ---------------------------------------------------------------------------- | ---------- | ----------- |
 | 1     | The app is live at `3moji.me` and a person can create an account and sign in | #26        | In progress |
 | 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | In progress |
-| 3     | You can claim a Handle end to end on the live site                           | #76        | Planned     |
-| 4     | A claimed Handle shows a real page its owner controls                        | —          | Not planned |
+| 3     | You can claim a Handle end to end on the live site                           | #76        | Done        |
+| 4     | A claimed Handle shows a real page its owner controls                        | #101       | Planned     |
 | 5     | It survives real people                                                      | —          | Not planned |
 
 ### Phase 1 — Foundation and providers
@@ -136,13 +136,13 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Acceptance criteria:**
 
-- [ ] Picking three emoji shows live availability, including the taken and held states.
-- [ ] Claiming holds the Handle for 24 hours, sends the email, and finalises on verification.
-- [ ] Each failure path on issue #15 has a test.
-- [ ] An expired hold frees the Handle and deletes the unverified Account, evaluated lazily with no scheduled job.
-- [ ] Releasing deletes the Account and writes a tombstone carrying **no user reference** — the row is the canonical key and a timestamp, nothing more ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md) decision 3).
-- [ ] A Handle released moments ago **can** be claimed immediately, asserted against a real Postgres. This is [#63](https://github.com/joshstothard/3moji/issues/63)'s outstanding criterion: "no cooldown" is satisfied by accident unless a test makes it deliberate.
-- [ ] The claim transaction re-checks reservations inside its own transaction, proven by a test that reserves a Handle mid-flight.
+- [x] Picking three emoji shows live availability, including the taken and held states.
+- [x] Claiming holds the Handle for 24 hours, sends the email, and finalises on verification.
+- [x] Each failure path on issue #15 has a test.
+- [x] An expired hold frees the Handle and deletes the unverified Account, evaluated lazily with no scheduled job.
+- [x] Releasing deletes the Account and writes a tombstone carrying **no user reference** — the row is the canonical key and a timestamp, nothing more ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md) decision 3).
+- [x] A Handle released moments ago **can** be claimed immediately, asserted against a real Postgres. This is [#63](https://github.com/joshstothard/3moji/issues/63)'s outstanding criterion: "no cooldown" is satisfied by accident unless a test makes it deliberate.
+- [x] The claim transaction re-checks reservations inside its own transaction, proven by a test that reserves a Handle mid-flight.
 - [x] A reserved or blocked Handle never renders "This Handle is available". Done by #80: `/🍕🍕🍕` and `/🔪🔪🔪` resolve 200 and read "This Handle is reserved.", with no reason given.
 
 **Dependencies:** Phases 1 and 2. ADR-0004 **as amended by** [ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md), which resolved the cooldown contradiction that blocked this phase; [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
@@ -151,13 +151,13 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- #77 Add the Handle repository port and its availability read
-- #78 Build the home-page Handle builder with live URL preview
-- #79 Add category tabs and search to the builder
+- #77 Add the Handle repository port and its availability read — done
+- #78 Build the home-page Handle builder with live URL preview — done
+- #79 Add category tabs and search to the builder — done
 - #80 Render the availability states and swap suggestions — done (also closed #68)
-- #81 Claim: sign-up and hold as one atomic act
-- #82 Finalise the Claim on verification, with the hold screen and resend
-- #83 Expire holds lazily and delete the unverified Account
+- #81 Claim: sign-up and hold as one atomic act — done
+- #82 Finalise the Claim on verification, with the hold screen and resend — done
+- #83 Expire holds lazily and delete the unverified Account — done
 - #84 Release: account deletion and the released_handle tombstone — done (also meets #63's outstanding criterion: a just-released Handle is claimed at the instant of release, against real Postgres)
 
 ### Phase 4 — Profile
@@ -184,9 +184,20 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Dependencies:** Phase 3. [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
 
+**Status:** In progress. Planned as epic [#101](https://github.com/joshstothard/3moji/issues/101).
+
+**The storage layer is built** — [#102](https://github.com/joshstothard/3moji/issues/102): the `profile` and `link` tables, their migration, and the read port that resolves a canonical `HandleKey` to a Profile. A Profile is keyed on the Account, so Release takes it and its Links with it; Links carry an explicit order, and "at most ten" is enforced by the schema rather than by the write path. "Claimed but unedited" is a named state rather than an empty object. See [`data-model.md` § Profile](../architecture/data-model.md#profile). The field limits themselves are [#103](https://github.com/joshstothard/3moji/issues/103)'s and the write path is [#106](https://github.com/joshstothard/3moji/issues/106)'s; there is no page yet.
+
 **Issues:**
 
-- #102, #103, #104, #105, #106, #107, #108, #109 — this phase's sub-issues, on epic [#101](https://github.com/joshstothard/3moji/issues/101). #105 (the unclaimed Handle renders the builder pre-filled) is done.
+- #102 Add the profile and link tables with their migration and read path
+- #103 Enforce the Profile field limits in the domain
+- #104 Render the Profile at a claimed Handle
+- #105 Render the builder pre-filled at an unclaimed Handle — done
+- #106 Edit the Profile in place
+- #107 Reorder Links by dragging, and by keyboard
+- #108 Resolve a dot-separated word alias to a Handle
+- #109 Render the listing when an alias matches several Handles
 
 ### Phase 5 — Launch readiness
 
@@ -304,3 +315,17 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   password even after deciding the address is taken. One deviation flagged: verifying lands on
   `/claim/verified/<handle>` rather than on the Handle itself, because `/[handle]` is a Phase 4
   placeholder that reads no database and would tell a new owner their Handle is available.
+- 2026-09-12 — Synced from GitHub: **Phase 3 Done** (epic #76 closed, all eight issues #77–#84
+  closed). Phase 1 In progress (epic #26, 5 of 6; #32 blocked on #19) and Phase 2 In progress
+  (epic #48, 6 of 7; #55 blocked on #23) are unchanged — both wait on work only the repository
+  owner can do. All eight Phase 3 acceptance criteria are ticked, including "each failure path on
+  #15 has a test": the two password-reset paths have no page yet, but they are covered at the API
+  level in `packages/core/src/auth/auth.integration.test.ts`, including #15's judgement call that a
+  successful reset must not mark an email verified. Phase 3 also closed three issues outside its own
+  list: #68 (a reserved Handle rendering "available"), #63 (the cooldown contradiction) and #89
+  (the production driver could not open a transaction).
+- 2026-09-12 — Phase 4 planned: epic #101, issues #102–#109. The held-state criterion is already
+  met by #80 and is pinned by a regression assertion in #104 rather than rebuilt. The dotted-segment
+  criterion cannot close until the site deploys (#32, blocked on #19), and #108 records that rather
+  than claiming it. One schema decision was made rather than left open: a Profile is keyed on the
+  **Account**, not the Handle, so it cascades on Release through the path that already exists.

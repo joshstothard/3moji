@@ -17,6 +17,8 @@ export default defineConfig({
     "./src/db/handle.ts",
     "./src/db/verification-dispatch.ts",
     "./src/db/released-handle.ts",
+    "./src/db/profile.ts",
+    "./src/db/link.ts",
   ],
   out: "./migrations",
   dialect: "postgresql",
