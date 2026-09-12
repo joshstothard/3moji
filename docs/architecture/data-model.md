@@ -97,13 +97,14 @@ The row exists because **time cannot be backfilled**: a cooldown switched on lat
 
 ADR-0004 decision 4 — _every live Account owns exactly one Handle_ — is an invariant about two rows in two tables, so it holds only if they are written together. Account creation and the hold are therefore **one transaction**, and every rejection rolls all of it back: a Claim that fails for any reason creates nothing, never an Account waiting for a Handle.
 
-| Piece                            | Lives in                                                   |
-| -------------------------------- | ---------------------------------------------------------- |
-| The use case and its result type | `packages/core/src/handle/claim-handle.ts`                 |
-| The unit-of-work port            | `packages/core/src/ports/claim-store.ts`                   |
-| Its Drizzle adapter              | `packages/core/src/adapters/drizzle-claim-store.ts`        |
-| Holding email until commit       | `packages/core/src/auth/adapters/deferred-email-sender.ts` |
-| The wiring                       | `createCoreServices`, as `services.claims`                 |
+| Piece                            | Lives in                                                                     |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| The use case and its result type | `packages/core/src/handle/claim-handle.ts`                                   |
+| The unit-of-work port            | `packages/core/src/ports/claim-store.ts`                                     |
+| Its Drizzle adapter              | `packages/core/src/adapters/drizzle-claim-store.ts`                          |
+| Holding email until commit       | `packages/core/src/auth/adapters/deferred-email-sender.ts`                   |
+| The wiring                       | `createCoreServices`, as `services.claims`                                   |
+| Freeing an expired hold          | `freeExpiredHold` on the same port — see [Expiring a hold](#expiring-a-hold) |
 
 **The writes exist only inside the transaction, structurally.** `HandleRepository` was deliberately read-only so that no caller could write a hold without a transaction, and `ClaimStore` keeps that property rather than restating it as a convention: it exposes one method, `runInTransaction`, and `createAccount` and `holdHandle` are reachable only on the object handed to its callback. The callback returns its verdict beside a commit decision instead of throwing, because a rejected Claim is an ordinary answer — the same argument `canonicalise` makes — while still having to roll back.
 

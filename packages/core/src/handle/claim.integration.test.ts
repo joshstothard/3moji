@@ -538,6 +538,47 @@ describeWithDatabase("the Claim against a real Postgres", () => {
   });
 
   /**
+   * **The one new concurrency shape this write introduces**: two Claims racing
+   * for the same Handle when the row sitting there is an *expired* hold, so
+   * both want to delete the same `user` row before inserting their own.
+   *
+   * Both are issued before either is awaited, each on its own pooled
+   * connection in its own transaction, and they name different emails so a
+   * rejection can only have come from the Handle's primary key. The loser's
+   * `SELECT … FOR UPDATE` waits on the winner's row lock; when the winner
+   * commits its DELETE, the waiter re-evaluates the predicate, finds no row,
+   * and goes on to its own INSERT, which the primary key then refuses. So the
+   * shape terminates in one `held` and one `taken` rather than deadlocking —
+   * and `statement_timeout` on the pool means a bug here fails CI instead of
+   * wedging it.
+   */
+  it("leaves one row when two Claims race for the same expired Handle", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 15);
+    const abandoned = addressFor("expired-race-abandoned");
+    const first = addressFor("expired-race-first");
+    const second = addressFor("expired-race-second");
+    await claim({ segment: key, email: abandoned });
+    emailSender.clear();
+
+    const settled = await Promise.all([
+      claim({ segment: key, email: first, clock: pastExpiry }),
+      claim({ segment: key, email: second, clock: pastExpiry }),
+    ]);
+
+    expect(settled.filter((result) => result.state === "held")).toHaveLength(1);
+    expect(settled.filter((result) => result.state === "taken")).toHaveLength(
+      1,
+    );
+    // The expired Account is gone, exactly one of the two newcomers has one,
+    // and the Handle is held once.
+    expect(await countUsers(abandoned)).toBe("0");
+    const users = [await countUsers(first), await countUsers(second)];
+    expect(users.filter((count) => count === "1")).toHaveLength(1);
+    expect(await countHandles(key)).toBe("1");
+    expect(emailSender.sent).toHaveLength(1);
+  });
+
+  /**
    * The same guarantee, one layer lower: the **freeing write's own predicate**,
    * called directly rather than through the Claim.
    *
