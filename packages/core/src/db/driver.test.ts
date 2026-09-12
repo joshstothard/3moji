@@ -1,38 +1,26 @@
-import { resolveDriver, type DatabaseDriver } from "./driver";
+import { resolveDriver } from "./driver";
 
 describe("resolveDriver", () => {
-  it("uses Neon's serverless HTTP driver in production", () => {
-    expect(resolveDriver({ nodeEnv: "production" })).toBe("neon-http");
-  });
-
-  it.each(["development", "test", undefined])(
-    "uses node-postgres when NODE_ENV is %s",
+  // The point of ADR-0010. A driver chosen by NODE_ENV meant CI exercised
+  // something production never ran, and four pull requests merged green over a
+  // Claim path that could not open a transaction. There is now one answer.
+  it.each(["production", "development", "test", undefined])(
+    "answers node-postgres when NODE_ENV is %s",
     (nodeEnv) => {
       expect(resolveDriver({ nodeEnv })).toBe("node-postgres");
     },
   );
 
-  it("lets an explicit override win over NODE_ENV", () => {
-    expect(
-      resolveDriver({ nodeEnv: "production", override: "node-postgres" }),
-    ).toBe("node-postgres");
-    expect(resolveDriver({ nodeEnv: "test", override: "neon-http" })).toBe(
-      "neon-http",
+  it("gives production and test the same driver, which is the whole decision", () => {
+    expect(resolveDriver({ nodeEnv: "production" })).toBe(
+      resolveDriver({ nodeEnv: "test" }),
     );
-  });
-
-  it("rejects an override it does not recognise, naming the value", () => {
-    expect(() =>
-      resolveDriver({ nodeEnv: "test", override: "sqlite" as DatabaseDriver }),
-    ).toThrow(/sqlite/);
   });
 
   it("does not read process.env itself", () => {
     const previous = process.env.NODE_ENV;
     try {
       process.env.NODE_ENV = "production";
-      // The caller passes the environment in; nothing is read ambiently, so a
-      // production process.env must not change a test-env decision.
       expect(resolveDriver({ nodeEnv: "test" })).toBe("node-postgres");
     } finally {
       if (previous === undefined) delete process.env.NODE_ENV;

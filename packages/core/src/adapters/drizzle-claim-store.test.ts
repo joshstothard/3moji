@@ -55,9 +55,9 @@ const causeOf = (error: unknown): unknown =>
     ? error.cause
     : undefined;
 
-const build = (driver: "neon-http" | "node-postgres") => {
+const build = () => {
   const emailSender = createRecordingEmailSender();
-  const handle = createDatabase({ url: URL, driver });
+  const handle = createDatabase({ url: URL });
   const auth: AuthFactory = ({ db, emailSender: sender, dispatches }) =>
     createAuth({
       db,
@@ -78,43 +78,14 @@ const build = (driver: "neon-http" | "node-postgres") => {
 
 describe("createDrizzleClaimStore", () => {
   /**
-   * ADR-0006 decision 6 puts production on `neon-http`, which has no
-   * interactive transactions. The Claim cannot run there, and this asserts it
-   * says so in terms a reader can act on rather than surfacing the driver's
-   * bare "No transactions support in neon-http driver" inside a 500.
-   */
-  it("explains itself when the driver has no interactive transactions", async () => {
-    const { store, close } = build("neon-http");
-
-    await expect(
-      store.runInTransaction(() =>
-        Promise.resolve({ commit: true, value: "unreachable" }),
-      ),
-    ).rejects.toThrow(/neon-serverless.+new ADR|ADR-0006 decision 6/s);
-
-    await close();
-  });
-
-  it("keeps the driver's own error as the cause, so the diagnosis is checkable", async () => {
-    const { store, close } = build("neon-http");
-
-    const failure = await store
-      .runInTransaction(() =>
-        Promise.resolve({ commit: true, value: "unreachable" }),
-      )
-      .catch((error: unknown) => error);
-
-    expect(messageOf(causeOf(failure))).toContain("No transactions support");
-
-    await close();
-  });
-
-  /**
    * The email is the part that cannot be taken back, so a transaction that
    * never even opened must not have sent one.
    */
   it("sends nothing when the transaction could not be opened", async () => {
-    const { store, emailSender, close } = build("neon-http");
+    // The transaction fails to open because the database is unreachable —
+    // previously this used a driver that could not open one at all. The
+    // realistic failure exercises the same branch and outlives the driver.
+    const { store, emailSender, close } = build();
 
     await store
       .runInTransaction(() =>
@@ -134,7 +105,7 @@ describe("createDrizzleClaimStore", () => {
    * database failure behind an ADR reference.
    */
   it("passes a genuine connection failure through untranslated", async () => {
-    const { store, close } = build("node-postgres");
+    const { store, close } = build();
 
     const failure = await store
       .runInTransaction(() =>
@@ -165,7 +136,7 @@ describe("claimTransactionOn against an unreachable database", () => {
   if (KEY === undefined) throw new Error("the test Handle must canonicalise");
 
   const build = () => {
-    const handle = createDatabase({ url: URL, driver: "node-postgres" });
+    const handle = createDatabase({ url: URL });
     const auth = createAuth({
       db: handle.db,
       emailSender: createRecordingEmailSender(),

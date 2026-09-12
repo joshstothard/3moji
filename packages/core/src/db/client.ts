@@ -1,5 +1,3 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
 import { drizzle as drizzleNode } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
@@ -9,38 +7,41 @@ import { authSchema } from "./schema";
 export interface CreateDatabaseInput {
   /** The connection string. Passed in; never read from the environment here. */
   readonly url: string;
-  /** The value of `NODE_ENV`, used to pick a driver when none is forced. */
+  /**
+   * The value of `NODE_ENV`. Kept so callers need not change, and deliberately
+   * no longer able to select a driver — see {@link ./driver.resolveDriver} and
+   * ADR-0010.
+   */
   readonly nodeEnv?: string | undefined;
-  /** Forces a driver, whatever the environment says. */
-  readonly driver?: DatabaseDriver | undefined;
 }
 
 export type NodePostgresDatabase = ReturnType<
   typeof drizzleNode<typeof authSchema>
 >;
-export type NeonDatabase = ReturnType<typeof drizzleNeon<typeof authSchema>>;
-export type Database = NodePostgresDatabase | NeonDatabase;
 
 /**
- * A transaction opened on a {@link Database}, whichever driver it came from.
+ * The one client shape. **No longer a union** — ADR-0010 puts every environment
+ * on `node-postgres`, so a second driver's type cannot reach a caller.
+ */
+export type Database = NodePostgresDatabase;
+
+/**
+ * A transaction opened on a {@link Database}.
  *
- * **Derived from the drivers' own signatures rather than named**, because
+ * **Derived from the driver's own signature rather than named**, because
  * Drizzle's transaction type is generic in its query-result and schema
- * parameters and spelling it out would restate three of them — each a chance to
+ * parameters and spelling it out would restate them — each a chance to
  * disagree with the client the transaction actually came from.
  *
- * **Both shapes are here, and only one of them can ever exist at runtime.**
- * `Database` is a union, so `db.transaction(…)` hands its callback the union of
- * both transaction types and a type covering only node-postgres would not
- * compile. `drizzle-orm/neon-http` nonetheless throws "No transactions support
- * in neon-http driver" the moment `transaction` is called — the types promise
- * what that driver does not deliver. See
- * {@link ../adapters/drizzle-claim-store.createDrizzleClaimStore}, which is
- * where that matters and where it is reported.
+ * This was a union of two drivers' transaction types, and the second could not
+ * open one: `drizzle-orm/neon-http` throws "No transactions support in
+ * neon-http driver" the moment `transaction` is called, so its types promised
+ * what it did not deliver. ADR-0010 removed that driver, and with it the gap
+ * between what the type said and what the runtime did.
  */
-export type DatabaseTransaction =
-  | Parameters<Parameters<NodePostgresDatabase["transaction"]>[0]>[0]
-  | Parameters<Parameters<NeonDatabase["transaction"]>[0]>[0];
+export type DatabaseTransaction = Parameters<
+  Parameters<NodePostgresDatabase["transaction"]>[0]
+>[0];
 
 /**
  * Anything a read or a write may be issued against: the client, or a
@@ -55,11 +56,10 @@ export type DatabaseOrTransaction = Database | DatabaseTransaction;
 /**
  * A database client plus the means to release it.
  *
- * `close` exists because the node-postgres driver holds a connection pool, and
- * anything that opens one must be able to release it — a migration script, an
+ * `close` exists because `node-postgres` holds a connection pool, and anything
+ * that opens one must be able to release it — a migration script, an
  * integration test, a one-off task. Without it a process hangs on exit for
- * reasons that are tedious to diagnose. For the Neon HTTP driver there is no
- * pool, so `close` is a no-op and callers need not care which they hold.
+ * reasons that are tedious to diagnose.
  */
 export interface DatabaseHandle {
   readonly db: Database;
@@ -70,9 +70,9 @@ export interface DatabaseHandle {
 /**
  * Builds a Drizzle client over the auth schema.
  *
- * Neither driver connects eagerly, so constructing this is cheap and safe at
- * module scope. Which driver is used is decided by `resolveDriver`
- * (ADR-0006 decision 6).
+ * The driver does not connect eagerly, so constructing this is cheap and safe
+ * at module scope. There is one driver in every environment (ADR-0010), and
+ * `resolveDriver` is where that is stated and tested.
  */
 export function createDatabase(input: CreateDatabaseInput): DatabaseHandle {
   if (input.url === "") {
@@ -81,18 +81,7 @@ export function createDatabase(input: CreateDatabaseInput): DatabaseHandle {
     );
   }
 
-  const driver = resolveDriver({
-    nodeEnv: input.nodeEnv,
-    override: input.driver,
-  });
-
-  if (driver === "neon-http") {
-    return {
-      db: drizzleNeon(neon(input.url), { schema: authSchema }),
-      driver,
-      close: () => Promise.resolve(),
-    };
-  }
+  const driver = resolveDriver({ nodeEnv: input.nodeEnv });
 
   const pool = new Pool({ connectionString: input.url });
   return {

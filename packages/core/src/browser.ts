@@ -2,7 +2,7 @@
  * The part of the domain a browser bundle may import.
  *
  * `./index.ts` is not importable from a client component. It re-exports
- * `db/client`, which reaches `pg` and `@neondatabase/serverless`, and bundling
+ * `db/client`, which reaches `pg`, and bundling
  * those for the browser fails `next build` outright:
  *
  * ```

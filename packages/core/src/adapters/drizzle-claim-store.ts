@@ -47,19 +47,15 @@ const MINIMUM_PASSWORD_LENGTH = 8;
  * dies between the two leaves exactly the handle-less Account the invariant
  * forbids.
  *
- * ## The neon-http problem, stated rather than hidden
+ * ## One driver, in every environment
  *
- * `drizzle-orm/neon-http` has no interactive transactions — it throws "No
- * transactions support in neon-http driver" — and ADR-0006 decision 6 puts
- * production on that driver. So this path cannot run in production as
- * configured today. Nothing calls it in production yet (the claim UI is #78-#82
- * and there is no server action), and the hosting report named this exact
- * trigger in advance: "what would change it: needing interactive transactions
- * in request handlers (then switch to `neon-serverless` over WebSockets, still
- * Neon)". That switch is a change to an accepted ADR's decision and therefore
- * needs a new ADR, which is not this issue's to write. Until it is made, the
- * failure is translated into the diagnosis rather than surfacing as a raw
- * driver message in a 500.
+ * This needs an interactive transaction, and it gets one everywhere: ADR-0010
+ * puts local development, CI and production on `node-postgres`. It previously
+ * could not have run in production at all — ADR-0006 decision 6 selected
+ * Neon's HTTP driver, which throws "No transactions support in neon-http
+ * driver" — and nothing caught it because CI exercised a different driver from
+ * production. That divergence is gone, so this path is exercised by the same
+ * driver that serves it.
  */
 export function createDrizzleClaimStore(
   input: DrizzleClaimStoreInput,
