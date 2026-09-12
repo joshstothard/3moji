@@ -12,7 +12,11 @@ export default defineConfig({
   // glob would sweep the `*.test.ts` files beside them in, so new tables are
   // added here by hand — a table missing from this list generates no migration
   // and fails no build.
-  schema: ["./src/db/schema.ts", "./src/db/handle.ts"],
+  schema: [
+    "./src/db/schema.ts",
+    "./src/db/handle.ts",
+    "./src/db/verification-dispatch.ts",
+  ],
   out: "./migrations",
   dialect: "postgresql",
   dbCredentials: {

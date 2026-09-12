@@ -1,3 +1,4 @@
+import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import { createDatabase } from "../db/client";
 import { createRecordingEmailSender } from "./adapters/recording-email-sender";
 import { createAuth } from "./create-auth";
@@ -6,18 +7,23 @@ const SECRET = "a".repeat(32);
 const BASE_URL = "http://localhost:3000";
 const DB_URL = "postgresql://app:app@localhost:5432/app_test";
 
+const NOW = new Date("2026-09-12T12:00:00.000Z");
+
 const build = (overrides: Partial<Parameters<typeof createAuth>[0]> = {}) => {
   const emailSender = createRecordingEmailSender();
+  const dispatches = createInMemoryVerificationDispatchStore();
   const handle = createDatabase({ url: DB_URL, nodeEnv: "test" });
   const auth = createAuth({
     db: handle.db,
     emailSender,
+    dispatches,
+    clock: { now: () => NOW },
     baseUrl: BASE_URL,
     secret: SECRET,
     from: "3moji <no-reply@mail.3moji.me>",
     ...overrides,
   });
-  return { auth, emailSender, close: handle.close };
+  return { auth, emailSender, dispatches, close: handle.close };
 };
 
 describe("createAuth", () => {

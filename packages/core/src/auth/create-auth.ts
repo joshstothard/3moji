@@ -3,10 +3,42 @@ import { betterAuth, type BetterAuthOptions } from "better-auth";
 
 import type { DatabaseOrTransaction } from "../db/client";
 import { authSchema } from "../db/schema";
+import type { Clock } from "../ports/clock";
+import type { VerificationDispatchStore } from "../ports/verification-dispatch-store";
 import type { EmailSender } from "./ports/email-sender";
+import { verificationTokenFingerprint } from "./verification-token";
 
 /** Better Auth's own minimum is 32 characters of randomness. */
 const MINIMUM_SECRET_LENGTH = 32;
+
+/**
+ * Where a verification link points: **our page, not Better Auth's endpoint.**
+ *
+ * Better Auth's own link is `{baseURL}/api/auth/verify-email?token=…`, which
+ * would work and is what the library hands us in `url`. It is not used, for two
+ * reasons that only a real run makes obvious:
+ *
+ * 1. **Invalidation needs an interception point.** The verification token is a
+ *    signed JWT the library does not store, so every link it ever issued stays
+ *    valid for its hour. "Each resend invalidates the previous link" can only
+ *    be enforced by something that runs *before* verification, against our own
+ *    record of what we issued — and nothing can run before an endpoint the
+ *    library owns.
+ * 2. **The endpoint's failure mode loses the token.** Given a `callbackURL`, a
+ *    rejected token becomes a redirect to `{callbackURL}?error=token_expired`,
+ *    and the token — the only thing that says *whose* link it was — is gone. So
+ *    the expired-link page could not say which Handle is still being held,
+ *    which is the one thing #82 insists it must say. Given no `callbackURL`, a
+ *    rejection is a bare 401 with no page at all.
+ *
+ * The token still travels as a **query parameter**, matching the shape the
+ * library uses; password reset puts its token in a **path segment** instead,
+ * and a helper that handles only one of the two shapes passes every
+ * verification test and fails every reset test (`quality-strategy.md`).
+ */
+function verificationLink(baseUrl: string, token: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/claim/verify?token=${encodeURIComponent(token)}`;
+}
 
 export interface CreateAuthInput {
   /**
@@ -18,6 +50,18 @@ export interface CreateAuthInput {
    */
   readonly db: DatabaseOrTransaction;
   readonly emailSender: EmailSender;
+  /**
+   * Records every verification link issued.
+   *
+   * **Passed in, never built from `db` here.** It has to be bound to the same
+   * client this instance is — on the claim path that is the transaction — and a
+   * store constructed inside this function would be bound correctly for the
+   * pooled instance and wrongly for the transactional one, silently, with the
+   * row outliving the rollback.
+   */
+  readonly dispatches: VerificationDispatchStore;
+  /** Stamps the dispatch. The same `Clock` the rest of the domain reads. */
+  readonly clock: Clock;
   /** Where the app is served from; Better Auth builds its links from this. */
   readonly baseUrl: string;
   /** Signing secret. Passed in; never read from the environment here. */
@@ -91,11 +135,26 @@ export function createAuth(input: CreateAuthInput) {
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
-      sendVerificationEmail: async ({ user, url }) => {
+      sendVerificationEmail: async ({ user, token }) => {
+        // **Recorded before it is sent, and that order is deliberate.** If the
+        // send fails after the row is written, the previous link is dead and no
+        // new one arrived — recoverable, because resend is on the hold screen.
+        // The other order puts a live link in somebody's inbox that we have no
+        // record of, and an unrecorded link is one `finaliseClaim` can only
+        // treat as unknown. The recoverable failure is the one to choose.
+        await input.dispatches.record({
+          userId: user.id,
+          tokenHash: verificationTokenFingerprint(token),
+          sentAt: input.clock.now(),
+        });
+
         await emailSender.send({
           to: user.email,
           subject: "Verify your email to claim your 3moji handle",
-          text: `Verify your email: ${url}\n\nYour handle is held for 24 hours while you do. After that it returns to the pool.\n\nFrom ${from}`,
+          // The token travels in the URL only, never the subject: subjects are
+          // logged, previewed on lock screens and indexed far more widely than
+          // bodies.
+          text: `Verify your email: ${verificationLink(input.baseUrl, token)}\n\nYour handle is held for 24 hours while you do. After that it returns to the pool.\n\nIf the link has expired by the time you get to it, the page will offer you a new one — your handle is still held.\n\nFrom ${from}`,
         });
       },
     },

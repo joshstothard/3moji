@@ -93,7 +93,7 @@ The row exists because **time cannot be backfilled**: a cooldown switched on lat
 
 ## The Claim
 
-**Built as a domain path, with no user interface in front of it and not runnable on the production driver.** `claimHandle` in `packages/core/src/handle/claim-handle.ts`; the picker, the hold screen and the server action that would call it are #78-#82.
+**Built, and not runnable on the production driver.** `claimHandle` in `packages/core/src/handle/claim-handle.ts`, with `submitClaim` over it (`src/handle/submit-claim.ts`) and the `submitClaimAction` server action in `apps/web`. The hold screen, the verification landing and resend are built ([#82](https://github.com/joshstothard/3moji/issues/82)); wiring the builder's submit button to the action is #79-#80's.
 
 ADR-0004 decision 4 — _every live Account owns exactly one Handle_ — is an invariant about two rows in two tables, so it holds only if they are written together. Account creation and the hold are therefore **one transaction**, and every rejection rolls all of it back: a Claim that fails for any reason creates nothing, never an Account waiting for a Handle.
 
@@ -113,13 +113,44 @@ ADR-0004 decision 4 — _every live Account owns exactly one Handle_ — is an i
 
 **`held_until` comes from the injected `Clock`** and the 24 hours is `HOLD_DURATION_MS`, a domain constant. The column has no SQL default on purpose; see its row in the table above.
 
-An already-registered email is decided by a read **inside the transaction**, not from the sign-up response: Better Auth returns a synthetic success for one to prevent account enumeration ([#15](https://github.com/joshstothard/3moji/issues/15)), so its return value cannot distinguish the two. The domain answers `already-registered` and nothing is written — neither a second Account nor a hold that would take the Handle away from the person submitting. **The transport owes the submitter the same hold screen a new sign-up gets**, and the email to the existing address naming the Handle they already own is #82's.
+An already-registered email is decided by a read **inside the transaction**, not from the sign-up response: Better Auth returns a synthetic success for one to prevent account enumeration ([#15](https://github.com/joshstothard/3moji/issues/15)), so its return value cannot distinguish the two. The domain answers `already-registered` and nothing is written — neither a second Account nor a hold that would take the Handle away from the person submitting. **The submitter is owed the same hold screen a new sign-up gets**, and `submitClaim` is where that promise is kept: it collapses `already-registered` into `pending`, so the case no longer exists in the type a transport sees, and it pads the fast branch to a 500 ms floor so the _timing_ does not answer the question either. The claim adapter hashes the submitted password even after deciding the address is taken, which is the same dummy-work trick Better Auth's own sign-in uses. The existing address is told by email instead, naming the Handle it already owns and linking to the reset **form** — not a tokenised reset link, because sign-up is unauthenticated and a tokenised link there would let a stranger have live reset tokens mailed to somebody else's inbox.
 
 ### The production driver cannot run it
 
 `drizzle-orm/neon-http` has **no interactive transactions** — it throws "No transactions support in neon-http driver" — and [ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md) decision 6 selects that driver for production. Local development and CI resolve to `node-postgres`, which does support them, so the Claim is exercised in CI against `postgres:16` and would fail on Vercel as configured today.
 
 Nothing calls it in production yet — there is no server action and no claim UI — so this is a gap to close before #78-#82 ship, not a live defect. [The hosting report](../reports/2026-09-11-hosting-and-email.md) named this exact trigger in advance: needing interactive transactions in request handlers is the condition under which the driver becomes `drizzle-orm/neon-serverless` over WebSockets, still Neon. **That is a change to an accepted ADR's decision and needs a new ADR**, so it is recorded here rather than made quietly. In the meantime the adapter translates the driver's refusal into a diagnosis naming the driver and the decision, so the failure cannot be mistaken for a bug in the claim path.
+
+### Finalising the Claim
+
+**Built** — `finaliseClaim` in `packages/core/src/auth/finalise-claim.ts`, over the `ClaimFinaliser` port and its Drizzle adapter, reached from `apps/web/src/app/claim/verify/route.ts` ([#82](https://github.com/joshstothard/3moji/issues/82)).
+
+A Claim becomes final when the email is verified, and **that means two rows in two tables**: `user.email_verified` going true and `handle.claimed_at` filling in. They are written in **one transaction**, for the same reason the Claim itself is one — `claimed_at` is what ownership _means_, so an address verified without it leaves a Handle that still reads as held, and lazy expiry ([#83](https://github.com/joshstothard/3moji/issues/83)) would free it out from under somebody who did everything right.
+
+The finalisation refuses a hold that has already expired, and `ownershipOf` decides that rather than a SQL predicate, so the 24-hour rule has exactly one implementation. A refusal rolls the verification back too: an Account whose hold died is one #83 deletes, and leaving it verified with no Handle is the state ADR-0004 decision 4 forbids.
+
+It shares its transaction plumbing with the Claim (`packages/core/src/adapters/transactional-auth.ts`): Better Auth rebound to the transaction, the email sender deferred until the commit, and the dispatch store bound to the same transaction. The neon-http caveat below therefore applies to both ([#89](https://github.com/joshstothard/3moji/issues/89)).
+
+## Verification dispatch
+
+**Built** — `packages/core/src/db/verification-dispatch.ts`, migration `0003_verification_dispatch`.
+
+One row per verification link issued: who for, when, and which link. It exists because **Better Auth's verification token is stateless**: `createEmailVerificationToken` signs a JWT carrying the address and an hour's expiry and stores nothing. So there is no row for a resend to delete, and every link the library has ever signed stays valid until it expires on its own. "Each resend invalidates the previous link" is not something the library can be configured into — it is a rule enforced against our own record of what we issued, or it is not enforced at all.
+
+The same rows carry the resend rate limit, which is not two responsibilities bolted together: "three an hour, at most one a minute, per Account" is a question about the same facts. A serverless deployment has no process memory to hold them in, so they have to be rows.
+
+### How it is stored
+
+| Column       | Type                            | Why                                                                                                                                              |
+| ------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`         | `text`, PK                      | A UUID from the adapter                                                                                                                          |
+| `user_id`    | `text`, FK cascade              | The Account the link was issued to. Cascades, so a deleted Account leaves no trace here                                                          |
+| `token_hash` | `text`, indexed, **not unique** | SHA-256 of the token, hex. **Never the token**, which is a bearer credential good for an hour                                                    |
+| `sent_at`    | `timestamptz`, no default       | When it went out, from the injected `Clock` — the rate-limit window is a domain rule, and a SQL default would put it where no test can move time |
+
+**`token_hash` is deliberately not `UNIQUE`.** Better Auth's JWT carries `iat` at one-second resolution and no nonce, so two tokens signed for the same address inside the same second are byte-identical. The one-a-minute floor makes that unreachable through the product, but a unique index would turn any future path that sent twice quickly into a constraint violation on a bookkeeping row — a hard failure in exchange for nothing, since duplicate rows here are indistinguishable from each other anyway. Both reads order newest-first and take one row.
+
+**Rows are written in exactly one place**: the `sendVerificationEmail` hook in `createAuth`, which is the only point at which Better Auth reveals the token it signed. That is what makes "every link we issue is recorded" structural rather than a convention — a caller that could send without recording would silently revive an invalidated link. On the claim path the hook runs inside the claim transaction, so a rolled-back Claim leaves no dispatch behind, exactly as it leaves no Account.
 
 ## Profile
 

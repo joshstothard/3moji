@@ -169,10 +169,16 @@ describeWithDatabase("the Claim against a real Postgres", () => {
     await removeOwnRows();
 
     emailSender = createRecordingEmailSender();
-    const auth: AuthFactory = ({ db: client, emailSender: sender }) =>
+    const auth: AuthFactory = ({
+      db: client,
+      emailSender: sender,
+      dispatches,
+    }) =>
       createAuth({
         db: client,
         emailSender: sender,
+        dispatches,
+        clock: { now: () => new Date() },
         baseUrl: "http://localhost:3000",
         secret: "integration-test-secret-of-sufficient-length",
         from: "3moji <no-reply@mail.3moji.me>",
