@@ -184,9 +184,20 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Dependencies:** Phase 3. [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
 
+**Status:** In progress. Planned as epic [#101](https://github.com/joshstothard/3moji/issues/101).
+
+**The storage layer is built** — [#102](https://github.com/joshstothard/3moji/issues/102): the `profile` and `link` tables, their migration, and the read port that resolves a canonical `HandleKey` to a Profile. A Profile is keyed on the Account, so Release takes it and its Links with it; Links carry an explicit order, and "at most ten" is enforced by the schema rather than by the write path. "Claimed but unedited" is a named state rather than an empty object. See [`data-model.md` § Profile](../architecture/data-model.md#profile). The field limits themselves are [#103](https://github.com/joshstothard/3moji/issues/103)'s and the write path is [#106](https://github.com/joshstothard/3moji/issues/106)'s; there is no page yet.
+
 **Issues:**
 
-- _Not planned yet._
+- [#102](https://github.com/joshstothard/3moji/issues/102) — Add the profile and link tables with their migration and read path. **In review.**
+- [#103](https://github.com/joshstothard/3moji/issues/103) — Enforce the Profile field limits in the domain.
+- [#104](https://github.com/joshstothard/3moji/issues/104) — Render the Profile at a claimed Handle.
+- [#105](https://github.com/joshstothard/3moji/issues/105) — Render the builder pre-filled at an unclaimed Handle.
+- [#106](https://github.com/joshstothard/3moji/issues/106) — Edit the Profile in place.
+- [#107](https://github.com/joshstothard/3moji/issues/107) — Reorder Links by dragging, and by keyboard.
+- [#108](https://github.com/joshstothard/3moji/issues/108) — Resolve a dot-separated word alias to a Handle.
+- [#109](https://github.com/joshstothard/3moji/issues/109) — Render the listing when an alias matches several Handles.
 
 ### Phase 5 — Launch readiness
 

@@ -19,11 +19,17 @@ import type { Profile, ProfileRepository } from "../ports/profile-repository";
  *
  * **One query, not two.** The public Handle page is the most-read thing this
  * product has, and a Profile has at most ten Links, so a left join returning at
- * most eleven narrow rows beats a second round trip. It is an index seek all
- * the way down: `handle.key` is the primary key under the deterministic `C`
- * collation, `handle.user_id` is `UNIQUE`, `profile.user_id` is the primary
- * key, and `link_user_position` covers the Link lookup in the order it is
- * wanted.
+ * most eleven narrow rows beats a second round trip. Every predicate it joins
+ * on is a key or a unique index — `handle.key` is the primary key under the
+ * deterministic `C` collation, `handle.user_id` is `UNIQUE`, `profile.user_id`
+ * is the primary key, and `link_user_position` leads on `user_id` — so the
+ * planner has an index available at every step and the row count is bounded at
+ * eleven by the constraints rather than by a `LIMIT`.
+ *
+ * **That is the shape of the query, not a measured plan.** No `EXPLAIN` has
+ * been run, and against empty or tiny tables Postgres will sequential-scan
+ * regardless because that is genuinely cheaper. If this ever shows up in a
+ * slow-query log, measure before adding an index.
  *
  * **`ORDER BY position` is the behaviour, not a tidying.** Postgres promises
  * nothing about row order without one, and both of the orders a reader might
