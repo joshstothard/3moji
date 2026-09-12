@@ -140,7 +140,7 @@ describe("the curated layer", () => {
       (entry) => entry.displayName !== entry.spokenName,
     );
 
-    expect(overridden).toHaveLength(29);
+    expect(overridden).toHaveLength(30);
     expect(overridden.length / RELEASED_TOTAL).toBeLessThan(0.15);
   });
 
@@ -204,7 +204,10 @@ describe("searchEmoji", () => {
     // only match through the synonyms list — which is what proves that path is
     // wired rather than incidentally covered by a display-name match.
     expect(codepointsFor("aubergine")).toEqual(["🍆"]);
-    expect(findCuratedEmoji("🍆")?.displayName).toBe("eggplant");
+    expect(findCuratedEmoji("🍆")?.displayName).toBe("aubergine");
+    // The CLDR name is kept as a synonym, so the American term still finds it.
+    expect(codepointsFor("eggplant")).toEqual(["🍆"]);
+    expect(findCuratedEmoji("🍆")?.spokenName).toBe("eggplant");
   });
 
   it("still finds an emoji by its CLDR name after an override", () => {
