@@ -50,7 +50,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 | Phase | Outcome                                                                      | Epic issue | Status      |
 | ----- | ---------------------------------------------------------------------------- | ---------- | ----------- |
-| 1     | The app is live at `3moji.me` and a person can create an account and sign in | —          | Not planned |
+| 1     | The app is live at `3moji.me` and a person can create an account and sign in | #26        | Planned     |
 | 2     | A URL containing emoji resolves to exactly one canonical Handle              | —          | Not planned |
 | 3     | You can claim a Handle end to end on the live site                           | —          | Not planned |
 | 4     | A claimed Handle shows a real page its owner controls                        | —          | Not planned |
@@ -81,7 +81,12 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- _Not planned yet._
+- #27 Remove the OKR demo pages and API client from the web app
+- #28 Delete apps/api and its CI jobs, image build, and doc references
+- #29 Create packages/core with an enforced framework-free boundary
+- #30 Add Drizzle and the first migration for the auth tables
+- #31 Wire Better Auth with verification required and auto sign-in
+- #32 Deploy to Vercel with migrations running in the build step
 
 ### Phase 2 — The Emoji Set and canonicalisation
 
@@ -213,3 +218,4 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 - 2026-09-12 — Created (Proposed).
 - 2026-09-12 — ADR-0003, ADR-0004 and ADR-0005 accepted; architecture docs added for the data model and auth.
+- 2026-09-12 — Phase 1 planned: epic #26, issues #27–#32.
