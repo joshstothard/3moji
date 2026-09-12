@@ -1,11 +1,14 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import {
   check,
   customType,
   pgTable,
   text,
   timestamp,
+  type PgColumn,
 } from "drizzle-orm/pg-core";
+
+import { BLOCKED_EMOJI } from "../handle/reserved-handles";
 
 import { HANDLE_KEY_LENGTH, type HandleKey } from "./handle-key";
 import { user } from "./schema";
@@ -35,6 +38,49 @@ import { user } from "./schema";
 const handleKeyColumn = customType<{ data: HandleKey; driverData: string }>({
   dataType: () => 'text collate "C"',
 });
+
+/**
+ * The decimal code point of a single-code-point emoji.
+ *
+ * `codePointAt` returns `number | undefined`, and the package's lint forbids
+ * both `any` and the non-null assertion that would paper over it, so the
+ * impossible branch is spelled out. It is reached only if a row in
+ * {@link BLOCKED_EMOJI} has an empty `emoji`, which a domain test also catches.
+ */
+function decimalCodePoint(emoji: string): number {
+  const codePoint = emoji.codePointAt(0);
+  if (codePoint === undefined) {
+    throw new Error(
+      `a blocked-emoji row carries no code point: ${JSON.stringify(emoji)}`,
+    );
+  }
+  return codePoint;
+}
+
+/**
+ * `key` contains none of the nine blocked emoji, as one SQL expression.
+ *
+ * **Generated from {@link BLOCKED_EMOJI}, never hand-written**, so the
+ * constraint and the versioned data cannot drift: adding a row here is the only
+ * way to change what the database refuses, and the generated migration shows
+ * the change in the diff.
+ *
+ * `chr(<decimal>)` rather than an emoji literal. A variation selector is
+ * invisible in source and a SQL file holding one is unreviewable — the same
+ * argument `canonicalise` makes for writing the presentation selectors as
+ * escapes. `chr` is `IMMUTABLE`, which is what lets a `CHECK` call it at all,
+ * and `strpos` searches the whole string, which is what "wherever they appear"
+ * means.
+ */
+function withoutBlockedEmoji(key: PgColumn): SQL {
+  return sql.join(
+    BLOCKED_EMOJI.map(
+      (blocked) =>
+        sql`strpos(${key}, chr(${sql.raw(String(decimalCodePoint(blocked.emoji)))})) = 0`,
+    ),
+    sql` and `,
+  );
+}
 
 /**
  * A claimed or held Handle: an ordered sequence of emoji from the Emoji Set,
@@ -137,5 +183,30 @@ export const handle = pgTable(
       "handle_key_three_codepoints",
       sql`char_length(${table.key}) = ${sql.raw(String(HANDLE_KEY_LENGTH))}`,
     ),
+    /**
+     * The Reserved Handle list's database layer, and the same decision 7
+     * argument applied to a different rule: the nine blocked emoji of
+     * [#18](https://github.com/joshstothard/3moji/issues/18) cannot reach a row
+     * even if the domain guard in `src/handle/claimable.ts` is bypassed — by a
+     * bug, a script, or a psql session.
+     *
+     * **Only the nine are here, not the reserved entries.** The nine are a
+     * *rule* — "wherever they appear" — which is what a CHECK expresses well,
+     * and they are the half that protects people rather than brands. The
+     * entries are the half that grows case by case; regenerating a constraint
+     * on every addition would buy nothing the domain guard does not already
+     * give, and it would put a commercial list in a migration.
+     *
+     * **A later addition to the nine needs a hand-written migration.**
+     * `ALTER TABLE … ADD CONSTRAINT … CHECK` validates existing rows, so
+     * adding an emoji here would fail the migration if any Handle already
+     * contained it — the exact retroactivity #18 forbids. At launch there are
+     * no rows, so this one is safe as generated. A future addition must be
+     * `ADD CONSTRAINT … NOT VALID`, which applies to new writes only, leaving
+     * an already-claimed Handle to a deliberate takedown. The domain layer is
+     * where the future-claims-only rule is tested, because that is where it
+     * lives.
+     */
+    check("handle_key_no_blocked_emoji", withoutBlockedEmoji(table.key)),
   ],
 );

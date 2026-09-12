@@ -15,6 +15,13 @@
       "when": 1789219611881,
       "tag": "0001_handle_table",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789221366622,
+      "tag": "0002_blocked_emoji_check",
+      "breakpoints": true
     }
   ]
 }
