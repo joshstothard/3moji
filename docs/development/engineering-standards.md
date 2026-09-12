@@ -20,13 +20,13 @@
 
 ### SOLID
 
-| Principle                 | How it applies                                                                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Single Responsibility** | Each class/module has one reason to change. The API client fetches. The validator checks. The repository persists.             |
-| **Open/Closed**           | New behaviours are added as new strategies — never by modifying existing code.                                                 |
-| **Liskov Substitution**   | Repository interfaces are interchangeable — real DB and in-memory test implementations honour the same contract.               |
-| **Interface Segregation** | Separate interfaces for separate concerns. No fat multi-purpose services.                                                      |
-| **Dependency Inversion**  | Use cases depend on repository and client interfaces, not on the database or external SDKs directly. DI wires them at runtime. |
+| Principle                 | How it applies                                                                                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Single Responsibility** | Each class/module has one reason to change. The API client fetches. The validator checks. The repository persists.                                                |
+| **Open/Closed**           | New behaviours are added as new strategies — never by modifying existing code.                                                                                    |
+| **Liskov Substitution**   | Repository interfaces are interchangeable — real DB and in-memory test implementations honour the same contract.                                                  |
+| **Interface Segregation** | Separate interfaces for separate concerns. No fat multi-purpose services.                                                                                         |
+| **Dependency Inversion**  | Use cases depend on repository and client interfaces, not on the database or external SDKs directly. A manual composition root wires them (see Layer Boundaries). |
 
 ### Additional Principles
 
@@ -46,10 +46,43 @@ Entities <- Use Cases <- Interface Adapters <- Frameworks & Drivers
 
 Rules:
 
-- Domain models must never import framework packages.
+- Domain models must never import framework packages. In `packages/core` this is enforced, not merely asked: its ESLint config fails the build on any import of `next/*`, `react`, `react-dom` or `@vercel/*`, including type-level imports.
 - Use cases must never reference HTTP status codes or request/response objects.
 - All services and repositories are injected via constructors — never instantiated directly.
+- Dependencies are wired by a **manual composition root**, not a DI container ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md) decision 4). Next.js route handlers and server actions have no container to resolve from, so there is nothing for a container to hook into.
 - Use strategy patterns for validation pipelines — add new checks as new strategies, not modifications to existing code.
+
+#### The composition root
+
+Anything the domain needs from the outside world is declared as a **port**: an interface in `packages/core/src/ports/`. An **adapter** in `packages/core/src/adapters/` implements it against the real world. The composition root is the single function that constructs the adapters and hands them to the use cases, and it is the only place that does so.
+
+```ts
+// packages/core/src/ports/clock.ts — what the domain needs
+export interface Clock {
+  now(): Date;
+}
+
+// packages/core/src/adapters/system-clock.ts — the real implementation
+export function createSystemClock(): Clock {
+  return { now: () => new Date() };
+}
+
+// packages/core/src/composition-root.ts — the only place that wires
+export function createCoreServices(deps: CoreDependencies): CoreServices {
+  return { clock: deps.clock };
+}
+```
+
+The transport layer calls it once and passes the result down:
+
+```ts
+// apps/web — a route handler stays a thin adapter
+const services = createCoreServices({ clock: createSystemClock() });
+```
+
+Two rules follow. **Nothing outside the composition root constructs a use case**, so there is one place to look when you need to know what depends on what. And **no module reaches out for a collaborator**, so every test substitutes a fake by passing it in rather than by patching a module.
+
+Time is the clearest example of why this matters. A Handle's hold expires after 24 hours and a released Handle returns after 30 days ([ADR-0004](../adr/0004-the-handle-model.md)); neither rule is testable if the code reads the system clock directly.
 
 ---
 
