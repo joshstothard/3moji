@@ -27,8 +27,13 @@ export interface HandleHoldRow {
  * expires holds lazily — evaluated when someone next attempts that Handle,
  * with no scheduled sweep — so a hold past `heldUntil` reads as `available`
  * while its row is still sitting there. Freeing the row and deleting the
- * unverified Account belongs to the claim path
- * ([#83](https://github.com/joshstothard/3moji/issues/83)), not here.
+ * unverified Account belongs to the claim path — `ClaimTransaction.freeExpiredHold`,
+ * called from `claimHandle` inside its own transaction — and not here.
+ *
+ * The write there restates this rule as SQL (`claimed_at IS NULL AND
+ * held_until <= now`) rather than trusting this verdict, so a wrong reading
+ * here cannot delete an Account. The two encodings must agree on the boundary;
+ * an integration test pins the instant itself in both.
  *
  * A hold expires **at** `heldUntil`, not after it: the boundary instant is
  * already expired. Twenty-four hours means twenty-four hours.

@@ -1,6 +1,6 @@
 # Data model
 
-**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, and the `handle` table — the first we design ourselves — in `packages/core/src/db/handle.ts`, with their migrations in `packages/core/migrations/`. The Emoji Set ships as data in `packages/core/src/emoji/`. The **table** a Handle lives in is built, and so is [the Claim](#the-claim) that writes to it — as a domain path, with no user interface in front of it yet. The hold-expiry and release **flows** are not built, and neither are Profiles and Links. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
+**Partly built.** The four tables Better Auth owns exist in `packages/core/src/db/schema.ts`, and the `handle` table — the first we design ourselves — in `packages/core/src/db/handle.ts`, with their migrations in `packages/core/migrations/`. The Emoji Set ships as data in `packages/core/src/emoji/`. The **table** a Handle lives in is built, and so is [the Claim](#the-claim) that writes to it — as a domain path, with no user interface in front of it yet. **Lazy hold expiry is built**, as the write inside that Claim (see [Expiring a hold](#expiring-a-hold)). The release flow is not built, and neither are Profiles and Links. The shape is decided in [ADR-0004](../adr/0004-the-handle-model.md) and [ADR-0005](../adr/0005-the-emoji-set.md); vocabulary is defined in [`CONTEXT.md`](../../CONTEXT.md).
 
 ## Account
 
@@ -33,7 +33,7 @@ Membership is checked left to right and the **leftmost** offender is reported, s
 
 **Alias stability is coupled to curation, which makes curation no longer cosmetic.** `displayName` is curated and mutable — 29 of 307 are overridden — so renaming one silently changes every alias containing it and breaks links already in people's bios. Deriving aliases from the immutable CLDR `spokenName` would avoid that at the cost of `/ice.ice.ice`, the exact defect the curated layer exists to fix. A display-name change is therefore a **breaking URL change** and needs the old alias retained as a redirect.
 
-**Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. The first step of that is built — see [the Claim](#the-claim) below. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job. An expired hold frees the Handle and deletes the unverified Account. **A released Handle returns to the pool immediately — there is no cooldown in the MVP** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). Handles cannot be changed in the MVP.
+**Lifecycle.** Pick, then hold for 24 hours pending email verification, then claim. The first step of that is built — see [the Claim](#the-claim) below. Holds expire lazily, evaluated when someone next attempts that Handle, with no scheduled job; an expired hold frees the Handle and deletes the unverified Account. **That is built too** — see [Expiring a hold](#expiring-a-hold). **A released Handle returns to the pool immediately — there is no cooldown in the MVP** ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). Handles cannot be changed in the MVP.
 
 ## Reserved Handles
 
@@ -70,7 +70,7 @@ Membership is checked left to right and the **leftmost** offender is reported, s
 | `key`        | `text collate "C"`, PK       | The canonical code-point sequence. Primary key, so uniqueness cannot be dropped without dropping the table                                |
 | `user_id`    | `text`, `UNIQUE`, FK cascade | The owning Account. Unique gives the _at most one Handle per Account_ half of ADR-0004 decision 4; cascade makes Release account deletion |
 | `held_until` | `timestamptz`, no default    | When the hold dies. Supplied from the injected `Clock`, never defaulted in SQL, or the 24-hour rule lives where no test can move time     |
-| `claimed_at` | `timestamptz`, nullable      | When the Claim became final. `NULL` **is** what "still held" means, so lazy expiry reads `claimed_at IS NULL AND held_until < now()`      |
+| `claimed_at` | `timestamptz`, nullable      | When the Claim became final. `NULL` **is** what "still held" means, so lazy expiry reads `claimed_at IS NULL AND held_until <= now`       |
 | `created_at` | `timestamptz`, `now()`       | An audit fact. There is no `updated_at`: decision 6 rules out changing a Handle, so the only mutation is `claimed_at` filling in          |
 
 **The collation is stated on the column, not only on an index.** A Postgres `UNIQUE` index is byte equality _under a collation_, and the database's default collation belongs to the deployment — Neon in production, `postgres:16` in CI. `"C"` is deterministic by definition and identical everywhere, and pinning it on the column means the primary key and every future index and `WHERE key = …` inherit it. Drizzle's `text` has no collation option, so the column is a `customType` whose `dataType` is the full `text collate "C"`.
@@ -97,13 +97,14 @@ The row exists because **time cannot be backfilled**: a cooldown switched on lat
 
 ADR-0004 decision 4 — _every live Account owns exactly one Handle_ — is an invariant about two rows in two tables, so it holds only if they are written together. Account creation and the hold are therefore **one transaction**, and every rejection rolls all of it back: a Claim that fails for any reason creates nothing, never an Account waiting for a Handle.
 
-| Piece                            | Lives in                                                   |
-| -------------------------------- | ---------------------------------------------------------- |
-| The use case and its result type | `packages/core/src/handle/claim-handle.ts`                 |
-| The unit-of-work port            | `packages/core/src/ports/claim-store.ts`                   |
-| Its Drizzle adapter              | `packages/core/src/adapters/drizzle-claim-store.ts`        |
-| Holding email until commit       | `packages/core/src/auth/adapters/deferred-email-sender.ts` |
-| The wiring                       | `createCoreServices`, as `services.claims`                 |
+| Piece                            | Lives in                                                                     |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| The use case and its result type | `packages/core/src/handle/claim-handle.ts`                                   |
+| The unit-of-work port            | `packages/core/src/ports/claim-store.ts`                                     |
+| Its Drizzle adapter              | `packages/core/src/adapters/drizzle-claim-store.ts`                          |
+| Holding email until commit       | `packages/core/src/auth/adapters/deferred-email-sender.ts`                   |
+| The wiring                       | `createCoreServices`, as `services.claims`                                   |
+| Freeing an expired hold          | `freeExpiredHold` on the same port — see [Expiring a hold](#expiring-a-hold) |
 
 **The writes exist only inside the transaction, structurally.** `HandleRepository` was deliberately read-only so that no caller could write a hold without a transaction, and `ClaimStore` keeps that property rather than restating it as a convention: it exposes one method, `runInTransaction`, and `createAccount` and `holdHandle` are reachable only on the object handed to its callback. The callback returns its verdict beside a commit decision instead of throwing, because a rejected Claim is an ordinary answer — the same argument `canonicalise` makes — while still having to roll back.
 
@@ -114,6 +115,28 @@ ADR-0004 decision 4 — _every live Account owns exactly one Handle_ — is an i
 **`held_until` comes from the injected `Clock`** and the 24 hours is `HOLD_DURATION_MS`, a domain constant. The column has no SQL default on purpose; see its row in the table above.
 
 An already-registered email is decided by a read **inside the transaction**, not from the sign-up response: Better Auth returns a synthetic success for one to prevent account enumeration ([#15](https://github.com/joshstothard/3moji/issues/15)), so its return value cannot distinguish the two. The domain answers `already-registered` and nothing is written — neither a second Account nor a hold that would take the Handle away from the person submitting. **The transport owes the submitter the same hold screen a new sign-up gets**, and the email to the existing address naming the Handle they already own is #82's.
+
+### Expiring a hold
+
+**Built.** `ClaimTransaction.freeExpiredHold`, implemented in `packages/core/src/adapters/drizzle-claim-store.ts` and called from `claimHandle` **inside the claim transaction**.
+
+ADR-0004 decision 3 expires holds **lazily** — evaluated when someone next attempts that Handle, with no scheduled sweep — so there is exactly one moment at which an expired hold can be cleared: the moment somebody tries to claim it. The read side already treats an expired hold as `available` (`ownershipOf`); this is the write that makes it true.
+
+| Rule                                                           | How it is kept                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Freeing the Handle deletes the unverified Account (decision 5) | The write deletes the **`user` row**; `handle.user_id` cascades, so the Handle goes with it — along with Better Auth's `session` and `account` rows                                                                                                                  |
+| A verified Account's Handle is never freed                     | The predicate is `claimed_at IS NULL AND held_until <= <injected now>`. **`claimed_at IS NULL` is what "still held" means**, so a finished Claim is untouchable whatever its `held_until` says                                                                       |
+| The boundary instant is already expired                        | `<=`, matching `ownershipOf`, which frees a hold _at_ `held_until` rather than after it. An integration test pins that instant against the database                                                                                                                  |
+| Time is injected                                               | `now` comes from the `Clock` the use case read once, never `now()` in SQL — the same reason `held_until` has no SQL default                                                                                                                                          |
+| The order inside the transaction                               | The freeing write runs **before** `createAccount`. The Account being deleted may hold the address being submitted, by someone reclaiming their own expired Handle; a sign-up read that ran first would answer `already-registered` and they could never have it back |
+
+**The rule is stated twice, deliberately.** `ownershipOf` decides what a reader is told, and the SQL predicate decides what is deleted, restating the condition rather than trusting the caller's verdict. An adapter that deleted on the caller's word would delete a verified Account the moment that verdict was wrong. The cost is two encodings of one rule, which is why their agreement on the boundary instant is tested on both sides.
+
+**The row is locked `FOR UPDATE` before the delete.** Verification sets `claimed_at` on the same row, and under `READ COMMITTED` a plain `SELECT` can see a version another transaction is about to finalise. Locking makes that writer wait and Postgres re-evaluates the predicate against the new version, so a just-verified row stops matching. Nothing writes `claimed_at` until the verification flow (#82) exists, so no test can contend for it today; the lock is there because the window is real, not because it is covered.
+
+**There is no sweep, and the absence is asserted.** `packages/core/src/handle/lazy-expiry.test.ts` fails if a workspace declares a scheduling dependency or a `vercel.json` grows a `crons` array, so adding one is a deliberate change with the ADR in the diff. The consequence ADR-0004 accepts stands: a Handle can appear held after its hold has died, until somebody tries it.
+
+**One consequence for the verification flow (#82).** After this change, a stale verification link may find the hold row **gone entirely** rather than merely expired, because a later claimant's transaction deleted it — and with it the Account the link was for. The "this hold expired, pick again" copy therefore has to handle a missing row, not only a past `held_until`.
 
 ### The production driver cannot run it
 

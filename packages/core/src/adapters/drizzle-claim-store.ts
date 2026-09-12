@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lte } from "drizzle-orm";
 
 import { createDeferredEmailSender } from "../auth/adapters/deferred-email-sender";
 import type { Auth, AuthFactory } from "../auth/auth-factory";
 import type { EmailSender } from "../auth/ports/email-sender";
 import type { Database, DatabaseOrTransaction } from "../db/client";
 import { handle } from "../db/handle";
+import type { HandleKey } from "../db/handle-key";
 import { postgresErrorCode, UNIQUE_VIOLATION } from "../db/postgres-error";
 import { user } from "../db/schema";
 import type {
@@ -12,6 +13,7 @@ import type {
   AccountToCreate,
   ClaimStore,
   ClaimTransaction,
+  ExpiredHoldFreed,
   HoldToWrite,
   HoldWritten,
   TransactionOutcome,
@@ -169,6 +171,60 @@ export function claimTransactionOn(
 
   return {
     availabilityOf: (key, now) => handles.availabilityOf(key, now),
+
+    /**
+     * The write side of lazy expiry: delete the unverified Account whose hold
+     * on this key has died, and let the Handle cascade away with it.
+     *
+     * **It deletes a `user` row, not a `handle` row.** `handle.user_id`
+     * references `user.id` `ON DELETE CASCADE`, so deleting the Account is
+     * what frees the Handle — and ADR-0004 decision 5 says an unverified
+     * Account whose hold expires is deleted alongside it, so the Handle row
+     * alone would leave exactly the handle-less Account decision 4 forbids.
+     * Better Auth's `session` and `account` rows cascade from `user` too, so
+     * the credential row goes with it.
+     *
+     * **The predicate is `claimed_at IS NULL AND held_until <= now`, and both
+     * halves are load-bearing.** `claimed_at IS NULL` is what "still held"
+     * means, so a verified Account is untouchable however long ago its
+     * `held_until` passed; `<=` rather than `<` matches
+     * {@link ownershipOf}, which treats the expiry instant itself as expired.
+     * `now` comes from the caller's injected `Clock`, never `now()` in SQL.
+     *
+     * **`FOR UPDATE` rather than a bare read.** Verification sets `claimed_at`
+     * on this row, and under `READ COMMITTED` a plain `SELECT` could see a
+     * version that a concurrent transaction is about to finalise. Locking the
+     * row makes the concurrent write wait, and Postgres re-evaluates this
+     * `WHERE` against the new version once the lock is granted — so a
+     * just-verified row stops matching instead of being deleted. Nothing sets
+     * `claimed_at` until #82 exists, so no test can contend for it today; the
+     * lock is here because the window is real, not because it is covered.
+     */
+    async freeExpiredHold(
+      key: HandleKey,
+      now: Date,
+    ): Promise<ExpiredHoldFreed> {
+      const expired = await tx
+        .select({ userId: handle.userId })
+        .from(handle)
+        .where(
+          and(
+            eq(handle.key, key),
+            isNull(handle.claimedAt),
+            lte(handle.heldUntil, now),
+          ),
+        )
+        .limit(1)
+        .for("update");
+
+      const row = expired[0];
+      if (row === undefined) {
+        return { freed: false };
+      }
+
+      await tx.delete(user).where(eq(user.id, row.userId));
+      return { freed: true };
+    },
 
     async createAccount(account: AccountToCreate): Promise<AccountCreated> {
       // Read, rather than infer from the sign-up response. Better Auth returns

@@ -202,6 +202,25 @@ describe("claimTransactionOn against an unreachable database", () => {
   });
 
   /**
+   * The freeing write must not report "nothing to free" when it never managed
+   * to look. `freed: false` is the ordinary answer for a Handle with no expired
+   * row, so a swallowed failure here would be indistinguishable from the happy
+   * path — and the Claim would go on to an insert the primary key then refuses,
+   * reporting a race that never happened.
+   */
+  it("does not read an unreachable database as nothing to free", async () => {
+    const { tx, close } = build();
+
+    const failure = await tx
+      .freeExpiredHold(KEY, new Date("2026-09-12T12:00:00.000Z"))
+      .then((freed) => `resolved: ${JSON.stringify(freed)}`)
+      .catch((error: unknown) => messagesOf(error));
+
+    expect(failure).toMatch(/ECONNREFUSED/);
+    await close();
+  });
+
+  /**
    * `holdHandle` reads a SQLSTATE to decide whether the primary key refused the
    * row, and `23505` is the only code that means that. Anything else has to
    * propagate: a `catch` that returned `key-taken` for every failure would pass

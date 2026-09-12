@@ -42,10 +42,10 @@ export type ClaimResult =
       /**
        * `held` and `claimed` are what the in-transaction read found.
        * `write-rejected` is the primary key having the last word after that
-       * read said `available`: a race lost between the read and the insert, or
-       * an expired hold whose row nothing has freed
-       * ([#83](https://github.com/joshstothard/3moji/issues/83) owns the write
-       * side of lazy expiry; this path only tolerates the row).
+       * read said `available`: a **race** lost between the read and the
+       * insert. An expired hold is no longer one of the possibilities — the
+       * same transaction freed it a few lines earlier
+       * ([#83](https://github.com/joshstothard/3moji/issues/83)).
        */
       readonly because: "held" | "claimed" | "write-rejected";
     }
@@ -158,6 +158,20 @@ export function claimHandle(input: ClaimHandleInput): Promise<ClaimResult> {
         value: { state: "taken", handle, because: ownership },
       };
     }
+
+    // ADR-0004 decision 3's lazy expiry, on the only occasion it can happen:
+    // someone is attempting the Handle right now. The read above answers
+    // `available` both for a key with no row and for a key whose hold has
+    // died, so this is where the dead row is cleared — and with it the
+    // unverified Account, which is what actually frees the Handle (decision
+    // 5). It is a no-op in the ordinary case.
+    //
+    // **Before `createAccount`, and that ordering is the rule rather than a
+    // preference.** The Account being deleted may hold the very address being
+    // submitted, by someone coming back to reclaim their own expired Handle. A
+    // `createAccount` that ran first would read that doomed row and answer
+    // `already-registered`, so they could never have it back.
+    await tx.freeExpiredHold(key, now);
 
     const account = await tx.createAccount({
       email: input.email,

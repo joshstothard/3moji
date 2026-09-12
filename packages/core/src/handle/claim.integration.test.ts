@@ -5,7 +5,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
-import { createDrizzleClaimStore } from "../adapters/drizzle-claim-store";
+import {
+  claimTransactionOn,
+  createDrizzleClaimStore,
+} from "../adapters/drizzle-claim-store";
 import { createRecordingEmailSender } from "../auth/adapters/recording-email-sender";
 import type { AuthFactory } from "../auth/auth-factory";
 import { createAuth } from "../auth/create-auth";
@@ -41,6 +44,17 @@ const PASSWORD = "correct horse battery staple";
 const NOW = new Date("2026-09-12T12:00:00.000Z");
 const HELD_UNTIL = "2026-09-13T12:00:00.000Z";
 const fixedClock: Clock = { now: () => NOW };
+
+/** An hour after a hold taken at `NOW` died: 25 hours later. */
+const pastExpiry: Clock = {
+  now: () => new Date("2026-09-13T13:00:00.000Z"),
+};
+/** A fresh 24-hour hold taken at {@link pastExpiry}. */
+const PAST_EXPIRY_HELD_UNTIL = "2026-09-14T13:00:00.000Z";
+/** Verification, as #82 will write it. */
+const CLAIMED_AT = new Date("2026-09-12T12:30:00.000Z");
+/** A `held_until` far enough back that only `claimed_at` can save the row. */
+const LONG_PAST = new Date("2020-01-01T00:00:00.000Z");
 
 /** Every Account this suite creates carries this tag, and only these are deleted. */
 const SUITE_TAG = `claim-int-${String(Date.now())}`;
@@ -92,13 +106,15 @@ describeWithDatabase("the Claim against a real Postgres", () => {
     email: string;
     store?: ClaimStore;
     list?: ReservedHandleList;
+    /** Moves time for the lazy-expiry cases. Never a sleep. */
+    clock?: Clock;
   }): Promise<ClaimResult> =>
     claimHandle({
       segment: input.segment,
       email: input.email,
       password: PASSWORD,
       store: input.store ?? store,
-      clock: fixedClock,
+      clock: input.clock ?? fixedClock,
       ...(input.list === undefined ? {} : { list: input.list }),
     });
 
@@ -364,6 +380,241 @@ describeWithDatabase("the Claim against a real Postgres", () => {
    * Handle they own and carrying a reset link, is #82's: it is composed email
    * copy that needs a reset token from Better Auth's reset flow, not a write.
    */
+  /**
+   * **ADR-0004 decision 3's write side, against a real Postgres.**
+   *
+   * Time moves through the injected `Clock` — never a `sleep`, and never
+   * `now()` in SQL — so an expired hold is a Claim made at `NOW` re-attempted
+   * at `PAST_EXPIRY`. The expired row is freed and the newcomer takes the
+   * Handle in one transaction, and freeing it **deleted the unverified
+   * Account** (decision 5's last sentence): the first address has no `user`
+   * row afterwards.
+   */
+  it("frees an expired hold and lets someone else claim the Handle", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 9);
+    const first = addressFor("expired-loser");
+    const second = addressFor("expired-winner");
+    await claim({ segment: key, email: first });
+    const abandoned = await userRow(first);
+    expect(abandoned).toBeDefined();
+    emailSender.clear();
+
+    const result = await claim({
+      segment: key,
+      email: second,
+      clock: pastExpiry,
+    });
+
+    expect(result.state).toBe("held");
+    // The unverified Account went with the hold.
+    expect(await countUsers(first)).toBe("0");
+    const winner = await userRow(second);
+    const hold = await holdRow(key);
+    expect(await countHandles(key)).toBe("1");
+    expect(hold?.user_id).toBe(winner?.id);
+    expect(hold?.claimed_at).toBeNull();
+    expect(emailSender.sent).toHaveLength(1);
+  });
+
+  /**
+   * The same person, coming back after their own hold died. This is the case
+   * the **ordering** inside the transaction exists for: the freeing write
+   * deletes the Account holding that address, so the `createAccount` read that
+   * follows finds the address free. A freeing write placed after it would
+   * answer `already-registered` and the submitter could never reclaim their
+   * own expired Handle.
+   */
+  it("lets the same address reclaim its own expired hold", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 10);
+    const email = addressFor("expired-same-address");
+    const before = await claim({ segment: key, email });
+    expect(before.state).toBe("held");
+    const first = await userRow(email);
+    emailSender.clear();
+
+    const result = await claim({ segment: key, email, clock: pastExpiry });
+
+    expect(result.state).toBe("held");
+    // Exactly one Account for the address, and it is a *new* one: the old row
+    // was deleted, not reused.
+    expect(await countUsers(email)).toBe("1");
+    const second = await userRow(email);
+    expect(second?.id).not.toBe(first?.id);
+    const hold = await holdRow(key);
+    expect(hold?.user_id).toBe(second?.id);
+    expect(new Date(hold?.held_until ?? 0).toISOString()).toBe(
+      PAST_EXPIRY_HELD_UNTIL,
+    );
+    expect(emailSender.sent).toHaveLength(1);
+  });
+
+  /**
+   * A hold that has not expired yet is refused, and nothing is written. Time
+   * has moved — but only to one second before `held_until`, which is the
+   * boundary the read-side rule is defined on.
+   */
+  it("refuses a Claim on a hold that has not expired yet", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 11);
+    const first = addressFor("not-yet-first");
+    const second = addressFor("not-yet-second");
+    await claim({ segment: key, email: first });
+    const owner = await userRow(first);
+    emailSender.clear();
+
+    const result = await claim({
+      segment: key,
+      email: second,
+      clock: { now: () => new Date(new Date(HELD_UNTIL).getTime() - 1000) },
+    });
+
+    if (result.state !== "taken") throw new Error(`got ${result.state}`);
+    expect(result.because).toBe("held");
+    // The hold is untouched: same Account, same row, nothing freed.
+    expect(await countUsers(first)).toBe("1");
+    expect(await countUsers(second)).toBe("0");
+    expect((await holdRow(key))?.user_id).toBe(owner?.id);
+    expect(emailSender.sent).toHaveLength(0);
+  });
+
+  /**
+   * The boundary instant itself, against the database rather than in the pure
+   * rule. `ownershipOf` treats `held_until == now` as already expired —
+   * twenty-four hours means twenty-four hours — so the SQL predicate behind
+   * the freeing write has to be `held_until <= now`, not `<`. This is the one
+   * case where an off-by-one between the two encodings of the same rule shows
+   * up, and it mirrors the read-side test in `handle-ownership.test.ts`.
+   */
+  it("treats the expiry instant itself as expired", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 12);
+    const first = addressFor("boundary-first");
+    const second = addressFor("boundary-second");
+    await claim({ segment: key, email: first });
+
+    const result = await claim({
+      segment: key,
+      email: second,
+      clock: { now: () => new Date(HELD_UNTIL) },
+    });
+
+    expect(result.state).toBe("held");
+    expect(await countUsers(first)).toBe("0");
+  });
+
+  /**
+   * **A verified Account's Handle is never freed, whatever `held_until`
+   * says** — the criterion the issue is most emphatic about, proved here
+   * against the row rather than through the domain read.
+   *
+   * `claimed_at` is set directly, which is what #82's verification will do,
+   * and `held_until` is left far in the past. A predicate that read the
+   * timestamp alone would delete a real owner's Account.
+   */
+  it("never frees a verified Account's Handle, however long ago held_until passed", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 13);
+    const owner = addressFor("verified-owner");
+    const intruder = addressFor("verified-intruder");
+    await claim({ segment: key, email: owner });
+    const ownerRow = await userRow(owner);
+    // Verification, as #82 will perform it: the Claim becomes final.
+    await db.execute(
+      sql`UPDATE "handle" SET claimed_at = ${CLAIMED_AT}, held_until = ${LONG_PAST} WHERE key = ${key}`,
+    );
+    emailSender.clear();
+
+    const result = await claim({
+      segment: key,
+      email: intruder,
+      clock: pastExpiry,
+    });
+
+    if (result.state !== "taken") throw new Error(`got ${result.state}`);
+    expect(result.because).toBe("claimed");
+    expect(await countUsers(owner)).toBe("1");
+    expect(await countUsers(intruder)).toBe("0");
+    const hold = await holdRow(key);
+    expect(hold?.user_id).toBe(ownerRow?.id);
+    expect(hold?.claimed_at).not.toBeNull();
+    expect(emailSender.sent).toHaveLength(0);
+  });
+
+  /**
+   * **The one new concurrency shape this write introduces**: two Claims racing
+   * for the same Handle when the row sitting there is an *expired* hold, so
+   * both want to delete the same `user` row before inserting their own.
+   *
+   * Both are issued before either is awaited, each on its own pooled
+   * connection in its own transaction, and they name different emails so a
+   * rejection can only have come from the Handle's primary key. The loser's
+   * `SELECT … FOR UPDATE` waits on the winner's row lock; when the winner
+   * commits its DELETE, the waiter re-evaluates the predicate, finds no row,
+   * and goes on to its own INSERT, which the primary key then refuses. So the
+   * shape terminates in one `held` and one `taken` rather than deadlocking —
+   * and `statement_timeout` on the pool means a bug here fails CI instead of
+   * wedging it.
+   */
+  it("leaves one row when two Claims race for the same expired Handle", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 15);
+    const abandoned = addressFor("expired-race-abandoned");
+    const first = addressFor("expired-race-first");
+    const second = addressFor("expired-race-second");
+    await claim({ segment: key, email: abandoned });
+    emailSender.clear();
+
+    const settled = await Promise.all([
+      claim({ segment: key, email: first, clock: pastExpiry }),
+      claim({ segment: key, email: second, clock: pastExpiry }),
+    ]);
+
+    expect(settled.filter((result) => result.state === "held")).toHaveLength(1);
+    expect(settled.filter((result) => result.state === "taken")).toHaveLength(
+      1,
+    );
+    // The expired Account is gone, exactly one of the two newcomers has one,
+    // and the Handle is held once.
+    expect(await countUsers(abandoned)).toBe("0");
+    const users = [await countUsers(first), await countUsers(second)];
+    expect(users.filter((count) => count === "1")).toHaveLength(1);
+    expect(await countHandles(key)).toBe("1");
+    expect(emailSender.sent).toHaveLength(1);
+  });
+
+  /**
+   * The same guarantee, one layer lower: the **freeing write's own predicate**,
+   * called directly rather than through the Claim.
+   *
+   * The test above passes even if `claimed_at IS NULL` were dropped from the
+   * SQL, because the availability read answers `claimed` and the Claim never
+   * asks the write to run. This one asks it to run, on exactly the row a
+   * timestamp-only predicate would delete, and asserts it refuses. That is
+   * ADR-0004's defence in depth rather than its happy path, and it is why
+   * `claimTransactionOn` is exported.
+   */
+  it("refuses to free a claimed row even when asked directly", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 14);
+    const email = addressFor("verified-direct");
+    await claim({ segment: key, email });
+    await db.execute(
+      sql`UPDATE "handle" SET claimed_at = ${CLAIMED_AT}, held_until = ${LONG_PAST} WHERE key = ${key}`,
+    );
+
+    const outcome = await db.transaction((tx) =>
+      claimTransactionOn(
+        tx,
+        createAuth({
+          db: tx,
+          emailSender,
+          baseUrl: "http://localhost:3000",
+          secret: "integration-test-secret-of-sufficient-length",
+          from: "3moji <no-reply@mail.3moji.me>",
+        }),
+      ).freeExpiredHold(key, pastExpiry.now()),
+    );
+
+    expect(outcome).toEqual({ freed: false });
+    expect(await countUsers(email)).toBe("1");
+    expect(await countHandles(key)).toBe("1");
+  });
+
   it("creates nothing when the email already has an Account", async () => {
     const email = addressFor("duplicate");
     const owned = handleKeyFromSet(HANDLE_KEY_LENGTH * 5);
