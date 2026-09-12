@@ -53,13 +53,22 @@ function handleKeyFromSet(offset: number): HandleKey {
  * what makes this a proof about the index: ADR-0004 decision 7 says the
  * database constraint "is what decides a race between simultaneous claims", and
  * only the code distinguishes that from a connection drop or a typo.
+ *
+ * **It walks the `cause` chain, and that is not defensive padding.** A raw `pg`
+ * client rejects with the driver's own error, which carries `code` directly;
+ * `db.execute` rejects with Drizzle's `DrizzleQueryError`, which carries no
+ * `code` of its own and keeps the driver error in `cause`. Reading only the top
+ * level finds a code on the former and nothing on the latter — which is exactly
+ * what CI reported when this suite first ran against a real Postgres.
  */
 function postgresErrorCode(error: unknown): string | undefined {
-  if (typeof error === "object" && error !== null && "code" in error) {
-    const { code } = error;
-    return typeof code === "string" ? code : undefined;
+  if (typeof error !== "object" || error === null) {
+    return undefined;
   }
-  return undefined;
+  if ("code" in error && typeof error.code === "string") {
+    return error.code;
+  }
+  return "cause" in error ? postgresErrorCode(error.cause) : undefined;
 }
 
 /**
