@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { render, screen } from "@testing-library/react";
 
 /**
@@ -68,7 +69,7 @@ jest.mock("next/navigation", () => ({
 
 import HandlePage from "./page";
 
-function visit(handle: string): Promise<React.ReactElement> {
+function visit(handle: string): Promise<ReactElement> {
   return HandlePage({ params: Promise.resolve({ handle }) });
 }
 
