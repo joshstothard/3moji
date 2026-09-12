@@ -1,3 +1,4 @@
+import { createAuth, type CreateAuthInput } from "./auth/create-auth";
 import type { Clock } from "./ports/clock";
 
 /**
@@ -5,6 +6,7 @@ import type { Clock } from "./ports/clock";
  */
 export interface CoreDependencies {
   readonly clock: Clock;
+  readonly auth: CreateAuthInput;
 }
 
 /**
@@ -12,6 +14,7 @@ export interface CoreDependencies {
  */
 export interface CoreServices {
   readonly clock: Clock;
+  readonly auth: ReturnType<typeof createAuth>;
 }
 
 /**
@@ -19,14 +22,15 @@ export interface CoreServices {
  *
  * ADR-0006 decision 4 replaces runtime dependency injection with this function,
  * because Next.js route handlers and server actions have no container to wire
- * them. Dependencies are passed in and use cases are constructed here, so the
- * domain never reaches out for a collaborator and every test can substitute one.
+ * them. Dependencies are passed in and collaborators are constructed here, so
+ * the domain never reaches out for one and every test can substitute a fake.
  *
- * Use cases are added to `CoreServices` as they arrive, each constructed here
- * from `deps`. Nothing else in the codebase should construct them.
+ * Nothing else in the codebase should construct the auth instance: there is one
+ * place to look when you need to know what depends on what.
  */
 export function createCoreServices(deps: CoreDependencies): CoreServices {
   return {
     clock: deps.clock,
+    auth: createAuth(deps.auth),
   };
 }

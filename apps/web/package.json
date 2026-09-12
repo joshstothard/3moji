@@ -12,8 +12,10 @@
     "test:e2e": "playwright test --config ../../playwright.config.ts --pass-with-no-tests"
   },
   "dependencies": {
+    "@template/core": "^0.0.1",
     "@template/shared": "*",
     "@template/ui": "*",
+    "better-auth": "^1.7.4",
     "next": "^16.3.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

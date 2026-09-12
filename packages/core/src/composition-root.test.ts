@@ -1,21 +1,74 @@
+import { createRecordingEmailSender } from "./auth/adapters/recording-email-sender";
 import { createCoreServices } from "./composition-root";
+import { createDatabase } from "./db/client";
 import type { Clock } from "./ports/clock";
 
 const fixedClock = (at: string): Clock => ({ now: () => new Date(at) });
 
+const build = (clock: Clock) => {
+  const handle = createDatabase({
+    url: "postgresql://app:app@localhost:5432/app_test",
+    nodeEnv: "test",
+  });
+  const services = createCoreServices({
+    clock,
+    auth: {
+      db: handle.db,
+      emailSender: createRecordingEmailSender(),
+      baseUrl: "http://localhost:3000",
+      secret: "a".repeat(32),
+      from: "3moji <no-reply@mail.3moji.me>",
+    },
+  });
+  return { services, close: handle.close };
+};
+
 describe("createCoreServices", () => {
-  it("exposes the clock it was given", () => {
-    const clock = fixedClock("2026-09-12T10:00:00.000Z");
-    const services = createCoreServices({ clock });
+  it("exposes the clock it was given", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
 
     expect(services.clock.now().toISOString()).toBe("2026-09-12T10:00:00.000Z");
+    await close();
   });
 
-  it("reads time through the injected clock rather than the system clock", () => {
-    const services = createCoreServices({
-      clock: fixedClock("1999-12-31T23:59:59.000Z"),
-    });
+  it("reads time through the injected clock rather than the system clock", async () => {
+    const { services, close } = build(fixedClock("1999-12-31T23:59:59.000Z"));
 
     expect(services.clock.now().getFullYear()).toBe(1999);
+    await close();
+  });
+
+  it("wires auth, so nothing else in the codebase constructs it", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(
+      services.auth.options.emailAndPassword.requireEmailVerification,
+    ).toBe(true);
+    expect(
+      services.auth.options.emailVerification.autoSignInAfterVerification,
+    ).toBe(true);
+    await close();
+  });
+
+  it("passes transport plugins through to auth", async () => {
+    const handle = createDatabase({
+      url: "postgresql://app:app@localhost:5432/app_test",
+      nodeEnv: "test",
+    });
+    const marker = { id: "marker-plugin" };
+    const services = createCoreServices({
+      clock: fixedClock("2026-09-12T10:00:00.000Z"),
+      auth: {
+        db: handle.db,
+        emailSender: createRecordingEmailSender(),
+        baseUrl: "http://localhost:3000",
+        secret: "a".repeat(32),
+        from: "3moji <no-reply@mail.3moji.me>",
+        plugins: [marker],
+      },
+    });
+
+    expect(services.auth.options.plugins).toContainEqual(marker);
+    await handle.close();
   });
 });
