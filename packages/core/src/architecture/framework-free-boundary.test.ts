@@ -106,26 +106,38 @@ function removeStaleFixtureDirs(): void {
   }
 }
 
+/** ESLint's severity for an error. A warning does not fail `npm run lint`. */
+const ERROR_SEVERITY = 2;
+
 /** One line per message, so a failure prints what actually fired, verbatim. */
 function summarise(messages: LintMessage[]): string[] {
-  return messages.map((m) => `${m.ruleId ?? "(fatal)"}: ${m.message}`);
+  return messages.map(
+    (m) =>
+      `${m.ruleId ?? "(fatal)"} [severity ${String(m.severity)}]: ${m.message}`,
+  );
 }
 
 /**
- * Reports whether `rule` fired citing the ADR it enforces. Returns a sentence
- * rather than a boolean so a failing assertion prints every message ESLint
- * actually reported — the difference between "the boundary rule is gone" and
- * "something unrelated is failing" is the whole point of this test.
+ * Reports whether `rule` fired **as an error**, citing the ADR it enforces.
+ * Severity is part of the assertion: a rule downgraded to `"warn"` still
+ * produces a message, but stops failing `npm run lint`, so the boundary would be
+ * gone while a severity-blind check stayed green.
+ *
+ * Returns a sentence rather than a boolean so a failing assertion prints every
+ * message ESLint actually reported — the difference between "the boundary rule
+ * is gone" and "something unrelated is failing" is the whole point of this test.
  */
 function firingReport(rule: string, messages: LintMessage[]): string {
-  const lines = summarise(messages);
-  const fired = lines.filter(
-    (line) => line.startsWith(`${rule}: `) && line.includes("ADR-0006"),
+  const fired = messages.filter(
+    (m) =>
+      m.ruleId === rule &&
+      m.severity === ERROR_SEVERITY &&
+      m.message.includes("ADR-0006"),
   );
-  if (fired.length > 0) return `${rule} fired citing ADR-0006`;
+  if (fired.length > 0) return `${rule} raised an error citing ADR-0006`;
   return (
-    `${rule} did not fire citing ADR-0006; ESLint reported:\n` +
-    (lines.join("\n") || "(no messages)")
+    `${rule} did not raise an error citing ADR-0006; ESLint reported:\n` +
+    (summarise(messages).join("\n") || "(no messages)")
   );
 }
 
@@ -202,7 +214,7 @@ describe("packages/core framework-free boundary (ADR-0006 decision 2)", () => {
         "no-restricted-syntax",
         messagesFor("next-type-query.fixture.ts"),
       ),
-    ).toBe("no-restricted-syntax fired citing ADR-0006");
+    ).toBe("no-restricted-syntax raised an error citing ADR-0006");
   });
 
   it('reports a type-only `import type ... from "next/headers"` via no-restricted-imports', () => {
@@ -211,7 +223,7 @@ describe("packages/core framework-free boundary (ADR-0006 decision 2)", () => {
         "no-restricted-imports",
         messagesFor("next-type-import.fixture.ts"),
       ),
-    ).toBe("no-restricted-imports fired citing ADR-0006");
+    ).toBe("no-restricted-imports raised an error citing ADR-0006");
   });
 
   it('reports a plain `import { createElement } from "react"` via no-restricted-imports', () => {
@@ -220,6 +232,6 @@ describe("packages/core framework-free boundary (ADR-0006 decision 2)", () => {
         "no-restricted-imports",
         messagesFor("react-value-import.fixture.ts"),
       ),
-    ).toBe("no-restricted-imports fired citing ADR-0006");
+    ).toBe("no-restricted-imports raised an error citing ADR-0006");
   });
 });
