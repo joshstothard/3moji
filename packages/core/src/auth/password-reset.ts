@@ -65,7 +65,8 @@ export interface RequestPasswordResetInput {
  *    every address.
  * 2. **The request.** Better Auth looks the address up, and for a registered
  *    one signs a token and mails the link; for an unknown one it simulates the
- *    work and sends nothing. Both answer `sent`.
+ *    work and sends nothing. Both answer `sent`. The link is mailed after the
+ *    answer (#216), so neither a slow provider nor a failing one reaches it.
  *
  * **Every answer is padded**, the refusal included. The fast branches — a
  * refusal, an unknown address — are what a floor exists for; padding all of

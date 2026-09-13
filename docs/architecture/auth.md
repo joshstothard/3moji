@@ -4,25 +4,26 @@
 
 ## Where each piece lives
 
-| Piece                               | Lives in                                                                             |
-| ----------------------------------- | ------------------------------------------------------------------------------------ |
-| The auth instance and its settings  | `packages/core/src/auth/create-auth.ts`                                              |
-| The email port and its two adapters | `packages/core/src/auth/ports/`, `packages/core/src/auth/adapters/`                  |
-| The wiring                          | `apps/web/src/lib/services.ts`, the only module that reads the environment           |
-| The HTTP surface                    | `apps/web/src/app/api/auth/[...all]/route.ts`                                        |
-| The verification landing            | `apps/web/src/app/claim/verify/route.ts`                                             |
-| The hold screen and resend          | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`                     |
-| The Claim's rate limit              | `packages/core/src/handle/claim-rate-limit.ts`, `apps/web/src/lib/client-address.ts` |
-| Better Auth's rate limit            | `packages/core/src/auth/auth-rate-limit.ts`, applied in `create-auth.ts`             |
-| Hashing Better Auth's counter keys  | `packages/core/src/auth/auth-rate-limit-key.ts`, applied in `create-auth.ts`         |
-| Resend's per-client-address limit   | `packages/core/src/auth/resend-rate-limit.ts`                                        |
-| The sign-in form's limit            | `packages/core/src/auth/sign-in-rate-limit.ts`, gated in `sign-in-action.ts`         |
-| Password reset                      | `packages/core/src/auth/password-reset.ts`, `apps/web/src/app/reset-password/`       |
-| The reset request form's limit      | `packages/core/src/auth/reset-request-rate-limit.ts`                                 |
-| Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app              |
-| The signed-in indicator's answer    | `packages/core/src/auth/viewer-summary.ts`, `apps/web/src/lib/viewer.ts`             |
-| The signed-in indicator             | `apps/web/src/app/api/viewer/route.ts`, `src/components/account-menu.tsx`            |
-| Signing out                         | `apps/web/src/components/sign-out-action.ts`                                         |
+| Piece                               | Lives in                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------- |
+| The auth instance and its settings  | `packages/core/src/auth/create-auth.ts`                                                     |
+| The email port and its two adapters | `packages/core/src/auth/ports/`, `packages/core/src/auth/adapters/`                         |
+| The wiring                          | `apps/web/src/lib/services.ts`, the only module that reads the environment                  |
+| The HTTP surface                    | `apps/web/src/app/api/auth/[...all]/route.ts`                                               |
+| The verification landing            | `apps/web/src/app/claim/verify/route.ts`                                                    |
+| The hold screen and resend          | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`                            |
+| The Claim's rate limit              | `packages/core/src/handle/claim-rate-limit.ts`, `apps/web/src/lib/client-address.ts`        |
+| Better Auth's rate limit            | `packages/core/src/auth/auth-rate-limit.ts`, applied in `create-auth.ts`                    |
+| Hashing Better Auth's counter keys  | `packages/core/src/auth/auth-rate-limit-key.ts`, applied in `create-auth.ts`                |
+| Resend's per-client-address limit   | `packages/core/src/auth/resend-rate-limit.ts`                                               |
+| The sign-in form's limit            | `packages/core/src/auth/sign-in-rate-limit.ts`, gated in `sign-in-action.ts`                |
+| Password reset                      | `packages/core/src/auth/password-reset.ts`, `apps/web/src/app/reset-password/`              |
+| The reset request form's limit      | `packages/core/src/auth/reset-request-rate-limit.ts`                                        |
+| Sending email after the response    | `packages/core/src/ports/background-tasks.ts`, `apps/web/src/lib/after-background-tasks.ts` |
+| Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app                     |
+| The signed-in indicator's answer    | `packages/core/src/auth/viewer-summary.ts`, `apps/web/src/lib/viewer.ts`                    |
+| The signed-in indicator             | `apps/web/src/app/api/viewer/route.ts`, `src/components/account-menu.tsx`                   |
+| Signing out                         | `apps/web/src/components/sign-out-action.ts`                                                |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
 
@@ -119,7 +120,39 @@ It **reuses the Claim's counter table and store** (`claim_rate_limit`, `ClaimRat
 
 **The one-a-minute floor is load-bearing beyond politeness, and it rests on the clock.** Better Auth stamps a token's `iat` from `Date.now()` at one-second resolution and adds no nonce, so two links issued for one address inside the same real second are **byte-identical** — and an older link byte-identical to the newest is not invalidated, because it _is_ the newest. The floor is what puts a minute between them, and it is measured on the injected `Clock`. So invalidation holds only while that clock tracks real time, which `lib/services.ts` guarantees by wiring `createSystemClock()` — asserted in its own test, because a frozen clock would weaken invalidation silently rather than loudly. A test that advanced only the injected clock reached the identical-token case in milliseconds, which is how this was found.
 
-Three answers can come back — `sent`, `too-soon`, `too-many` — and **`sent` does not mean an email went out**. An unknown address and an already-verified one both produce `sent`, because the alternative is an endpoint that answers "does this address have an unverified account here" for anyone who asks. The two refusals are shown honestly, since telling somebody "you may try again in 40 seconds" is worth more than the residual signal, and the fast path out is padded to the same 500 ms floor Better Auth uses on its own unauthenticated email endpoints (`RESPONSE_FLOOR_MS`) so the _timing_ does not give away what the body will not.
+Three answers can come back — `sent`, `too-soon`, `too-many` — and **`sent` does not mean an email went out**. An unknown address and an already-verified one both produce `sent`, because the alternative is an endpoint that answers "does this address have an unverified account here" for anyone who asks. The two refusals are shown honestly, since telling somebody "you may try again in 40 seconds" is worth more than the residual signal, and the fast path out is padded to the same 500 ms floor Better Auth uses on its own unauthenticated email endpoints (`RESPONSE_FLOOR_MS`) so the _timing_ does not give away what the body will not. The email itself goes out after the response, so a slow or failing provider changes neither ([below](#email-is-sent-after-the-response)).
+
+### Email is sent after the response
+
+**No answer about an address waits on the email provider** ([#216](https://github.com/joshstothard/3moji/issues/216)). The response floor pads answers that finish early, and a real send is the one thing that can finish late. A registered address sends mail and an unregistered one does not, so a send inside the request turned a slow provider into a timing difference and a failing one into a `failed` answer, both for registered addresses only.
+
+So every email goes out after the response. `createCoreServices` requires a `BackgroundTasks` port (`packages/core/src/ports/background-tasks.ts`). `apps/web` implements it with Next.js's `after()` (`src/lib/after-background-tasks.ts`); tests and the E2E seed pass `createHeldBackgroundTasks`, which they release by hand.
+
+| Email                                                           | How it is deferred                                                                               | Logged when it fails as           |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------- |
+| Password-reset link                                             | `createBackgroundEmailSender`, as the pooled auth instance's sender                              | `auth_email_send_failed`          |
+| Verification link from resend, or from Better Auth's HTTP paths | The same                                                                                         | `auth_email_send_failed`          |
+| Claim-collision notice                                          | `createBackgroundEmailSender`, as `CoreServices.emailSender`                                     | `claim_collision_email_failed`    |
+| A fresh Claim's verification link                               | Held until the commit, then the whole flush handed over as one task (`runWithTransactionalAuth`) | `claim_verification_email_failed` |
+
+- **The invalidation order is unchanged.** The verification hook still awaits the dispatch row before it calls the sender; the sender now schedules the send instead of making it. `create-auth.test.ts` asserts the order with the sender the composition root wires.
+- **Not Better Auth's `advanced.backgroundTasks.handler`.** That hands off each hook whole, so the dispatch write would run detached — on the Claim's transactional instance, after its transaction had closed — and a failure would reach Better Auth's logger with its raw message. It would also detach the rate limiter's pruning. `disabledPaths`, the rate limit and the Account-creation audit are untouched.
+- **The Claim's flush is one task**, not one per email: Next.js runs separate `after()` callbacks through a queue that is not serial, and the held emails are ordered messages to one person.
+
+**What is left inside the floor is bounded, not absent.** A fresh Claim still hashes a password and writes two rows where a collision reads one (the claim adapter's dummy hash covers most of that), and a registered reset request writes a verification row where an unregistered one does a dummy read. What #216 removed is the unbounded call to a third party. A database failure on one of those registered-only writes still answers `failed`: that predates #216 and remains.
+
+#### What an operator sees when a send fails
+
+The person is told the same thing either way — the reset form's "a link is on its way", the hold screen, resend's `sent` — so **the logs are the only place a failed send shows up**. `createAfterBackgroundTasks` writes one structured line per failed email through `logFailure`: the event from the table above, the `correlationId` of the request that scheduled it (read while that request was still current, and passed in), and the allow-listed error descriptor. No address, no token and no provider message. The request's boundary line has already been written by then, and says `redirected`.
+
+What a failure costs the person, and how they recover:
+
+- **Reset link:** no email arrives. They ask again from `/reset-password`, within its limit.
+- **Verification link from resend:** the dispatch row was written, so the previous link is already invalid and the new one never arrived. Resend on the hold screen recovers it, at the cost of one of the Account's three links an hour.
+- **A fresh Claim's link:** the Handle is still held, and the hold screen's resend recovers it.
+- **Collision notice:** the owner is not told somebody used their address. Nothing depends on it.
+
+**Where `after()` runs is the platform's promise, not a tested one.** On Vercel, `after()` callbacks run under `waitUntil` once the response has been sent, within the function's maximum duration. The tests prove every send is handed to `after()` and that the answer comes back before any send runs; they do not measure a deployment. A host that held the response open until its callbacks finished would bring the timing difference back without anything failing.
 
 ### Signing in before verifying
 
@@ -139,7 +172,7 @@ A successful password reset does **not** mark the email verified, even though it
 
 **Success revokes every session and verifies nothing.** `revokeSessionsOnPasswordReset` deletes every session row, so a request carrying a pre-reset session cookie is signed out — this browser's too, which is why success lands on `/sign-in?notice=password-reset`. The Account's `email_verified` is untouched (above).
 
-**The request answers the same for every address.** `requestPasswordReset` asks the per-client limit (below), then `auth.api.requestPasswordReset`, which mails a registered address and simulates the work for an unknown one; both answer `sent`, rendered as "if that address belongs to an account, a reset link is on its way". **Every answer is padded to `RESPONSE_FLOOR_MS`**, the refusal included. The floor pads the fast branches; a real send slower than 500 ms is still slower, the price the resend flow already pays. A failure — a limiter that cannot count, a send that throws — answers `failed` and is logged through `logFailure` (`password_reset_request_failed`, `password_reset_set_failed`). `password-reset-request.test.tsx` runs the real action, use case, floor and limiter for a registered and an unregistered address and compares everything observable.
+**The request answers the same for every address.** `requestPasswordReset` asks the per-client limit (below), then `auth.api.requestPasswordReset`, which mails a registered address and simulates the work for an unknown one; both answer `sent`, rendered as "if that address belongs to an account, a reset link is on its way". **Every answer is padded to `RESPONSE_FLOOR_MS`**, the refusal included. The floor pads the fast branches, and the link is mailed after the response ([above](#email-is-sent-after-the-response)), so a slow or failing provider changes neither the answer nor how long it takes. A failure the request itself meets — a limiter that cannot count, a database that cannot be read — answers `failed` and is logged through `logFailure` (`password_reset_request_failed`, `password_reset_set_failed`); a send that fails is logged later, as `auth_email_send_failed`. `password-reset-request.test.tsx` runs the real action, use case, floor and limiter for a registered and an unregistered address and compares everything observable.
 
 #### The reset request form's rate limit
 

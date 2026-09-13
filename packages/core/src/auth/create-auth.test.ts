@@ -1,3 +1,6 @@
+import { createHeldBackgroundTasks } from "../adapters/held-background-tasks";
+import type { BackgroundTasks } from "../ports/background-tasks";
+import type { VerificationDispatchStore } from "../ports/verification-dispatch-store";
 import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import { createDatabase } from "../db/client";
 import { createRecordingEmailSender } from "./adapters/recording-email-sender";
@@ -6,6 +9,10 @@ import {
   authRateLimitOptions,
 } from "./auth-rate-limit";
 import { createAuth } from "./create-auth";
+import {
+  createBackgroundEmailSender,
+  DEFERRED_EMAIL_FAILURE_EVENTS,
+} from "./adapters/background-email-sender";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-length";
 
 const SECRET = "a".repeat(32);
@@ -223,6 +230,64 @@ describe("createAuth", () => {
     const { auth, close } = build({ plugins: [marker] });
 
     expect(auth.options.plugins).toContainEqual(marker);
+    await close();
+  });
+});
+
+/**
+ * **Resend's invalidation order survives the move to the background**
+ * ([#216](https://github.com/joshstothard/3moji/issues/216)).
+ * `docs/architecture/auth.md` records why the dispatch row is written before
+ * the send. With the sender the composition root wires, the send is handed to
+ * the background after that awaited write, and reaches the provider later.
+ */
+describe("createAuth with the background sender the composition root wires (#216)", () => {
+  const USER = {
+    id: "user-1",
+    name: "",
+    email: "owner@example.com",
+    emailVerified: false,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+
+  it("records the verification dispatch before the send is handed to the background, and the provider sees nothing until it runs", async () => {
+    const provider = createRecordingEmailSender();
+    const order: string[] = [];
+    const held = createHeldBackgroundTasks();
+    const tasks: BackgroundTasks = {
+      run: (event, task) => {
+        order.push("schedule:" + event);
+        held.run(event, task);
+      },
+    };
+    const inMemory = createInMemoryVerificationDispatchStore();
+    const dispatches: VerificationDispatchStore = {
+      ...inMemory,
+      record: (dispatch) => {
+        order.push("record");
+        return inMemory.record(dispatch);
+      },
+    };
+    const { auth, close } = build({
+      emailSender: createBackgroundEmailSender({
+        inner: provider,
+        tasks,
+        event: DEFERRED_EMAIL_FAILURE_EVENTS.auth,
+      }),
+      dispatches,
+    });
+
+    await auth.options.emailVerification.sendVerificationEmail({
+      user: USER,
+      url: "http://localhost:3000/api/auth/verify-email?token=token",
+      token: "token",
+    });
+
+    expect(order).toEqual(["record", "schedule:auth_email_send_failed"]);
+    expect(provider.sent).toHaveLength(0);
+    await held.release();
+    expect(provider.sent.map((email) => email.to)).toEqual([USER.email]);
     await close();
   });
 });

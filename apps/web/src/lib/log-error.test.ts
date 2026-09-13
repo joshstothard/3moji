@@ -162,6 +162,35 @@ describe("logFailure", () => {
       expect(JSON.stringify(line)).not.toContain("forged");
     });
 
+    /** A line written with an id handed in, outside any request's store. */
+    function lineWithExplicitId(correlationId: string): unknown {
+      const spy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        logFailure("auth_email_send_failed", new Error("boom"), correlationId);
+        expect(spy).toHaveBeenCalledTimes(1);
+        const line: unknown = spy.mock.calls[0]?.[0];
+        return JSON.parse(typeof line === "string" ? line : "null");
+      } finally {
+        spy.mockRestore();
+      }
+    }
+
+    it("carries an id handed to it, for a failure logged after its request's store has gone (#216)", () => {
+      expect(lineWithExplicitId(ID)).toMatchObject({
+        event: "auth_email_send_failed",
+        correlationId: ID,
+      });
+    });
+
+    it("never writes a forged id handed to it", () => {
+      const line = lineWithExplicitId(`"},{"event":"forged`);
+
+      expect(line).toMatchObject({ correlationId: "none" });
+      expect(JSON.stringify(line)).not.toContain("forged");
+    });
+
     it("does not throw when the request store cannot be read", () => {
       const hostile = {
         type: "request",

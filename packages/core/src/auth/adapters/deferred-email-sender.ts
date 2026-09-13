@@ -27,7 +27,8 @@ export interface DeferredEmailSender extends EmailSender {
  * ordered messages to one person, and a provider that reorders them is a defect
  * the caller cannot see. It is the one place the standards' "parallelise
  * independent async work" rule is deliberately not applied, because these are
- * not independent.
+ * not independent. The Claim hands the whole flush to the background as one
+ * task (#216), so the order survives the email being sent after the answer.
  */
 export function createDeferredEmailSender(
   inner: EmailSender,

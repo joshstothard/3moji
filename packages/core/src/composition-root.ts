@@ -1,8 +1,13 @@
 import { createBetterAuthPasswordResetter } from "./auth/adapters/better-auth-password-resetter";
 import { createBetterAuthVerificationMailer } from "./auth/adapters/better-auth-verification-mailer";
+import {
+  createBackgroundEmailSender,
+  DEFERRED_EMAIL_FAILURE_EVENTS,
+} from "./auth/adapters/background-email-sender";
 import type { AuthFactory } from "./auth/auth-factory";
 import { createAuth, type CreateAuthInput } from "./auth/create-auth";
 import type { EmailSender } from "./auth/ports/email-sender";
+import type { BackgroundTasks } from "./ports/background-tasks";
 import {
   createResendClientRateLimiter,
   type ResendClientRateLimiter,
@@ -59,6 +64,16 @@ export interface CoreDependencies {
    * this function supplies it to both.
    */
   readonly db: Database;
+  /**
+   * Runs work after the answer has gone back
+   * ([#216](https://github.com/joshstothard/3moji/issues/216)). Every email
+   * the domain sends is handed to it, so no answer waits on — or fails because
+   * of — the email provider. **Required, not defaulted to running inline**: a
+   * caller that forgot it would quietly bring back the timing difference it
+   * exists to remove. `apps/web` passes Next.js's `after()`; tests and the E2E
+   * seed pass `createHeldBackgroundTasks`, which they release by hand.
+   */
+  readonly backgroundTasks: BackgroundTasks;
   /**
    * Everything `createAuth` needs except the three things this function owns:
    * the client, the dispatch store bound to it, and the `Clock` above.
@@ -153,11 +168,16 @@ export interface CoreServices {
   /** Which verification links went out, and when. */
   readonly dispatches: VerificationDispatchStore;
   /**
-   * The real sender, for the one email Better Auth does not send for us: the
+   * The sender for the one email Better Auth does not send for us: the
    * "somebody tried to sign up with your address" notice
-   * ([#15](https://github.com/joshstothard/3moji/issues/15)). It is handed out
-   * **unwrapped**, because that email is sent after the claim transaction has
-   * already rolled back — there is nothing left to defer it until.
+   * ([#15](https://github.com/joshstothard/3moji/issues/15)).
+   *
+   * **Not the transaction's deferring sender**: that email is sent after the
+   * claim transaction has already rolled back, so there is no commit left to
+   * hold it until. **But not the raw provider either** (#216): it is sent from
+   * inside the Claim's response floor, for a registered address only, so it is
+   * handed to {@link CoreDependencies.backgroundTasks} and goes out after the
+   * answer, under `claim_collision_email_failed` if it fails.
    */
   readonly emailSender: EmailSender;
   /** The verified sender address, for copy that signs off with it. */
@@ -202,6 +222,21 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     });
 
   const dispatches = createDrizzleVerificationDispatchStore({ db: deps.db });
+
+  /**
+   * The provider, behind the background (#216). Every email that leaves
+   * through the pooled services is sent after the answer: Better Auth's reset
+   * and verification links, over HTTP and server-side alike, and the collision
+   * notice. The Claim's own verification email is the exception only in where
+   * it is deferred: its transaction holds it until the commit, then hands the
+   * whole flush to the background (`runWithTransactionalAuth`).
+   */
+  const afterTheAnswer = (event: string): EmailSender =>
+    createBackgroundEmailSender({
+      inner: deps.auth.emailSender,
+      tasks: deps.backgroundTasks,
+      event,
+    });
   /** On the pooled client, shared by every limiter on `claim_rate_limit`. */
   const rateLimitStore = createDrizzleClaimRateLimitStore({ db: deps.db });
 
@@ -210,10 +245,12 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     db: deps.db,
     auth: authFactory,
     emailSender: deps.auth.emailSender,
+    tasks: deps.backgroundTasks,
   };
 
   const auth = createAuth({
     ...deps.auth,
+    emailSender: afterTheAnswer(DEFERRED_EMAIL_FAILURE_EVENTS.auth),
     db: deps.db,
     dispatches,
     clock: deps.clock,
@@ -260,7 +297,7 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     releases: createDrizzleReleaseStore({ db: deps.db }),
     accounts: createDrizzleAccountDirectory(deps.db),
     dispatches,
-    emailSender: deps.auth.emailSender,
+    emailSender: afterTheAnswer(DEFERRED_EMAIL_FAILURE_EVENTS.claimCollision),
     emailFrom: deps.auth.from,
     resetRequestUrl: `${deps.auth.baseUrl.replace(/\/+$/, "")}/reset-password`,
   };

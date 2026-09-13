@@ -56,6 +56,24 @@ const seen: { who: Who; accountsCreated: number; sent: SentEmail[] } = {
   sent: [],
 };
 
+/** The sender the running describe chose; the recording one otherwise. */
+let activeEmailSender: Core.EmailSender | undefined;
+
+/**
+ * Next.js's `after()`, held: what the real `createAfterBackgroundTasks` hands
+ * it, run by a test once the response is complete (#216).
+ */
+const afterResponse: (() => Promise<void>)[] = [];
+jest.mock("next/server", () => ({
+  after: (callback: () => Promise<void>) => {
+    afterResponse.push(callback);
+  },
+}));
+
+const { createBackgroundEmailSender } = jest.requireActual<{
+  readonly createBackgroundEmailSender: typeof Core.createBackgroundEmailSender;
+}>("../../../../packages/core/src/auth/adapters/background-email-sender");
+
 interface WorkOutcome {
   readonly commit: boolean;
   readonly value: unknown;
@@ -98,7 +116,7 @@ const services = () => ({
         claimedAt: new Date("2026-09-13T09:00:00.000Z"),
       }),
   },
-  emailSender: {
+  emailSender: activeEmailSender ?? {
     send: (email: SentEmail) => {
       seen.sent.push(email);
       return Promise.resolve();
@@ -146,6 +164,7 @@ jest.mock("./resend-action", () => ({
 }));
 
 import { submitClaimAction, type ClaimFormState } from "./claim-action";
+import { createAfterBackgroundTasks } from "../lib/after-background-tasks";
 import { ClaimForm } from "./claim-form";
 import HeldPage from "../app/claim/held/[handle]/page";
 
@@ -358,5 +377,106 @@ describe("an already-registered address, from the form to the hold screen", () =
     expect(seen.sent).toHaveLength(1);
     expect(snapshots[0]?.announced).toBe("");
     expect(snapshots[1]).toEqual(snapshots[0]);
+  });
+});
+
+/**
+ * **The collision notice with a slow or failing email provider, sent the way
+ * production sends it** ([#216](https://github.com/joshstothard/3moji/issues/216)):
+ * the **real** background sender over the **real** `after()` adapter, with
+ * `after()` held so the test runs its callbacks once the response is complete.
+ * The provider really takes two seconds, or really fails.
+ */
+describe("an already-registered address when the email provider is slow or failing (#216)", () => {
+  jest.setTimeout(30_000);
+
+  const PROVIDER_MS = 2_000;
+
+  function backgroundSender(provider: "slow" | "failing"): Core.EmailSender {
+    return createBackgroundEmailSender({
+      inner: {
+        send: async (email) => {
+          if (provider === "failing") {
+            throw new Error(`Resend refused ${email.to}`);
+          }
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, PROVIDER_MS);
+          });
+          seen.sent.push({ to: email.to });
+        },
+      },
+      tasks: createAfterBackgroundTasks(),
+      event: "claim_collision_email_failed",
+    });
+  }
+
+  async function timed(who: Who) {
+    const started = performance.now();
+    const outcome = await actionOutcome(who);
+    return { ...outcome, tookMs: performance.now() - started };
+  }
+
+  /** Everything `after()` was handed, run now the response is complete. */
+  async function afterTheResponse(): Promise<void> {
+    for (const callback of afterResponse.splice(0)) await callback();
+  }
+
+  beforeEach(() => {
+    afterResponse.length = 0;
+  });
+
+  afterEach(() => {
+    activeEmailSender = undefined;
+    jest.restoreAllMocks();
+  });
+
+  it("answers a collision exactly as a new address, and well before a two-second notice", async () => {
+    activeEmailSender = backgroundSender("slow");
+
+    const fresh = await timed("a new address");
+    const collision = await timed("an already-registered address");
+
+    expect(collision.observable).toEqual(fresh.observable);
+    expect(fresh.observable.redirected).toEqual([
+      `/claim/held/${ENCODED}?reason=pending`,
+    ]);
+    for (const outcome of [fresh, collision]) {
+      expect(outcome.tookMs).toBeGreaterThanOrEqual(RESPONSE_FLOOR_MS - 5);
+      expect(outcome.tookMs).toBeLessThan(PROVIDER_MS);
+    }
+
+    // Nothing was delivered before the response; afterwards the owner was told.
+    expect(seen.sent).toHaveLength(0);
+    await afterTheResponse();
+    expect(seen.sent).toEqual([{ to: EMAIL }]);
+  });
+
+  it("answers a collision exactly as a new address when the notice fails, and logs it once, after the response, without the address", async () => {
+    activeEmailSender = backgroundSender("failing");
+    const written: string[] = [];
+    for (const stream of ["log", "info", "warn", "error", "debug"] as const) {
+      jest.spyOn(console, stream).mockImplementation((...args: unknown[]) => {
+        written.push(args.map((arg) => String(arg)).join(" "));
+      });
+    }
+
+    const fresh = await actionOutcome("a new address");
+    const collision = await actionOutcome("an already-registered address");
+
+    expect(collision.observable).toEqual(fresh.observable);
+    expect(fresh.observable.redirected).toEqual([
+      `/claim/held/${ENCODED}?reason=pending`,
+    ]);
+
+    written.length = 0;
+    await afterTheResponse();
+
+    expect(written).toHaveLength(1);
+    expect(JSON.parse(written[0] ?? "null")).toEqual({
+      event: "claim_collision_email_failed",
+      correlationId: "none",
+      error: { name: "Error" },
+    });
+    expect(written.join("\n")).not.toContain(EMAIL);
   });
 });
