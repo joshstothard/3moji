@@ -3,6 +3,11 @@
 import { canonicalise } from "@template/core";
 import { redirect } from "next/navigation";
 
+import {
+  atBoundary,
+  type BoundaryOutcome,
+  type RecordOutcome,
+} from "../lib/boundary-log";
 import { getServices } from "../lib/services";
 import { logFailure } from "../lib/log-error";
 
@@ -62,6 +67,35 @@ function isUnverified(error: unknown): boolean {
  * so no amount of guessing here reveals whether an address is registered.
  */
 export async function signInAction(formData: FormData): Promise<SignInState> {
+  return atBoundary("sign-in.submit", (record) => signIn(formData, record), {
+    outcomeOf: outcomeOfSignIn,
+  });
+}
+
+/**
+ * The boundary outcome of an answer that did not redirect (#156). A wrong
+ * password and an address with no Account are both Better Auth's 401, so both
+ * are `rejected`; a signed-in or unverified Account records `redirected`.
+ */
+function outcomeOfSignIn(result: SignInState): BoundaryOutcome {
+  switch (result.state) {
+    case "idle":
+      return "ok";
+    case "invalid":
+      return "rejected";
+    case "failed":
+      return "failed";
+  }
+}
+
+/**
+ * Sign-in itself, behind both exported actions — unexported so that
+ * `signInFormAction` writes one boundary line, not two.
+ */
+async function signIn(
+  formData: FormData,
+  record: RecordOutcome,
+): Promise<SignInState> {
   const email = formData.get("email");
   const password = formData.get("password");
 
@@ -96,6 +130,7 @@ export async function signInAction(formData: FormData): Promise<SignInState> {
   }
 
   // Outside the try: `redirect` works by throwing.
+  record("redirected");
   redirect(destination);
 }
 
@@ -113,10 +148,14 @@ export async function signInAction(formData: FormData): Promise<SignInState> {
  * Auth answers both with the same 401 and so must we.
  */
 export async function signInFormAction(formData: FormData): Promise<void> {
-  const result = await signInAction(formData);
-  // Reached only when sign-in did not succeed: a success redirects out of
-  // `signInAction` by throwing, and never returns here.
-  redirect(`/sign-in?error=${result.state}`);
+  await atBoundary("sign-in.form", async (record) => {
+    const result = await signIn(formData, record);
+    // Reached only when sign-in did not succeed: a success redirects out of
+    // `signIn` by throwing, and never returns here. The redirect back to the
+    // form carries the refusal, so the refusal is the outcome.
+    record(outcomeOfSignIn(result));
+    redirect(`/sign-in?error=${result.state}`);
+  });
 }
 
 /**
