@@ -1,6 +1,7 @@
 import {
   profileStateOf,
   toHandleKey,
+  type HandleKey,
   type HandleOwnership,
   type ProfileState,
 } from "@template/core";
@@ -73,6 +74,74 @@ export async function readProfile(
 
 /** There is no Profile to show, and nothing more is being said. */
 const NOTHING_TO_SHOW: ProfileState = { state: "none" };
+
+/** No name for anybody, which is a legitimate answer and not a failure. */
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
+
+/**
+ * The display names behind a listing's rows, in one read
+ * ([#109](https://github.com/joshstothard/3moji/issues/109)).
+ *
+ * **It exists for the bound.** An alias already costs one availability read per
+ * candidate — 64 in ADR-0008's worst measured case — and calling
+ * {@link readProfile} per row would double that to fetch a bio and a Link list
+ * a listing never shows. One batched read keeps the page at N + 1.
+ *
+ * **It answers keyed on the segment it was asked about**, not on the branded
+ * `HandleKey` the query used. The route holds percent-encoded segments and
+ * nothing else, so a map keyed on a key would make every lookup at the render a
+ * second canonicalisation — and would be one more place the two reads behind a
+ * row could come to be about different Handles.
+ *
+ * **A missing key means "no name to show", and a failed read means the same.**
+ * The names decorate the rows; the emoji are the identity. So a refused
+ * connection costs the listing its names rather than the whole page, exactly as
+ * a failed Profile read leaves the Handle page on its honest line.
+ *
+ * It says nothing about whether these Handles are claimed. The caller has
+ * already asked `readAvailability` that and has filtered on the answer; asking
+ * again here would be the second encoding of a rule that lives in the domain.
+ *
+ * @param segments The percent-encoded emoji segments of the Handles being
+ * listed, in the order they are rendered.
+ */
+export async function readDisplayNames(
+  segments: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  const placed: { readonly segment: string; readonly key: HandleKey }[] = [];
+  for (const segment of segments) {
+    const key = toHandleKey(segment);
+    // Unreachable from the route, whose candidates come from the resolver and
+    // are canonical by construction. Skipped rather than thrown on: one
+    // unplaceable segment must not cost the other rows their names.
+    if (key !== undefined) placed.push({ segment, key });
+  }
+
+  if (placed.length === 0) return NO_NAMES;
+
+  try {
+    const { profiles } = getServices();
+    const byKey = await profiles.displayNamesOf(placed.map((one) => one.key));
+
+    const bySegment = new Map<string, string>();
+    for (const { segment, key } of placed) {
+      const name = byKey.get(key);
+      if (name !== undefined) bySegment.set(segment, name);
+    }
+    return bySegment;
+  } catch (error) {
+    // Logged for the reason `readProfile` logs its own: a misconfigured
+    // deployment or a refused connection is the failure that would otherwise be
+    // silent — and here it is silent by design, because the page still renders.
+    console.error(
+      JSON.stringify({
+        event: "display_names_read_failed",
+        message: error instanceof Error ? error.message : "unknown error",
+      }),
+    );
+    return NO_NAMES;
+  }
+}
 
 /**
  * The ownership verdict an availability answer implies.

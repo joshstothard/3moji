@@ -436,5 +436,59 @@ describeWithDatabase(
       expect(await countWhere("profile", userId)).toBe("0");
       expect(await countWhere("link", userId)).toBe("0");
     });
+
+    /**
+     * The listing's read ([#109](https://github.com/joshstothard/3moji/issues/109)),
+     * against the table rather than against a belief about it.
+     *
+     * Three things only Postgres settles here, and each is a way the listing
+     * could be silently wrong:
+     *
+     * - **One query answers about several Handles.** An `IN` over the primary
+     *   key under the deterministic `C` collation — the same column `profileOf`
+     *   matches on, and the reason the page costs N availability reads + 1
+     *   rather than 2N.
+     * - **A claimed but unedited Handle contributes nothing**, which the
+     *   `innerJoin` gives for free. A `leftJoin` would answer a null name and
+     *   the map would carry a key meaning "present, but empty".
+     * - **A `null` display name is absence, not a name.** Both it and the
+     *   missing row must leave the key out, so a row has one branch at the
+     *   render instead of three.
+     */
+    it("answers the display names behind several Handles in one query", async () => {
+      const named = handleKeyFromSet(HANDLE_KEY_LENGTH * 30);
+      const nameless = handleKeyFromSet(HANDLE_KEY_LENGTH * 31);
+      const unedited = handleKeyFromSet(HANDLE_KEY_LENGTH * 32);
+      const namedUser = await createClaimedHandle("listed-named", named);
+      const namelessUser = await createClaimedHandle(
+        "listed-nameless",
+        nameless,
+      );
+      await createClaimedHandle("listed-unedited", unedited);
+      await db.execute(sql`
+        INSERT INTO "profile" (user_id, display_name, bio, updated_at)
+        VALUES (${namedUser}, 'Ada Rose', NULL, ${NOW.toISOString()})
+      `);
+      await db.execute(sql`
+        INSERT INTO "profile" (user_id, display_name, bio, updated_at)
+        VALUES (${namelessUser}, NULL, NULL, ${NOW.toISOString()})
+      `);
+      // A Link, so a query that joined the Link table the way `profileOf` does
+      // would answer a duplicate row for this Handle rather than one.
+      await insertLink({
+        id: `${namedUser}-l`,
+        userId: namedUser,
+        title: "a",
+        position: 0,
+      });
+
+      const names = await createDrizzleProfileRepository(db).displayNamesOf([
+        named,
+        nameless,
+        unedited,
+      ]);
+
+      expect([...names]).toEqual([[named, "Ada Rose"]]);
+    });
   },
 );

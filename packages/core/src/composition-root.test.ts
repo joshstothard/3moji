@@ -99,7 +99,13 @@ describe("createCoreServices", () => {
   it("wires a read-only Profile repository", async () => {
     const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
 
-    expect(Object.keys(services.profiles)).toEqual(["profileOf"]);
+    // Two **reads** — the Profile behind one Handle, and the display names
+    // behind a listing's rows (#109). Both are named here rather than counted,
+    // so adding a third still has to turn this red and be read as a verb.
+    expect(Object.keys(services.profiles)).toEqual([
+      "profileOf",
+      "displayNamesOf",
+    ]);
     await close();
   });
 

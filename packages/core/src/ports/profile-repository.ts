@@ -51,4 +51,33 @@ export interface Profile {
  */
 export interface ProfileRepository {
   profileOf(key: HandleKey): Promise<Profile | undefined>;
+
+  /**
+   * The display name behind each of several Handles, for a listing
+   * ([#109](https://github.com/joshstothard/3moji/issues/109), ADR-0008
+   * decision 4).
+   *
+   * **A second method rather than a loop over {@link profileOf}, and the reason
+   * is the bound.** An alias costs one availability read per candidate — 64 in
+   * ADR-0008's worst measured case — and a Profile read per row would double
+   * that to fetch a bio and a Link list a listing never shows. One call keeps
+   * the page at N + 1.
+   *
+   * **An absent key is the whole of "no name to show".** A claimed Handle with
+   * no Profile row and one whose `display_name` was never set are the same
+   * answer to a listing: emoji, and nothing else. Collapsing them here leaves
+   * the renderer one branch instead of three, and means no caller can
+   * accidentally print an empty name.
+   *
+   * It says nothing about whether a Handle is claimed, exactly as
+   * {@link profileOf} does not — the caller has already asked
+   * `handleAvailability` that question, and answering it twice would be the
+   * second encoding of the hold-expiry rule `src/db/handle.ts` warns against.
+   *
+   * @param keys The Handles to ask about. An empty list is a legitimate call
+   * and must issue no query.
+   */
+  displayNamesOf(
+    keys: readonly HandleKey[],
+  ): Promise<ReadonlyMap<HandleKey, string>>;
 }

@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../db/client";
 import { handle } from "../db/handle";
@@ -69,6 +69,50 @@ export function createDrizzleProfileRepository(
         .orderBy(asc(link.position));
 
       return profileFromRows(rows);
+    },
+
+    /**
+     * The listing's read: **one query for the whole page, and no Link join.**
+     *
+     * Reusing `profileOf`'s join would be the natural mistake and the expensive
+     * one — it left-joins `link` and can return eleven rows per Handle, so
+     * across ADR-0008's worst 64-candidate alias it is up to 704 rows to
+     * produce at most 64 strings. This selects two columns from two tables and
+     * returns exactly one row per Handle that has a Profile.
+     *
+     * **The `innerJoin` is the omission rule.** A claimed Handle whose owner
+     * has never edited anything has no `profile` row and so contributes
+     * nothing, without this adapter knowing what "unedited" means — the same
+     * division of labour `profileOf` keeps. A `leftJoin` would answer a null
+     * name and put a key in the map meaning "present, but empty".
+     *
+     * `inArray` over `handle.key` — the primary key, under the deterministic
+     * `C` collation — so the planner has the index for every member. **The
+     * empty list is answered without a query**: an `IN ()` is a round trip that
+     * cannot return a row, and Drizzle's `inArray` is a sharp edge on an empty
+     * array besides.
+     */
+    async displayNamesOf(
+      keys: readonly HandleKey[],
+    ): Promise<ReadonlyMap<HandleKey, string>> {
+      if (keys.length === 0) return new Map();
+
+      const rows = await db
+        .select({ key: handle.key, displayName: profile.displayName })
+        .from(handle)
+        .innerJoin(profile, eq(profile.userId, handle.userId))
+        .where(inArray(handle.key, [...keys]));
+
+      const names = new Map<HandleKey, string>();
+      for (const row of rows) {
+        // `null` is the column's "never set", and an empty string is what a
+        // form that trimmed to nothing would leave. Neither is a name, and
+        // both must read as absence so the page has one branch, not three.
+        if (row.displayName !== null && row.displayName !== "") {
+          names.set(row.key, row.displayName);
+        }
+      }
+      return names;
     },
   };
 }
