@@ -537,8 +537,8 @@ describe("no boundary can be added silently", () => {
     return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) return sourceFiles(path);
-      return /\.(ts|tsx)$/.test(entry.name) &&
-        !/\.test\.(ts|tsx)$/.test(entry.name)
+      return /\.(ts|tsx|js|jsx|mjs)$/.test(entry.name) &&
+        !/\.test\.(ts|tsx|js|jsx|mjs)$/.test(entry.name)
         ? [path]
         : [];
     });
@@ -572,7 +572,9 @@ describe("no boundary can be added silently", () => {
   const discovered = sourceFiles(SRC).flatMap((path) => {
     const file = relative(SRC, path).split(sep).join("/");
     const source = readFileSync(path, "utf8");
-    const isRoute = /^app\/(.+\/)?route\.ts$/.test(file);
+    // Every extension Next.js accepts for a route handler, so a `route.js`
+    // cannot slip past the list.
+    const isRoute = /^app\/(.+\/)?route\.(ts|tsx|js|jsx|mjs)$/.test(file);
     const isServerModule = DIRECTIVE.test(source);
     return isRoute || isServerModule
       ? exportsOf(source).map((name) => `${file}#${name}`)
