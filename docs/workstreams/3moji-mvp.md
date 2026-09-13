@@ -351,6 +351,8 @@ _Not planned yet._
 
 ## Open questions
 
+Every decision and action only the repo owner can take, including the questions below, is gathered with a checkbox in [Owner actions and decisions](../owner-actions.md).
+
 - Do the `Symbols/alphanum` and `Symbols/geometric` subgroups stay in the Emoji Set? Excluding both takes it from 1,053 to 994. Decided in issue #23.
 - Which flagged emoji are excluded after the side-by-side render check? Issue #23.
 - Is three resends an hour the right limit? It is a starting value to tune, not a principle. As built (#82) it is one constant, `RESEND_LIMITS` in `packages/core/src/auth/resend-allowance.ts`, with an overridable parameter on the pure decision — so tuning it is a one-line change, and the sign-up link counts towards the three.
@@ -468,3 +470,4 @@ _Not planned yet._
 - 2026-09-13 — #163 added to Phase 5 (epic #149): the Claim's case-sensitive email lookups disagree with Better Auth's lowercasing, which by the code path breaks non-enumeration and blocks mixed-case sign-ups. Found while landing #148 (PR #162); measured first.
 - 2026-09-13 — Synced from GitHub after #188: **Phase 5 Done** (epic #149 closed, all 16 issues closed — #150–#158 and #163 as planned, plus #169, #177, #180, #182, #185 and #187 added after planning) and **Phase 6 Done** (epic #159 closed, #160 and #161 closed). All four Phase 5 and both Phase 6 acceptance criteria ticked against their closed issues. Not yet met despite the Done status: `3moji.me` is not live, so Phase 5's outcome and Phase 6's unfurl on a real share wait on #32 (blocked on #19); and Phase 5's error tracking was never planned as an issue. Phase 1 (#32) and Phase 2 (#55) remain In progress, so the workstream stays Active.
 - 2026-09-13 — Phase 7 added after an MVP gap review: owner return path (password reset, account area, sign-out, deletion), privacy/terms/reporting, finding a Handle by its spoken form, a rare three-of-a-kind celebration, site hygiene and an operations minimum. The claim-collision email's dead `/reset-password` link recorded as a live bug.
+- 2026-09-13 — Owner actions and decisions gathered into [`docs/owner-actions.md`](../owner-actions.md): setup only the owner can do, decisions due before launch, and decisions that can wait until after launch.
