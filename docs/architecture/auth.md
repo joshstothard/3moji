@@ -12,7 +12,7 @@
 | The HTTP surface                    | `apps/web/src/app/api/auth/[...all]/route.ts`                              |
 | The verification landing            | `apps/web/src/app/claim/verify/route.ts`                                   |
 | The hold screen and resend          | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`           |
-| Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app   |
+| Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app    |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
 
