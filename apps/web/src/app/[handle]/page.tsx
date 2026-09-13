@@ -213,19 +213,6 @@ async function AliasedHandle({ segment }: { readonly segment: string }) {
 }
 
 /**
- * An alias that could be more than one Handle, **none of which anybody has**.
- *
- * It says so and stops. No emoji, no Handles, no controls — and that is the
- * only branch left saying it, now that more than one claimed match renders
- * {@link AliasListing}. ADR-0008 omits unclaimed Handles from a listing, so
- * there is nothing here a listing may show; and the claim call to action is a
- * page for one specific Handle, which an alias naming eight does not give it.
- * Choosing between them is
- * [#121](https://github.com/joshstothard/3moji/issues/121), which needs its own
- * ADR — decision 4's `none` row assumes a single candidate, and an accepted ADR
- * cannot be edited.
- */
-/**
  * One Handle as a listing shows it: what to render, and where it lives.
  *
  * {@link RenderedHandle} plus the one field a row needs that a rendered Handle
@@ -329,6 +316,19 @@ function AliasListingRow({
   );
 }
 
+/**
+ * An alias that could be more than one Handle, **none of which anybody has**.
+ *
+ * It says so and stops. No emoji, no Handles, no controls — and that is the
+ * only branch left saying it, now that more than one claimed match renders
+ * {@link AliasListing}. ADR-0008 omits unclaimed Handles from a listing, so
+ * there is nothing here a listing may show; and the claim call to action is a
+ * page for one specific Handle, which an alias naming eight does not give it.
+ * Choosing between them is
+ * [#121](https://github.com/joshstothard/3moji/issues/121), which needs its own
+ * ADR — decision 4's `none` row assumes a single candidate, and an accepted ADR
+ * cannot be edited.
+ */
 function AmbiguousAlias() {
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
