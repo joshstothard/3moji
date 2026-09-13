@@ -624,3 +624,203 @@ describe("claiming from the builder", () => {
     expect(claimedHandle()).toBe(ENCODED_ICE_TRIPLE);
   });
 });
+
+/**
+ * A rare three-of-a-kind ([#202](https://github.com/joshstothard/3moji/issues/202)).
+ *
+ * Three of the same emoji stay claimable, and finding one free is meant to feel
+ * special. The celebration is **derived from two things the builder already
+ * shows** — the three slots and the availability line — so it can reveal
+ * nothing new: it appears only when the slots match and the line reads
+ * available, and for every other answer about the same triple it stays away.
+ *
+ * jsdom evaluates no CSS, so the motion itself and its reduced-motion
+ * alternative are proved in `e2e/rare-handle.spec.ts`. What is proved here is
+ * when it appears, what is announced, and that focus never moves.
+ */
+describe("a rare three-of-a-kind Handle", () => {
+  const PIZZA = "\u{1F355}";
+
+  function rareBadge(): HTMLElement | null {
+    return screen.queryByText(copy.rareBadge);
+  }
+
+  function announcement(): HTMLElement | null {
+    return screen.queryByText(copy.rareAnnouncement);
+  }
+
+  /** The polite live region the rarity is announced through. */
+  function rareRegion(): HTMLElement {
+    const region = document.querySelector<HTMLElement>(
+      "[data-rare-announcement]",
+    );
+    if (region === null) throw new Error("no rare live region is rendered");
+    return region;
+  }
+
+  it("celebrates an available three-of-a-kind with a badge and an announcement", async () => {
+    const { user } = renderBuilder(() => Promise.resolve("available"));
+
+    await pick(user, "ice cube", "ice cube", "ice cube");
+    await screen.findByText(copy.stateAvailable);
+
+    expect(rareBadge()).toBeInTheDocument();
+    expect(announcement()).toBeInTheDocument();
+  });
+
+  it("celebrates on first paint when the page opened on an available three-of-a-kind", () => {
+    render(
+      <HandleBuilder
+        checkAvailability={() => new Promise(() => undefined)}
+        initialEmoji={[ICE, ICE, ICE]}
+        initialAvailability="available"
+      />,
+    );
+
+    expect(rareBadge()).toBeInTheDocument();
+  });
+
+  it.each([
+    ["claimed", copy.stateClaimed],
+    ["held", copy.stateHeld],
+    ["not-claimable", copy.stateNotClaimable],
+    ["not-a-handle", copy.stateNotAHandle],
+    ["unknown", copy.stateUnknown],
+  ] as const)(
+    "does not celebrate a three-of-a-kind that comes back %s",
+    async (state, text) => {
+      const { user } = renderBuilder(() => Promise.resolve(state));
+
+      await pick(user, "ice cube", "ice cube", "ice cube");
+      await screen.findByText(text);
+
+      expect(rareBadge()).not.toBeInTheDocument();
+      expect(announcement()).not.toBeInTheDocument();
+    },
+  );
+
+  it("does not celebrate while the three-of-a-kind is still being checked", async () => {
+    const { user } = renderBuilder(() => new Promise(() => undefined));
+
+    await pick(user, "ice cube", "ice cube", "ice cube");
+    await screen.findByText(copy.checking);
+
+    expect(rareBadge()).not.toBeInTheDocument();
+    expect(announcement()).not.toBeInTheDocument();
+  });
+
+  it("does not celebrate two of a kind", async () => {
+    const { user } = renderBuilder(() => Promise.resolve("available"));
+
+    await pick(user, "ice cube", "ice cube");
+
+    expect(rareBadge()).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["the last differs", [ICE, ICE, PIZZA]],
+    ["the middle differs", [ICE, PIZZA, ICE]],
+    ["the first differs", [PIZZA, ICE, ICE]],
+  ] as const)(
+    "does not celebrate an available Handle whose emoji do not all match: %s",
+    async (_name, initialEmoji) => {
+      renderBuilder(() => Promise.resolve("available"), initialEmoji);
+
+      await screen.findByText(copy.stateAvailable);
+
+      expect(rareBadge()).not.toBeInTheDocument();
+      expect(announcement()).not.toBeInTheDocument();
+    },
+  );
+
+  it("announces through a polite live region that is on the page before the Handle is", async () => {
+    // A live region inserted together with its text is not reliably announced,
+    // so the region is permanent and only its text changes.
+    const { user } = renderBuilder(() => Promise.resolve("available"));
+    const region = rareRegion();
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toHaveTextContent("");
+
+    await pick(user, "ice cube", "ice cube", "ice cube");
+    await screen.findByText(copy.stateAvailable);
+
+    expect(rareRegion()).toBe(region);
+    expect(region).toHaveTextContent(copy.rareAnnouncement);
+    // Announced once: the visible badge is hidden from assistive technology,
+    // so the sentence is not read a second time from the badge.
+    expect(rareBadge()?.closest("[aria-hidden='true']")).not.toBeNull();
+  });
+
+  it("does not announce again when the builder re-renders for an unrelated reason", async () => {
+    const view = render(
+      <HandleBuilder
+        checkAvailability={() => Promise.resolve("available")}
+        initialEmoji={[ICE, ICE, ICE]}
+      />,
+    );
+    await screen.findByText(copy.rareAnnouncement);
+    const region = rareRegion();
+    const mutations: MutationRecord[] = [];
+    const observer = new MutationObserver((records) => {
+      mutations.push(...records);
+    });
+    observer.observe(region, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+
+    // A new read function asks about the same Handle again and gets the same
+    // answer: a re-render in which nothing about the rarity has changed.
+    const reread = jest.fn((_segment: string) =>
+      Promise.resolve("available" as const),
+    );
+    view.rerender(
+      <HandleBuilder
+        checkAvailability={reread}
+        initialEmoji={[ICE, ICE, ICE]}
+      />,
+    );
+    await waitFor(() => {
+      expect(reread).toHaveBeenCalled();
+    });
+    await screen.findByText(copy.stateAvailable);
+    observer.disconnect();
+
+    expect(mutations).toEqual([]);
+    expect(region).toHaveTextContent(copy.rareAnnouncement);
+  });
+
+  it("does not move focus when the celebration appears", async () => {
+    const { user } = renderBuilder(() => Promise.resolve("available"));
+    await pick(user, "ice cube", "ice cube");
+
+    const button = emoji("ice cube");
+    button.focus();
+    await user.keyboard("{Enter}");
+    await screen.findByText(copy.rareAnnouncement);
+
+    expect(button).toHaveFocus();
+  });
+
+  it("withdraws the celebration when the Handle changes, and plays it afresh on the way back", async () => {
+    const { user } = renderBuilder(() => Promise.resolve("available"));
+    await pick(user, "ice cube", "ice cube", "ice cube");
+    await screen.findByText(copy.stateAvailable);
+    const first = rareBadge();
+    expect(first).toBeInTheDocument();
+
+    await user.click(filledSlot(3, "ice cube"));
+    expect(rareBadge()).not.toBeInTheDocument();
+    expect(rareRegion()).toHaveTextContent("");
+
+    await pick(user, "ice cube");
+    await screen.findByText(copy.stateAvailable);
+
+    // A new node, not the old one kept: a CSS animation plays when its element
+    // is inserted, so a fresh node is what replays it.
+    const second = rareBadge();
+    expect(second).toBeInTheDocument();
+    expect(second).not.toBe(first);
+  });
+});

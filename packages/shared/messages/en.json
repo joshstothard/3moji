@@ -41,7 +41,9 @@
     "stateNotAHandle": "That is not a Handle.",
     "stateUnknown": "We could not check this Handle just now.",
     "swapHeading": "Try one of these instead",
-    "swapSuggestion": "Use {spoken}"
+    "swapSuggestion": "Use {spoken}",
+    "rareBadge": "Rare find",
+    "rareAnnouncement": "A rare find: all three emoji match, and this three-of-a-kind Handle is available."
   },
   "HandlePage": {
     "unclaimed": "Nobody has this Handle yet.",
