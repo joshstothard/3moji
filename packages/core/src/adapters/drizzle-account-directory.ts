@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../db/client";
+import { withSafeDatabaseErrors } from "../db/database-error";
 import { handle } from "../db/handle";
 import { user } from "../db/schema";
 import type { AccountDirectory } from "../ports/account-directory";
@@ -28,30 +29,34 @@ export function createDrizzleAccountDirectory(
 ): AccountDirectory {
   return {
     async byEmail(email) {
-      const rows = await db
-        .select({
-          userId: user.id,
-          email: user.email,
-          emailVerified: user.emailVerified,
-        })
-        .from(user)
-        .where(sql`lower(${user.email}) = lower(${email})`)
-        .limit(1);
+      const rows = await withSafeDatabaseErrors(() =>
+        db
+          .select({
+            userId: user.id,
+            email: user.email,
+            emailVerified: user.emailVerified,
+          })
+          .from(user)
+          .where(sql`lower(${user.email}) = lower(${email})`)
+          .limit(1),
+      );
       return rows[0];
     },
 
     async handleOf(userId) {
-      const rows = await db
-        .select({
-          key: handle.key,
-          heldUntil: handle.heldUntil,
-          claimedAt: handle.claimedAt,
-        })
-        .from(handle)
-        // `handle.user_id` is UNIQUE — an Account owns at most one Handle
-        // (ADR-0004 decision 4) — so this is an index seek returning one row.
-        .where(eq(handle.userId, userId))
-        .limit(1);
+      const rows = await withSafeDatabaseErrors(() =>
+        db
+          .select({
+            key: handle.key,
+            heldUntil: handle.heldUntil,
+            claimedAt: handle.claimedAt,
+          })
+          .from(handle)
+          // `handle.user_id` is UNIQUE — an Account owns at most one Handle
+          // (ADR-0004 decision 4) — so this is an index seek returning one row.
+          .where(eq(handle.userId, userId))
+          .limit(1),
+      );
       return rows[0];
     },
   };

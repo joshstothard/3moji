@@ -2,6 +2,7 @@ import { createDeferredEmailSender } from "../auth/adapters/deferred-email-sende
 import type { Auth, AuthFactory } from "../auth/auth-factory";
 import type { EmailSender } from "../auth/ports/email-sender";
 import type { Database, DatabaseOrTransaction } from "../db/client";
+import { toSafeDatabaseError } from "../db/database-error";
 import type { TransactionOutcome } from "../ports/claim-store";
 
 import { createDrizzleVerificationDispatchStore } from "./drizzle-verification-dispatch-store";
@@ -75,7 +76,10 @@ export async function runWithTransactionalAuth<T>(
     if (!(error instanceof ClaimRolledBack)) {
       // Nothing was committed, so nothing may be sent.
       deferred.discard();
-      throw error;
+      // Without the statement's bound parameters — the Claim's email address
+      // among them — and with the SQLSTATE kept (#144). The `23505` branches
+      // inside the unit of work have already seen the original.
+      throw toSafeDatabaseError(error);
     }
   }
 

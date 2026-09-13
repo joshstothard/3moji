@@ -1,0 +1,145 @@
+import path from "node:path";
+
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { Pool } from "pg";
+
+import { postgresErrorCode } from "../db/postgres-error";
+import { authSchema } from "../db/schema";
+
+import { createDrizzleAccountDirectory } from "./drizzle-account-directory";
+import { createDrizzleProfileStore } from "./drizzle-profile-store";
+
+const url = process.env.DATABASE_URL;
+
+// Fail loudly rather than skipping silently in CI: a green run that tested
+// nothing is worse than a red one.
+if (url === undefined && process.env.CI !== undefined) {
+  throw new Error(
+    "DATABASE_URL is not set. CI's integration-tests job must provide a Postgres service.",
+  );
+}
+
+const describeWithDatabase = url === undefined ? describe.skip : describe;
+
+const MIGRATIONS = path.join(__dirname, "..", "..", "migrations");
+
+const SUITE_TAG = `db-error-int-${String(Date.now())}`;
+const DISPLAY_NAME = `${SUITE_TAG} Ada Lovelace-Byron`;
+const BIO = `${SUITE_TAG} analyst of the Engine`;
+const LINK_TITLE = `${SUITE_TAG} private notebook`;
+const LINK_URL = `https://example.com/${SUITE_TAG}-notebook`;
+
+/** Every rendering a tracker could capture, down the whole `cause` chain. */
+function everythingSaidBy(error: unknown): string {
+  const said: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current !== undefined; depth += 1) {
+    if (typeof current !== "object" || current === null) {
+      said.push(JSON.stringify(current));
+      break;
+    }
+    said.push(Error.prototype.toString.call(current));
+    said.push(JSON.stringify(current));
+    if ("message" in current) said.push(String(current.message));
+    if ("stack" in current) said.push(String(current.stack));
+    current = "cause" in current ? current.cause : undefined;
+  }
+  return said.join("\n");
+}
+
+async function rejectionOf(work: Promise<unknown>): Promise<unknown> {
+  try {
+    await work;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("expected the adapter to reject, and it resolved.");
+}
+
+/**
+ * **Errors leaving the adapters against a real Postgres**
+ * ([#144](https://github.com/joshstothard/3moji/issues/144)).
+ *
+ * The unit suite proves the shape against a scripted client. Only a real
+ * server proves the two things that matter most: that a genuine SQLSTATE and
+ * constraint name survive the replacement, and that what Postgres itself puts
+ * in `detail` and the message does not.
+ *
+ * Nothing here writes a row that survives: every statement is rejected.
+ */
+describeWithDatabase(
+  "errors leaving core adapters against a real Postgres",
+  () => {
+    let pool: Pool;
+    let db: ReturnType<typeof drizzle<typeof authSchema>>;
+
+    beforeAll(async () => {
+      pool = new Pool({ connectionString: url });
+      db = drizzle(pool, { schema: authSchema });
+      await migrate(db, { migrationsFolder: MIGRATIONS });
+    });
+
+    afterAll(async () => {
+      await pool.end();
+    });
+
+    /**
+     * A Profile for an Account that does not exist: `profile.user_id`'s foreign
+     * key rejects the upsert, whose parameters are the display name and bio.
+     */
+    it("keeps the foreign-key SQLSTATE and constraint, and none of the Profile's text", async () => {
+      const store = createDrizzleProfileStore({ db });
+
+      const error = await rejectionOf(
+        store.runInTransaction(async (tx) => {
+          await tx.saveProfile({
+            userId: `${SUITE_TAG}-no-such-account`,
+            displayName: DISPLAY_NAME,
+            bio: BIO,
+            links: [{ title: LINK_TITLE, url: LINK_URL }],
+            updatedAt: new Date("2026-09-13T12:00:00.000Z"),
+          });
+          return { commit: true, value: undefined };
+        }),
+      );
+
+      const said = everythingSaidBy(error);
+      for (const secret of [DISPLAY_NAME, BIO, SUITE_TAG]) {
+        expect(said).not.toContain(secret);
+      }
+      // 23503 foreign_key_violation, read the way the domain reads it.
+      expect(postgresErrorCode(error)).toBe("23503");
+      expect(error).toMatchObject({
+        name: "DatabaseQueryFailed",
+        code: "23503",
+        constraint: "profile_user_id_user_id_fk",
+      });
+    });
+
+    /**
+     * An address Postgres cannot store: `text` refuses NUL, so the server rejects
+     * the lookup with the address bound as its parameter.
+     */
+    it("keeps the SQLSTATE of a rejected address lookup, and not the address", async () => {
+      const address = `${SUITE_TAG}-someone\u0000@example.com`;
+
+      const error = await rejectionOf(
+        createDrizzleAccountDirectory(db).byEmail(address),
+      );
+
+      const said = everythingSaidBy(error);
+      expect(said).not.toContain(SUITE_TAG);
+      expect(said).not.toContain("@example.com");
+      expect(error).toMatchObject({ name: "DatabaseQueryFailed" });
+      // 22021 character_not_in_repertoire: a SQLSTATE, not a connection code.
+      expect(postgresErrorCode(error)).toMatch(/^[0-9A-Z]{5}$/);
+    });
+
+    it("leaves the database answering after both rejections", async () => {
+      const result = await db.execute(sql`SELECT 1 AS one`);
+      expect(result.rows).toHaveLength(1);
+    });
+  },
+);

@@ -9,7 +9,9 @@
  * built from it can write somebody's email address into production logs, on
  * exactly the unexpected failures nobody reads carefully before they are
  * retained. (The Resend adapter's own error stopped quoting Resend's response
- * body in #140, but a message from anything else still can.)
+ * body in #140, and a database error leaving a core adapter stopped carrying
+ * the statement's parameters in #144 — it is `DatabaseQueryFailed`, whose own
+ * `code` is read below — but a message from anything else still can.)
  *
  * What is logged instead is a descriptor made only of values that **cannot**
  * carry free text: an identifier-shaped `name` and `code` that passed an

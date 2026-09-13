@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import type { Database, DatabaseOrTransaction } from "../db/client";
+import { toSafeDatabaseError } from "../db/database-error";
 import { handle } from "../db/handle";
 import type { HandleKey } from "../db/handle-key";
 import { releasedHandle } from "../db/released-handle";
@@ -72,7 +73,9 @@ export function createDrizzleReleaseStore(
         });
       } catch (error) {
         if (!(error instanceof ReleaseRolledBack)) {
-          throw error;
+          // Without the statement's bound parameters, and with the SQLSTATE
+          // kept (#144).
+          throw toSafeDatabaseError(error);
         }
       }
 

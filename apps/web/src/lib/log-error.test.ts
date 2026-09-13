@@ -163,6 +163,26 @@ describe("describeError", () => {
     expect(JSON.stringify(described)).not.toContain(EMAIL);
   });
 
+  it("reports the SQLSTATE of the database error core's adapters now throw (#144)", () => {
+    // The shape of core's `DatabaseQueryFailed`, built here because every web
+    // suite mocks `@template/core`: the code and constraint as own properties,
+    // a message naming only the code, and no `cause` at all — so nothing down a
+    // chain can supply the code, only the property.
+    const failed = Object.assign(
+      new Error("A database query failed with code 23505."),
+      {
+        name: "DatabaseQueryFailed",
+        code: "23505",
+        constraint: "user_email_unique",
+      },
+    );
+
+    const described = describeError(failed);
+
+    expect(described).toEqual({ name: "DatabaseQueryFailed", code: "23505" });
+    expect(JSON.stringify(described)).not.toContain("user_email_unique");
+  });
+
   it("reads the Resend adapter's rejection from its status and code properties (#140)", () => {
     // The shape of core's `ResendRequestRejected`, built here because every
     // web suite mocks `@template/core`. The message deliberately names no
