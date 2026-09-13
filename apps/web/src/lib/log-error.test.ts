@@ -152,15 +152,31 @@ describe("describeError", () => {
     });
   });
 
-  it("keeps the three-digit status of a provider rejection and none of the provider's words", () => {
+  it("keeps the three-digit status from a message that states only that, and none of its other words", () => {
     const rejected = new Error(
-      `Resend rejected the request with status 422. The \`to\` field ${EMAIL} is invalid.`,
+      `Some provider rejected the request with status 422. The \`to\` field ${EMAIL} is invalid.`,
     );
 
     const described = describeError(rejected);
 
     expect(described).toEqual({ name: "Error", status: "422" });
     expect(JSON.stringify(described)).not.toContain(EMAIL);
+  });
+
+  it("reads the Resend adapter's rejection from its status and code properties (#140)", () => {
+    // The shape of core's `ResendRequestRejected`, built here because every
+    // web suite mocks `@template/core`. The message deliberately names no
+    // status, so only the properties can supply one.
+    const rejected = Object.assign(
+      new Error("Resend rejected the request (VALIDATION_ERROR)."),
+      { name: "ResendRequestRejected", status: 422, code: "VALIDATION_ERROR" },
+    );
+
+    expect(describeError(rejected)).toEqual({
+      name: "ResendRequestRejected",
+      code: "VALIDATION_ERROR",
+      status: "422",
+    });
   });
 
   it("refuses a name or a code that is not identifier-shaped", () => {
