@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { checkGitHooks } from "./check-git-hooks.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const at = (...parts) => path.join(root, ...parts);
@@ -1278,6 +1279,17 @@ for (const skill of [...manualSkills, ...automaticSkills]) {
       `wrong body is posted (#66). Use a \`mktemp\` path, or scope the name to the issue or PR.`,
   );
 }
+
+// A checkout with no `.husky/_` has no git hooks at all, and git says nothing
+// about it -- a missing `core.hooksPath` is ignored silently, so a commit
+// succeeds with exit 0 and no warning (#119). Every other assertion in this file
+// checks that the agent workflow is *described* correctly; this one checks that
+// the machinery which enforces it is actually present in the checkout doing the
+// verifying. The reasoning, and why it asserts on the resolved directory rather
+// than on `.husky/_`, is in scripts/check-git-hooks.mjs.
+const gitHooks = checkGitHooks({ cwd: root });
+assert.ok(gitHooks.ok, gitHooks.message);
+if (gitHooks.skipped) console.log(gitHooks.message);
 
 console.log(
   `Agent workflow parity passed for ${manualSkills.length} manual workflows, ${automaticSkills.length} automatic skills, and ${roleSkills.length} shared roles.`,
