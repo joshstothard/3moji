@@ -89,13 +89,13 @@ export const verification = pgTable("verification", {
  * Better Auth owns this table as it owns the four above, and its shape is
  * Better Auth's (`getAuthTables` with `rateLimit.storage: "database"`):
  *
- * - `key` is `<client address>|<path>`, unique, and the row the limiter reads
- *   and increments. The address is Better Auth's normalised form — an IPv4
- *   address, or an IPv6 `/64` written out in full. **Unlike
- *   `claim_rate_limit`, it is not hashed**: Better Auth builds the key and
- *   offers no hook to hash it. The same addresses are already in
- *   `session.ip_address`, and rows are pruned once they are older than the
- *   longest window, so the table holds about an hour of history.
+ * - `key` is unique, and the row the limiter reads and increments. Better
+ *   Auth builds `<client address>|<path>`; **what is stored is an HMAC of it**
+ *   under a key derived from the auth secret, as `claim_rate_limit` stores its
+ *   buckets (#214). `hashedRateLimitKeys` in `auth/auth-rate-limit-key.ts`
+ *   hashes it on the way in, so no client address is held in clear. Rows are
+ *   pruned once they are older than the longest window, so the table holds
+ *   about an hour of hashed history.
  * - `count` is requests in the current rolling window.
  * - `lastRequest` is epoch **milliseconds**, which Better Auth marks `bigint`:
  *   an `integer` column would overflow on the first write.
