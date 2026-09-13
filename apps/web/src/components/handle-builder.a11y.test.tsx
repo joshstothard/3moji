@@ -12,8 +12,9 @@ import en from "../../../../packages/shared/messages/en.json";
  * Driven as `handle-builder.test.tsx` drives it: the real Emoji Set, and the
  * availability read injected as a prop. It opens on 🍕🍕🍕, which is what makes
  * the taken states render their swap suggestions — the part of the builder that
- * appears only when a Handle is refused. The claim endpoint is injected too, so
- * the available state carries the claim form it offers on the page.
+ * appears only when a Handle is refused — and the available state its rare
+ * three-of-a-kind badge (#202). The claim endpoint is injected too, so the
+ * available state carries the claim form it offers on the page.
  */
 const PIZZA = "\u{1F355}";
 const copy = en.HandleBuilder;
@@ -65,35 +66,35 @@ describe("the Handle builder, checked by axe", () => {
       "available",
       "available",
       copy.stateAvailable,
-      { claimForm: true, swaps: 0 },
+      { claimForm: true, swaps: 0, rare: true },
       ["label", "button-name", "autocomplete-valid"],
     ],
     [
       "taken",
       "claimed",
       copy.stateClaimed,
-      { claimForm: false, swaps: 3 },
+      { claimForm: false, swaps: 3, rare: false },
       ["button-name", "role-img-alt"],
     ],
     [
       "on hold",
       "held",
       copy.stateHeld,
-      { claimForm: false, swaps: 3 },
+      { claimForm: false, swaps: 3, rare: false },
       ["button-name", "role-img-alt"],
     ],
     [
       "reserved",
       "not-claimable",
       copy.stateNotClaimable,
-      { claimForm: false, swaps: 3 },
+      { claimForm: false, swaps: 3, rare: false },
       ["button-name", "role-img-alt"],
     ],
     [
       "unknown",
       "unknown",
       copy.stateUnknown,
-      { claimForm: false, swaps: 0 },
+      { claimForm: false, swaps: 0, rare: false },
       ["button-name", "role-img-alt"],
     ],
   ] as const)(
@@ -107,6 +108,10 @@ describe("the Handle builder, checked by axe", () => {
       expect(
         screen.queryByRole("form", { name: en.Claim.claimHeading }) !== null,
       ).toBe(region.claimForm);
+      // 🍕🍕🍕 is three of a kind, so an available answer celebrates it as
+      // rare (#202) and axe sees the badge and its live region; no other
+      // answer does.
+      expect(screen.queryByText(copy.rareBadge) !== null).toBe(region.rare);
 
       const report = await checkAccessibility(container);
 
