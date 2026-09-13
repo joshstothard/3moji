@@ -61,7 +61,19 @@ jest.mock("@template/core", () => ({
   canonicalise: (segment: string) => canonicalise(segment),
   resolveAlias: (segment: string) => resolveAlias(segment),
   spokenHandle: (codepoints: readonly string[]) => spokenHandle(codepoints),
+  canonicalAliasOf: () => "ice-cube.ice-cube.ice-cube",
 }));
+
+// The share control's origin (#160), so the claimed Profile below renders it.
+const savedOrigin = process.env.BETTER_AUTH_URL;
+process.env.BETTER_AUTH_URL = "http://localhost:3000";
+afterAll(() => {
+  if (savedOrigin === undefined) {
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_URL");
+  } else {
+    process.env.BETTER_AUTH_URL = savedOrigin;
+  }
+});
 
 jest.mock("next/navigation", () => ({
   notFound: () => {
@@ -154,7 +166,7 @@ describe("the Handle page's Profile and listing, checked by axe", () => {
     readDisplayNames.mockResolvedValue(new Map());
   });
 
-  it("reports no violations for a claimed Profile", async () => {
+  it("reports no violations for a claimed Profile, share control included", async () => {
     readProfile.mockResolvedValue({ state: "profile", profile: PROFILE });
     const { container } = render(await visit(ENCODED));
 
@@ -163,7 +175,13 @@ describe("the Handle page's Profile and listing, checked by axe", () => {
     expect(report.violations).toEqual([]);
     expect(report.incomplete).toEqual([]);
     expect(report.passed).toEqual(
-      expect.arrayContaining(["link-name", "list", "listitem", "role-img-alt"]),
+      expect.arrayContaining([
+        "button-name",
+        "link-name",
+        "list",
+        "listitem",
+        "role-img-alt",
+      ]),
     );
   });
 
