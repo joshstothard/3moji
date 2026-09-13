@@ -43,6 +43,10 @@ permissions:
   # trigger push/pull_request workflows). Also what lets GITHUB_TOKEN merge a PR
   # that changes files under .github/workflows/.
   actions: write
+  # Close the issues a merged PR links as closing, and comment on them (#42): a
+  # GITHUB_TOKEN merge does not fire GitHub's `Closes #N` automation.
+  # pull-requests: write covers comments on a pull request, not on an issue.
+  issues: write
 
 jobs:
   auto-merge:
