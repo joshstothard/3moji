@@ -15,6 +15,8 @@
  */
 interface ResendInput {
   readonly email: string;
+  readonly clientAddress: string | undefined;
+  readonly clientLimiter: unknown;
   readonly directory: unknown;
   readonly dispatches: unknown;
   readonly mailer: unknown;
@@ -49,15 +51,23 @@ const CLOCK = { now: () => new Date(0) };
 const ACCOUNTS = { byEmail: jest.fn(), handleOf: jest.fn() };
 const DISPATCHES = { record: jest.fn() };
 const MAILER = { send: jest.fn() };
+const RESEND_CLIENT_LIMITER = { admit: jest.fn() };
 
 const getServices = jest.fn(() => ({
   clock: CLOCK,
   accounts: ACCOUNTS,
   dispatches: DISPATCHES,
   verificationMailer: MAILER,
+  resendClientRateLimiter: RESEND_CLIENT_LIMITER,
 }));
 jest.mock("../lib/services", () => ({
   getServices: () => getServices(),
+}));
+
+/** The request's headers, as the forwarded-for header Vercel sets them. */
+let requestHeaders = new Headers({ "x-vercel-forwarded-for": "203.0.113.7" });
+jest.mock("next/headers", () => ({
+  headers: () => Promise.resolve(requestHeaders),
 }));
 
 /** Typed, so `redirect.mock.calls` is typed too and no assertion is needed. */
@@ -97,11 +107,26 @@ describe("requestNewVerificationLink", () => {
 
     expect(resendVerification).toHaveBeenCalledWith({
       email: "claimant@example.com",
+      clientAddress: "203.0.113.7",
+      clientLimiter: RESEND_CLIENT_LIMITER,
       directory: ACCOUNTS,
       dispatches: DISPATCHES,
       mailer: MAILER,
       clock: CLOCK,
     });
+  });
+
+  it("hands the per-client-address limit the address the forwarded headers state (#158)", async () => {
+    requestHeaders = new Headers({ "x-forwarded-for": "198.51.100.1" });
+
+    await requestNewVerificationLink(
+      form({ email: "claimant@example.com", handle: ENCODED }),
+    );
+
+    requestHeaders = new Headers({ "x-vercel-forwarded-for": "203.0.113.7" });
+    expect(resendVerification.mock.calls[0]?.[0].clientAddress).toBe(
+      "198.51.100.1",
+    );
   });
 
   it("comes back to that Handle's hold screen with the answer", async () => {

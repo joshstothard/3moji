@@ -5,6 +5,10 @@ import type { DatabaseOrTransaction } from "../db/client";
 import { authSchema } from "../db/schema";
 import type { Clock } from "../ports/clock";
 import type { VerificationDispatchStore } from "../ports/verification-dispatch-store";
+import {
+  authClientAddressOptions,
+  authRateLimitOptions,
+} from "./auth-rate-limit";
 import type { EmailSender } from "./ports/email-sender";
 import { safeDatabaseAdapter } from "./safe-database-adapter";
 import { verificationTokenFingerprint } from "./verification-token";
@@ -48,7 +52,7 @@ function verificationLink(baseUrl: string, token: string): string {
  * way to create one is the Claim, which calls `auth.api.signUpEmail` on the
  * server inside the transaction that writes the hold. Served over HTTP, the
  * same endpoint created an Account with no Handle and sent a verification email
- * from an endpoint nothing limits — measured against Postgres before this list
+ * from an endpoint nothing limited then — measured against Postgres before this list
  * existed (`direct-sign-up.integration.test.ts`).
  *
  * **Why `disabledPaths` and not `emailAndPassword.disableSignUp`.** Measured,
@@ -148,11 +152,16 @@ export function createAuth(input: CreateAuthInput) {
 
   const { emailSender, from } = input;
 
-  return betterAuth({
+  const auth = betterAuth({
     secret: input.secret,
     baseURL: input.baseUrl,
     // Refused over HTTP only; the Claim still calls sign-up server-side (#150).
     disabledPaths: [...HTTP_DISABLED_AUTH_PATHS],
+    // Every environment, counted in Postgres (#158). The limiter runs in the
+    // router's `onRequest`, after `disabledPaths` and only for HTTP requests,
+    // so the Claim's server-side `auth.api.signUpEmail` is never counted.
+    rateLimit: authRateLimitOptions(),
+    advanced: { ipAddress: authClientAddressOptions() },
     // Wrapped so a failed statement reaches Better Auth — and so its thrown
     // value, its logger and the HTTP route's console output — without the
     // statement's bound values (#148).
@@ -204,4 +213,38 @@ export function createAuth(input: CreateAuthInput) {
     },
     ...(input.plugins === undefined ? {} : { plugins: input.plugins }),
   });
+
+  // **The limiter reads Postgres before any endpoint runs** (#158), in the
+  // router's `onRequest`, which better-call does not catch: with the database
+  // unreachable, `auth.handler` would reject instead of answering. The value
+  // it rejects with is already `DatabaseQueryFailed` — nothing bound, via
+  // `safeDatabaseAdapter` — so this only restores the answer every other
+  // database failure on this route gets: a bare 500. Fail closed; nothing is
+  // admitted. Anything else is rethrown untouched.
+  const serve = auth.handler;
+  auth.handler = async (request: Request): Promise<Response> => {
+    try {
+      return await serve(request);
+    } catch (error) {
+      if (isDatabaseQueryFailed(error)) {
+        return new Response("Internal Server Error", { status: 500 });
+      }
+      throw error;
+    }
+  };
+
+  return auth;
+}
+
+/**
+ * Read by name, not `instanceof`: `--experimental-vm-modules` runs ESM in a
+ * realm of its own, where an `instanceof` check silently fails.
+ */
+function isDatabaseQueryFailed(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "DatabaseQueryFailed"
+  );
 }
