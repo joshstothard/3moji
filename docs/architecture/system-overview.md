@@ -23,7 +23,16 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 ## Routing
 
-**Partly built.** Four routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — and the owner's edit surface at `/[handle]/edit`.
+**Partly built.** Five routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — the owner's edit surface at `/[handle]/edit`, and the "Find a Handle" lookup's target at `/find`.
+
+### Finding a Handle
+
+The home page's lookup ([#200](https://github.com/joshstothard/3moji/issues/200)) is a plain `GET` form, `components/handle-lookup.tsx`, submitting `q` to `/find`, so it works with JavaScript disabled. `app/find/page.tsx` is a page, not a route handler, and so — like `/[handle]` — not one of the API boundaries below.
+
+- **It is not a second resolver.** `findHandleAlias` in `packages/core/src/handle/find-handle.ts` only decides where the term boundaries fall and hands each reading to `resolveAlias`. Dotted input (`ice-cube.ice-cube.ice-cube`) has the one reading it spells. Undotted input treats spaces, hyphens, commas and case alike, and every cut of its words into three terms is a reading (`ice cube ice cube ice cube`).
+- **Found redirects to the alias path**, `/ice-cube.ice-cube.ice-cube`, and that page decides the rest as it does for a pasted link — a Profile, a listing, the claim call to action. The lookup reveals nothing the alias path would not.
+- **Not found renders on `/find`**, with the words back in the field. It is the answer for unknown words, for input over 200 characters, and for words with **two readings naming different Handles** — `curry rice wine pizza` is `curry` + `rice wine` + `pizza` and `curry rice` + `wine` + `pizza` (ADR-0008's parse ambiguity) — where redirecting to either would invent an answer. The message suggests the dots that settle it. A bare `/find` redirects to `/`, and the page asks not to be indexed.
+- **The spoken form is not read here.** `three ice cubes` is not found; parsing number words is [#201](https://github.com/joshstothard/3moji/issues/201).
 
 ### The proxy
 
