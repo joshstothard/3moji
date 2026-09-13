@@ -23,6 +23,7 @@ const createDatabase = jest.fn((input: { url: string }) => ({
 const createResendEmailSender = jest.fn(
   (_input: { apiKey: string; from: string }) => "THE-SENDER",
 );
+const createRecordingEmailSender = jest.fn(() => "THE-RECORDING-SENDER");
 const createSystemClock = jest.fn(() => ({ now: () => new Date(0) }));
 const createCoreServices = jest.fn((deps: CoreDeps) => ({ deps }));
 
@@ -33,6 +34,7 @@ jest.mock("@template/core", () => ({
   createDatabase: (input: { url: string }) => createDatabase(input),
   createResendEmailSender: (input: { apiKey: string; from: string }) =>
     createResendEmailSender(input),
+  createRecordingEmailSender: () => createRecordingEmailSender(),
   createSystemClock: () => createSystemClock(),
   createCoreServices: (deps: CoreDeps) => createCoreServices(deps),
 }));
@@ -186,6 +188,97 @@ describe("getServices", () => {
     const { getServices } = await loadFresh();
 
     expect(() => getServices()).toThrow("BETTER_AUTH_SECRET");
+  });
+
+  /**
+   * The test-only email sender ([#151](https://github.com/joshstothard/3moji/issues/151)).
+   *
+   * **The refusal is the property that matters.** A switch that turns real
+   * email off is a switch that turns account verification into a no-op if it
+   * ever reaches production, so the production configuration must refuse to
+   * start with it selected rather than quietly sending nothing.
+   */
+  describe("the test email sender", () => {
+    const SWITCHES = ["TEST_EMAIL_SENDER", "NODE_ENV", "VERCEL_ENV"] as const;
+    const savedSwitches = new Map<string, string | undefined>();
+
+    /** `Reflect`, because Next.js types `NODE_ENV` as read-only. */
+    function setSwitch(name: (typeof SWITCHES)[number], value?: string): void {
+      if (value === undefined) Reflect.deleteProperty(process.env, name);
+      else Reflect.set(process.env, name, value);
+    }
+
+    beforeEach(() => {
+      for (const name of SWITCHES) savedSwitches.set(name, process.env[name]);
+      setSwitch("NODE_ENV", "test");
+      setSwitch("VERCEL_ENV");
+      setSwitch("TEST_EMAIL_SENDER");
+    });
+
+    afterEach(() => {
+      for (const name of SWITCHES) setSwitch(name, savedSwitches.get(name));
+    });
+
+    it("refuses to start in production with the test sender selected", async () => {
+      setEnv(ENV);
+      setSwitch("NODE_ENV", "production");
+      setSwitch("TEST_EMAIL_SENDER", "recording");
+      const { getServices } = await loadFresh();
+
+      expect(() => getServices()).toThrow("TEST_EMAIL_SENDER");
+      expect(createCoreServices).not.toHaveBeenCalled();
+      expect(createRecordingEmailSender).not.toHaveBeenCalled();
+    });
+
+    it("refuses to start on any Vercel deployment with the test sender selected", async () => {
+      setEnv(ENV);
+      setSwitch("VERCEL_ENV", "preview");
+      setSwitch("TEST_EMAIL_SENDER", "recording");
+      const { getServices } = await loadFresh();
+
+      expect(() => getServices()).toThrow("TEST_EMAIL_SENDER");
+      expect(createCoreServices).not.toHaveBeenCalled();
+    });
+
+    it("refuses a value it does not recognise rather than guessing", async () => {
+      setEnv(ENV);
+      setSwitch("TEST_EMAIL_SENDER", "off");
+      const { getServices } = await loadFresh();
+
+      expect(() => getServices()).toThrow("TEST_EMAIL_SENDER");
+      expect(createCoreServices).not.toHaveBeenCalled();
+    });
+
+    it("wires the recording sender, and never Resend, outside production", async () => {
+      setEnv(ENV);
+      setSwitch("TEST_EMAIL_SENDER", "recording");
+      const { getServices } = await loadFresh();
+
+      getServices();
+
+      expect(createRecordingEmailSender).toHaveBeenCalledTimes(1);
+      expect(createResendEmailSender).not.toHaveBeenCalled();
+      expect(recordedDeps().auth.emailSender).toBe("THE-RECORDING-SENDER");
+    });
+
+    it("still requires every variable, so the environment contract does not fork", async () => {
+      setEnv({ ...ENV, RESEND_API_KEY: undefined });
+      setSwitch("TEST_EMAIL_SENDER", "recording");
+      const { getServices } = await loadFresh();
+
+      expect(() => getServices()).toThrow("RESEND_API_KEY");
+    });
+
+    it("sends through Resend when the switch is absent, even in production", async () => {
+      setEnv(ENV);
+      setSwitch("NODE_ENV", "production");
+      const { getServices } = await loadFresh();
+
+      getServices();
+
+      expect(createResendEmailSender).toHaveBeenCalledTimes(1);
+      expect(createRecordingEmailSender).not.toHaveBeenCalled();
+    });
   });
 
   it("does not build at import time, so next build needs no environment", async () => {
