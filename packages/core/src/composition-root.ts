@@ -7,6 +7,10 @@ import {
   type ResendClientRateLimiter,
 } from "./auth/resend-rate-limit";
 import type { VerificationMailer } from "./auth/resend-verification";
+import {
+  createSignInClientRateLimiter,
+  type SignInClientRateLimiter,
+} from "./auth/sign-in-rate-limit";
 import { createDrizzleAccountDirectory } from "./adapters/drizzle-account-directory";
 import { createDrizzleClaimFinaliser } from "./adapters/drizzle-claim-finaliser";
 import { createDrizzleClaimRateLimitStore } from "./adapters/drizzle-claim-rate-limit-store";
@@ -109,6 +113,13 @@ export interface CoreServices {
    */
   readonly resendClientRateLimiter: ResendClientRateLimiter;
   /**
+   * The sign-in form's per-client-address limit (#180), which Better Auth's
+   * own limiter cannot give it: the form calls `auth.api.signInEmail`
+   * server-side, outside the router that limiter runs in. On the Claim's
+   * counter table under its own bucket kind, bound like the others.
+   */
+  readonly signInClientRateLimiter: SignInClientRateLimiter;
+  /**
    * The Release's unit of work: the tombstone and the account deletion in one
    * transaction ([ADR-0009](../../../docs/adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)).
    *
@@ -210,6 +221,11 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
       secret: deps.auth.secret,
     }),
     resendClientRateLimiter: createResendClientRateLimiter({
+      store: rateLimitStore,
+      clock: deps.clock,
+      secret: deps.auth.secret,
+    }),
+    signInClientRateLimiter: createSignInClientRateLimiter({
       store: rateLimitStore,
       clock: deps.clock,
       secret: deps.auth.secret,

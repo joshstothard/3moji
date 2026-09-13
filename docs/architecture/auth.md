@@ -15,6 +15,7 @@
 | The Claim's rate limit              | `packages/core/src/handle/claim-rate-limit.ts`, `apps/web/src/lib/client-address.ts` |
 | Better Auth's rate limit            | `packages/core/src/auth/auth-rate-limit.ts`, applied in `create-auth.ts`             |
 | Resend's per-client-address limit   | `packages/core/src/auth/resend-rate-limit.ts`                                        |
+| The sign-in form's limit            | `packages/core/src/auth/sign-in-rate-limit.ts`, gated in `sign-in-action.ts`         |
 | Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app              |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
@@ -132,7 +133,7 @@ It answers `undefined` rather than throwing when it cannot tell: the services ma
 
 Duplicate sign-ups return a synthetic success, so the API never reveals whether an address is registered. Because every live Account owns exactly one Handle, a duplicate address can never claim a second one; the existing owner is told by email instead — naming the Handle they already own, and linking to the reset **form** rather than carrying a tokenised reset link, because sign-up is unauthenticated and a tokenised link there would let a stranger have live reset tokens mailed to somebody else's inbox. How many of those notices one address can receive is bounded by the Claim's per-email rate limit (below), which refuses the submission before the Claim opens.
 
-Resend is rate limited per Account and per client address (above), the Claim per email and per client address (below), and Better Auth's own HTTP endpoints per client address and path ([below](#better-auths-rate-limit)).
+Resend is rate limited per Account and per client address (above), the Claim per email and per client address (below), Better Auth's own HTTP endpoints per client address and path ([below](#better-auths-rate-limit)), and the sign-in form per client address ([below](#the-sign-in-forms-rate-limit)).
 
 ### Better Auth's rate limit
 
@@ -155,7 +156,7 @@ Windows are in seconds, and **neither fixed nor rolling** — Better Auth's own 
 
 **`/sign-up/email` needs no rule.** #150's `disabledPaths` check runs in the router's `onRequest` before the limiter, so the path answers 404 without ever being counted — asserted: twelve requests, twelve 404s, no counter row. **The limiter is HTTP-only**, for the same reason `disabledPaths` is: it runs in `onRequest`, which `auth.api.*` calls never pass through. So the Claim's server-side `auth.api.signUpEmail` is not counted, and neither is anything else the app calls server-side.
 
-> **A gap this leaves, recorded rather than hidden.** The sign-in **form** does not use `POST /api/auth/sign-in/email`: `signInAction` calls `auth.api.signInEmail` server-side, so Better Auth's limiter does not see it. The public HTTP endpoint is limited; the server action in front of the same credential check is not. Closing it is a per-client-address limit on the action, as the Claim and resend have — a follow-up, not done here.
+**The sign-in form is not behind this limiter.** It does not use `POST /api/auth/sign-in/email`: `signInAction` calls `auth.api.signInEmail` server-side, so Better Auth's limiter never sees it — measured in `sign-in-rate-limit.test.tsx`, which found the form accepting eleven attempts from one client where the endpoint allows ten. It has its own limit, with the same numbers: see [the sign-in form's rate limit](#the-sign-in-forms-rate-limit).
 
 **Who is one client.** `advanced.ipAddress.ipAddressHeaders` is `CLIENT_ADDRESS_HEADERS` — `x-vercel-forwarded-for`, then `x-forwarded-for` — the same list, in the same order, that `apps/web/src/lib/client-address.ts` reads (its test pins the two together). Both group IPv6 by `/64` and count an IPv4-mapped IPv6 address as its IPv4 address; the integration test proves each against Better Auth's own handler. **One difference is kept on purpose:** with no `trustedProxies`, Better Auth trusts a header only when it holds a single address and falls through to the next header otherwise, and a request with no trustworthy address shares one `no-trusted-ip` counter per path — the analogue of our `unknown` bucket. Our transport takes the first entry of a list instead. On Vercel the edge sets both headers to one address, so the two agree; anywhere else both headers are client-writable anyway (see [the Claim's rate limit](#the-claims-rate-limit)). Setting `trustedProxies` to close the gap would add a spoofing surface to buy nothing. Better Auth falls back to `127.0.0.1` under `NODE_ENV` `test` or `development`, which is why every integration request names its client.
 
@@ -166,6 +167,32 @@ Windows are in seconds, and **neither fixed nor rolling** — Better Auth's own 
 **Counters live in Postgres** (`auth_rate_limit`, see [the tables](#the-tables-as-they-exist-today)), keyed `<address>|<path>`. **Unlike the Claim's buckets they are not hashed**: Better Auth builds the key and offers no hook. The same addresses are already stored in `session.ip_address`, and Better Auth prunes rows older than its longest window, so the table holds about an hour of history.
 
 **It fails closed.** A counter that cannot be read rejects inside the router's `onRequest`, which better-call does not catch, so `createAuth` wraps `auth.handler` to answer that `DatabaseQueryFailed` — already stripped of bound values by `safeDatabaseAdapter` (#148) — with a bare 500, as every other database failure on the route is answered. Nothing is admitted; any other error is rethrown untouched.
+
+### The sign-in form's rate limit
+
+**The form accepts no more attempts from one client than the HTTP endpoint does** ([#180](https://github.com/joshstothard/3moji/issues/180)). Before any credential is evaluated — before the form is even read — `signInAction` asks `signInClientRateLimiter` (`packages/core/src/auth/sign-in-rate-limit.ts`), handing it the client address and nothing else. Beyond the limit it answers `rate-limited` without calling Better Auth: the form comes back as `/sign-in?error=rate-limited` and announces `Claim.signInRateLimited` in the same `role="alert"` live region as the other refusals, with no focus moved, like them. The boundary line (#156) records `rate-limited`.
+
+| Limit              | Value                    | Constant                    |
+| ------------------ | ------------------------ | --------------------------- |
+| Per client address | 10 in a fixed 15 minutes | `SIGN_IN_CLIENT_RATE_LIMIT` |
+
+**Derived from `AUTH_RATE_LIMITS.signInEmail`, not restated**, so tuning the endpoint tunes the form and the two cannot drift apart silently; `sign-in-rate-limit.test.ts` asserts the equality, converting Better Auth's seconds to milliseconds. **The numbers match; the window semantics do not.** Better Auth's counter resets a window after its last admitted request; this one is a fixed window on the shared counter table, so one client can make up to twenty attempts across a window boundary — the same price the Claim and resend pay for an atomic one-statement increment. It fits inside `RATE_LIMIT_RETENTION_MS` and prunes by it, so it never deletes another limiter's live counter.
+
+**It reuses the Claim's table, store and hashing** under its own bucket kind, `sign-in-client:` and an HMAC of the address grouped by `clientAddressBucket` — IPv6 by `/64`, IPv4-mapped as IPv4, anything unreadable in the shared `unknown` bucket — exactly as the Claim's and resend's limiters identify a client.
+
+**A refusal cannot enumerate addresses or confirm a password.** Nothing about the submission but the client address reaches the limiter, so a registered and an unregistered address, a right and a wrong password, are counted and refused identically, and a correct password beyond the limit is refused exactly as a wrong one. `sign-in-rate-limit.test.tsx` compares all four combinations beyond the limit — the action's answer, the redirect, the boundary line, the rendered page, its announcement and focus — after proving the four differ below it. **There is no response floor, and none is needed:** no credential-dependent work runs before the decision, so its timing depends on the client alone, which is the argument `disabledPaths` rests on (above). The refusal says no "when": the form works without JavaScript, so a "when" would travel in the query string, and a single "wait a few minutes" says what a person needs.
+
+**It fails closed.** A store that cannot be read or written makes `admit` reject; the action catches that in its own `try` — separate from the credentials one, which reads any throw as a wrong password — logs it through `logFailure` (`sign_in_rate_limit_failed`) and answers `failed`. The adapter's error is already `DatabaseQueryFailed`, carrying a code and no bound values (#144).
+
+#### Per-account limiting: not implemented, for the repo owner to decide
+
+The per-client limit does nothing about **distributed** guessing: many clients, each under its limit, all guessing one Account's password. A per-Account limit — keyed on the normalised address (`normaliseEmailAddress`), counted before credentials so it too cannot enumerate — would slow that. **It is deliberately left out**, and flagged on the pull request, because:
+
+- **It hands anyone a lock-out.** Whoever knows an address can spend its allowance from anywhere and keep its owner out of their own Account, for as long as they care to. The Claim's per-email limit accepts that cost because it bounds something worse — mail sent to a third party who never asked for it. Sign-in sends nothing, so a per-Account limit buys only slower distributed guessing, and the price is a denial of service on the person the limit is meant to protect.
+- **It would make the refusal harder to keep honest.** With one limit, the refusal depends on the client alone. With two, it depends on the Account too, and every answer about the refusal — its wording, any "when" — has to be checked for revealing which bound; the Claim's `ClaimAdmission` carries no "when" for exactly that reason.
+- **Better Auth's own endpoint does not do it either**: its limiter keys on client and path, so a per-Account limit on the form alone would make the form stricter than the endpoint beside it.
+
+**What would change the decision:** evidence of distributed low-and-slow guessing in the boundary logs, which a pre-launch site cannot have. If it is added, it should be a separate constant with a conservative value, counted on every attempt (so a refusal cannot tell which limit bound), and paired with a way for the owner to get back in that does not depend on the limit — a password reset, which is separately limited.
 
 ### The Claim's rate limit
 

@@ -262,6 +262,16 @@ export type {
   ResendClientRateLimiter,
   ResendClientRateLimiterInput,
 } from "./auth/resend-rate-limit";
+export {
+  SIGN_IN_CLIENT_RATE_LIMIT,
+  createSignInClientRateLimiter,
+  signInClientBucket,
+} from "./auth/sign-in-rate-limit";
+export type {
+  SignInClientAdmission,
+  SignInClientRateLimiter,
+  SignInClientRateLimiterInput,
+} from "./auth/sign-in-rate-limit";
 export { resendVerification } from "./auth/resend-verification";
 export type {
   ResendOutcome,
