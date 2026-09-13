@@ -219,7 +219,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Dependencies:** Phases 1 to 4.
 
-**Planned as epic [#149](https://github.com/joshstothard/3moji/issues/149).** Sharing on the word alias and the per-Profile Open Graph image moved to Phase 6 at planning, keeping this phase to the launch-critical safety and accessibility work. Error tracking stays a deliverable here but is **not planned as an issue**: the vendor and its account are the repo owner's decision, and [#148](https://github.com/joshstothard/3moji/issues/148)'s tracing proposal should land first. [#150](https://github.com/joshstothard/3moji/issues/150) comes first because planning found that `POST /api/auth/sign-up/email` is forwarded to Better Auth unrestricted, which very likely creates an Account with no Handle — against ADR-0004 — and is an unlimited email-sending endpoint; it measures before it fixes.
+**Planned as epic [#149](https://github.com/joshstothard/3moji/issues/149).** Sharing on the word alias and the per-Profile Open Graph image moved to Phase 6 at planning, keeping this phase to the launch-critical safety and accessibility work. Error tracking stays a deliverable here but is **not planned as an issue**: the vendor and its account are the repo owner's decision, and [#148](https://github.com/joshstothard/3moji/issues/148)'s tracing proposal should land first. [#150](https://github.com/joshstothard/3moji/issues/150) comes first because planning found that `POST /api/auth/sign-up/email` is forwarded to Better Auth unrestricted, which very likely creates an Account with no Handle — against ADR-0004 — and is an unlimited email-sending endpoint; it measures before it fixes. [#163](https://github.com/joshstothard/3moji/issues/163), found the same day while landing #148, ranks with it: the Claim matches email addresses case-sensitively while Better Auth lowercases them, which by the code path both reveals whether an address is registered and very likely stops anyone who types a capital letter from claiming at all.
 
 **Issues:**
 
@@ -232,6 +232,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - #156 Log one structured JSON line at every API boundary
 - #157 Rate limit the claim action per IP and per email
 - #158 Rate limit Better Auth's sign-in and email endpoints
+- #163 Claim treats email case differently from Better Auth, leaking existence and blocking sign-up
 
 ### Phase 6 — Sharing
 
@@ -377,3 +378,4 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   a run GitHub refused to start as a failure (#125, fixed by #127 and proven live on #128). #58 —
   the gate is not re-triggered after it updates a branch — is still open and reproduced on #128.
 - 2026-09-13 — Phase 5 planned: epic #149, issues #150–#158. Sharing and the Open Graph image moved to a new Phase 6 — Sharing, planned as epic #159 with issues #160–#161. Error tracking is not planned as an issue pending the vendor decision and #148. Planning found an unrestricted `POST /api/auth/sign-up/email`, filed as #150.
+- 2026-09-13 — #163 added to Phase 5 (epic #149): the Claim's case-sensitive email lookups disagree with Better Auth's lowercasing, which by the code path breaks non-enumeration and blocks mixed-case sign-ups. Found while landing #148 (PR #162); measured first.
