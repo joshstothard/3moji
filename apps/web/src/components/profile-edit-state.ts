@@ -12,12 +12,18 @@ import type { ProfileDraft, ProfileViolation } from "@template/core";
  * revalidates and redirects to the page itself, so the only way back to the
  * form is a refusal.
  *
- * `forbidden` carries nothing at all. It is what the action answers to somebody
- * who may not edit this Handle — signed out, signed in as the owner of a
- * different Handle, or a session that expired between the render and the
- * submit — and those are **one answer on purpose**: the four refusals the
- * domain distinguishes would, spelled out here, tell a stranger which of them
- * applies to a Handle that is not theirs.
+ * `forbidden` is what the action answers to somebody who may not edit this
+ * Handle — signed out, signed in as the owner of a different Handle, or a
+ * session that expired between the render and the submit — and those are **one
+ * answer on purpose**: the four refusals the domain distinguishes would,
+ * spelled out here, tell a stranger which of them applies to a Handle that is
+ * not theirs.
+ *
+ * **It carries the draft too**, and that is not an oversight of the
+ * one-answer rule: the likeliest way a real owner meets it is a session that
+ * expired while they were writing, and losing the bio they just typed would be
+ * a second punishment for it. It reveals nothing — the draft is what the
+ * requester themselves posted a moment ago.
  */
 export type ProfileEditFormState =
   | { readonly state: "idle" }
@@ -26,7 +32,7 @@ export type ProfileEditFormState =
       readonly violations: readonly ProfileViolation[];
       readonly draft: ProfileDraft;
     }
-  | { readonly state: "forbidden" }
+  | { readonly state: "forbidden"; readonly draft: ProfileDraft }
   | { readonly state: "failed"; readonly draft: ProfileDraft };
 
 /** The action the form submits to. Injected, so a test can substitute one. */

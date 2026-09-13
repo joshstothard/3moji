@@ -316,6 +316,12 @@ describe("saveProfileAction, when the domain rejects the draft", () => {
  * satisfy a state-only assertion.
  */
 describe("saveProfileAction refuses anyone but the owner", () => {
+  const FILLED_DRAFT = {
+    displayName: "Ice Cube",
+    bio: "Three of them.",
+    links: [{ title: "Home", url: "https://example.com" }],
+  };
+
   const refused = async (handle: string) => {
     const state = await saveProfileAction(IDLE, form({ ...FILLED, handle }));
     return {
@@ -325,15 +331,23 @@ describe("saveProfileAction refuses anyone but the owner", () => {
     };
   };
 
+  /**
+   * **A refusal must not cost somebody what they typed either.** The likeliest
+   * way a real owner meets one is a session that expired mid-edit, and the
+   * draft is what they themselves posted a moment ago, so returning it reveals
+   * nothing.
+   */
+  const forbidden = {
+    state: { state: "forbidden", draft: FILLED_DRAFT },
+    wrote: 0,
+    navigated: [],
+  };
+
   it("refuses a signed-out visitor", async () => {
     viewer = undefined;
     owned = undefined;
 
-    expect(await refused(ICE)).toEqual({
-      state: { state: "forbidden" },
-      wrote: 0,
-      navigated: [],
-    });
+    expect(await refused(ICE)).toEqual(forbidden);
   });
 
   /**
@@ -347,11 +361,7 @@ describe("saveProfileAction refuses anyone but the owner", () => {
     viewer = { userId: "owner-of-balloons" };
     owned = claimed(BALLOON);
 
-    expect(await refused(ICE)).toEqual({
-      state: { state: "forbidden" },
-      wrote: 0,
-      navigated: [],
-    });
+    expect(await refused(ICE)).toEqual(forbidden);
     // The session was consulted about its own Account, never about the posted
     // Handle: the id under which anything might be written comes from the
     // session alone.
@@ -362,11 +372,7 @@ describe("saveProfileAction refuses anyone but the owner", () => {
     viewer = { userId: "handle-less" };
     owned = undefined;
 
-    expect(await refused(ICE)).toEqual({
-      state: { state: "forbidden" },
-      wrote: 0,
-      navigated: [],
-    });
+    expect(await refused(ICE)).toEqual(forbidden);
   });
 
   /** A hold is not ownership: `claimed_at` is what ownership means. */
@@ -374,25 +380,23 @@ describe("saveProfileAction refuses anyone but the owner", () => {
     const held = claimed(ICE);
     owned = { key: held.key, heldUntil: held.heldUntil, claimedAt: null };
 
-    expect(await refused(ICE)).toEqual({
-      state: { state: "forbidden" },
-      wrote: 0,
-      navigated: [],
-    });
+    expect(await refused(ICE)).toEqual(forbidden);
   });
 
   it("refuses a posted Handle that is not a Handle at all", async () => {
     expect(await refused("not-emoji")).toEqual({
-      state: { state: "forbidden" },
-      wrote: 0,
-      navigated: [],
+      ...forbidden,
+      state: { state: "forbidden", draft: FILLED_DRAFT },
     });
   });
 
   it("refuses a post with no Handle field at all", async () => {
     const state = await saveProfileAction(IDLE, form({ displayName: "x" }));
 
-    expect(state).toEqual({ state: "forbidden" });
+    expect(state).toEqual({
+      state: "forbidden",
+      draft: { displayName: "x", bio: "", links: [] },
+    });
     expect(editProfile).not.toHaveBeenCalled();
     expect(calls).toEqual([]);
   });

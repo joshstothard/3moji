@@ -34,18 +34,23 @@ export async function saveProfileAction(
   _previous: ProfileEditFormState,
   formData: FormData,
 ): Promise<ProfileEditFormState> {
+  // Parsed before anything is decided, so that **every** answer can carry it
+  // back. A refusal is most often a session that expired mid-edit, and losing
+  // what was typed would be a second punishment for it; the draft is what the
+  // requester posted a moment ago, so returning it reveals nothing.
+  const draft = draftFrom(formData);
+  const forbidden: ProfileEditFormState = { state: "forbidden", draft };
+
   const segment = formData.get("handle");
-  if (typeof segment !== "string") return FORBIDDEN;
+  if (typeof segment !== "string") return forbidden;
 
   const handle = canonicalise(segment);
   // A segment that is not a Handle cannot be anybody's, so there is nothing to
   // distinguish from the refusal below.
-  if (!handle.ok) return FORBIDDEN;
+  if (!handle.ok) return forbidden;
 
   const authority = await readEditAuthority(handle.encoded);
-  if (authority.state !== "allowed") return FORBIDDEN;
-
-  const draft = draftFrom(formData);
+  if (authority.state !== "allowed") return forbidden;
 
   try {
     const { profileEdits, clock } = getServices();
@@ -90,9 +95,6 @@ export async function saveProfileAction(
   // failure.
   redirect(`/${handle.encoded}`);
 }
-
-/** One answer for every refusal. See {@link ProfileEditFormState}. */
-const FORBIDDEN: ProfileEditFormState = { state: "forbidden" };
 
 /**
  * The posted form as a {@link ProfileDraft}.

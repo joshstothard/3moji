@@ -274,13 +274,24 @@ describe("the Profile form, when the save is rejected", () => {
     );
   });
 
-  it("tells somebody whose session no longer owns this Handle", async () => {
+  /**
+   * A refusal is a failed save too, and the likeliest way a real owner meets
+   * one is a session that expired while they were writing — so it keeps what
+   * they typed for the same reason a rejected draft does.
+   */
+  it("tells somebody whose session no longer owns this Handle, without losing their work", async () => {
     const user = userEvent.setup();
-    renderForm({ state: "forbidden" });
+    renderForm({
+      state: "forbidden",
+      draft: draft({ bio: "Typed while the session expired." }),
+    });
 
     await submit(user);
 
     expect(screen.getByRole("alert")).toHaveTextContent(copy.forbidden);
+    expect(screen.getByLabelText(copy.bioLabel)).toHaveValue(
+      "Typed while the session expired.",
+    );
   });
 
   it("keeps the draft when the write itself failed", async () => {
