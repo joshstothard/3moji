@@ -286,10 +286,10 @@ _Password reset:_
 
 _Account area:_
 
-- [ ] A signed-in owner sees a signed-in state, with links to their Profile and to its edit page.
+- [x] A signed-in owner sees a signed-in state, with links to their Profile and to its edit page.
 - [ ] Signing out ends the session: a request carrying the old session cookie is treated as signed out.
 - [ ] An owner can delete their Account (Release) behind plain, explicit copy that says the Handle is given up and the Account deleted ([ADR-0004](../adr/0004-the-handle-model.md) decision 5, [ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)); afterwards the Handle is claimable.
-- [ ] The public Profile stays cacheable and identical for every visitor: owner affordances do not vary the public page's cached response, proven by a test.
+- [x] The public Profile stays cacheable and identical for every visitor: owner affordances do not vary the public page's cached response, proven by a test.
 
 _Privacy, terms and reporting:_
 

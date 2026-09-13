@@ -35,6 +35,28 @@ function numberWord(count: number): string {
   return NUMBER_WORDS[count] ?? String(count);
 }
 
+/** The word that joins the last part of a spoken list: "a, b and c". */
+export const SPOKEN_LIST_JOINER = "and";
+
+/** The articles a single emoji is said with, when its name takes one. */
+const SPOKEN_ARTICLES: readonly string[] = ["a", "an"];
+
+/**
+ * How many emoji a leading word says, or `undefined` if it says no count.
+ *
+ * The inverse of what this module says, for the lookup that reads it back
+ * ([#201](https://github.com/joshstothard/3moji/issues/201)): a number word or
+ * its digits, and an article for one. "One" is never said here but people type
+ * it, so it counts as the number word it is.
+ */
+export function countSaidBy(word: string): number | undefined {
+  const lower = word.toLowerCase();
+  if (SPOKEN_ARTICLES.includes(lower)) return 1;
+  const index = NUMBER_WORDS.indexOf(lower);
+  if (index > 0) return index;
+  return /^[1-9][0-9]?$/.test(lower) ? Number(lower) : undefined;
+}
+
 interface Run {
   readonly entry: CuratedEmoji;
   readonly count: number;
@@ -70,7 +92,7 @@ function joinParts(parts: readonly string[]): string {
   if (parts.length === 1) {
     return last;
   }
-  return `${parts.slice(0, -1).join(", ")} and ${last}`;
+  return `${parts.slice(0, -1).join(", ")} ${SPOKEN_LIST_JOINER} ${last}`;
 }
 
 /**

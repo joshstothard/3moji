@@ -127,6 +127,7 @@ describe("the proxy's matcher", () => {
     "/_next/static/css/app.css",
     "/_next/image?url=%2Fa.png&w=64&q=75",
     "/favicon.ico",
+    "/icon.svg",
     "/robots.txt",
     "/sitemap.xml",
   ])("skips %s", (url) => {

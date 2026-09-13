@@ -97,7 +97,9 @@ export const CLIENT_ADDRESS_HEADERS = [
  *   otherwise be unlimited — and nothing would test the limit.
  * - **`storage: "database"`.** The default is an in-process `Map`, and on
  *   Vercel every serverless instance has its own, so memory storage would
- *   limit nothing. Secondary storage would need a Redis we do not run.
+ *   limit nothing. Secondary storage would need a Redis we do not run. Every
+ *   key is hashed before it reaches the table: see `auth-rate-limit-key.ts`
+ *   (#214), which `createAuth` wraps around the database adapter.
  * - **`customRules` keys are paths as Better Auth routes them**: the pathname
  *   with `/api/auth` removed and trailing slashes stripped, compared exactly.
  *   Each is proved to bind by `auth-rate-limit.integration.test.ts`.

@@ -9,6 +9,7 @@ import {
   authClientAddressOptions,
   authRateLimitOptions,
 } from "./auth-rate-limit";
+import { hashedRateLimitKeys } from "./auth-rate-limit-key";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-length";
 import type { EmailSender } from "./ports/email-sender";
 import { safeDatabaseAdapter } from "./safe-database-adapter";
@@ -188,12 +189,17 @@ export function createAuth(input: CreateAuthInput) {
     advanced: { ipAddress: authClientAddressOptions() },
     // Wrapped so a failed statement reaches Better Auth — and so its thrown
     // value, its logger and the HTTP route's console output — without the
-    // statement's bound values (#148).
-    database: safeDatabaseAdapter(
-      drizzleAdapter(input.db, {
-        provider: "pg",
-        schema: authSchema,
-      }),
+    // statement's bound values (#148). Outside that, every rate-limit key is
+    // hashed under a key derived from the secret before it reaches the table,
+    // so `auth_rate_limit` never holds a client address in clear (#214).
+    database: hashedRateLimitKeys(
+      safeDatabaseAdapter(
+        drizzleAdapter(input.db, {
+          provider: "pg",
+          schema: authSchema,
+        }),
+      ),
+      input.secret,
     ),
     emailAndPassword: {
       enabled: true,
