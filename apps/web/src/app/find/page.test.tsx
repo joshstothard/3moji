@@ -59,7 +59,7 @@ describe("the find page", () => {
   });
 
   it("says no Handle was found, and offers the lookup again with the words tried", async () => {
-    await renderPage({ q: "three ice cubes" });
+    await renderPage({ q: "three wibbles" });
 
     expect(redirect).not.toHaveBeenCalled();
     expect(
@@ -68,7 +68,7 @@ describe("the find page", () => {
     expect(screen.getByText(copy.notFound)).toBeInTheDocument();
     expect(
       screen.getByRole("searchbox", { name: lookupCopy.label }),
-    ).toHaveValue("three ice cubes");
+    ).toHaveValue("three wibbles");
   });
 
   it("reads only the first q when a query string repeats it", async () => {
