@@ -249,6 +249,59 @@ test("the static guard: this spec calls no pointer API", () => {
   }
 });
 
+test("a visitor looks up a Handle by keyboard alone (#200)", async ({
+  page,
+}) => {
+  await page.addInitScript((events: readonly string[]) => {
+    window.keyboardOnlyPointerEvents = [];
+    const record = (event: Event) => {
+      window.keyboardOnlyPointerEvents?.push(event.type);
+    };
+    for (const type of events) {
+      window.addEventListener(type, record, { capture: true });
+    }
+    window.addEventListener(
+      "click",
+      (event) => {
+        if (event.detail > 0) record(event);
+      },
+      { capture: true },
+    );
+  }, POINTER_EVENTS);
+
+  const lookupCopy = en.HandleLookup;
+
+  // Words that name no Handle, submitted with the button.
+  await page.goto("/");
+  const field = page.getByRole("searchbox", { name: lookupCopy.label });
+  await moveFocusTo(page, field, "Tab");
+  await page.keyboard.type("three ice cubes");
+  await moveFocusTo(
+    page,
+    page.getByRole("button", { name: lookupCopy.submit }),
+    "Tab",
+  );
+  await page.keyboard.press("Enter");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: en.FindPage.notFoundHeading }),
+  ).toBeVisible();
+
+  // Again from the not-found page, with Enter in the field this time.
+  const again = page.getByRole("searchbox", { name: lookupCopy.label });
+  await moveFocusTo(page, again, "Tab");
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("ice cube ice cube ice cube");
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL("/ice-cube.ice-cube.ice-cube");
+
+  expect(
+    await page.evaluate(() => window.keyboardOnlyPointerEvents ?? null),
+  ).toEqual([]);
+});
+
 test("a visitor fills, swaps and reaches the claim form by keyboard alone", async ({
   page,
 }) => {

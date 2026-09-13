@@ -20,6 +20,7 @@ import { HandleBuilder } from "../../components/handle-builder";
 import { checkAvailability } from "../../components/availability-action";
 import { claimFormAction } from "../../components/claim-action";
 import { ShareLinkControl } from "../../components/share-link";
+import { ReportLink } from "../../components/report-link";
 import type { AvailabilityState } from "../../components/availability-state";
 import en from "../../../../../packages/shared/messages/en.json";
 
@@ -158,6 +159,14 @@ const copy = en.HandlePage;
  * redirect a page which must not redirect.
  */
 type RenderedHandle = Pick<CanonicalHandle, "key" | "emoji">;
+
+/**
+ * A rendered Handle that can be reported: plus its percent-encoded canonical
+ * path, which the report link names in its subject
+ * ([#197](https://github.com/joshstothard/3moji/issues/197)). Both grammars
+ * carry it, and it is still not `isCanonical`.
+ */
+type ReportableHandle = RenderedHandle & { readonly encoded: string };
 
 /**
  * The word alias: `3moji.me/ice-cube.ice-cube.ice-cube`, the ASCII address of
@@ -493,7 +502,7 @@ function ResolvedHandle({
   state,
   profile,
 }: {
-  readonly handle: RenderedHandle;
+  readonly handle: ReportableHandle;
   readonly state: AvailabilityState;
   readonly profile: ProfileState;
 }) {
@@ -638,7 +647,7 @@ function UneditedHandle({
   handle,
   spoken,
 }: {
-  readonly handle: RenderedHandle;
+  readonly handle: ReportableHandle;
   readonly spoken: string | undefined;
 }) {
   return (
@@ -648,6 +657,7 @@ function UneditedHandle({
         <SpokenLine spoken={spoken} />
         <p className="mt-4 text-lg text-slate-500">{copy.unedited}</p>
       </div>
+      <ReportLink encoded={handle.encoded} />
     </main>
   );
 }
@@ -679,7 +689,7 @@ function ProfilePage({
   spoken,
   profile,
 }: {
-  readonly handle: RenderedHandle;
+  readonly handle: ReportableHandle;
   readonly spoken: string | undefined;
   readonly profile: Profile;
 }) {
@@ -715,6 +725,8 @@ function ProfilePage({
        * owner's own content rather than a control of ours.
        */}
       {share !== undefined && <ShareLinkControl href={share.href} />}
+      {/* Last of all (#197): reporting is for the few, sharing for everyone. */}
+      <ReportLink encoded={handle.encoded} />
     </main>
   );
 }

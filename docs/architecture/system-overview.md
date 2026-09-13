@@ -23,7 +23,16 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 ## Routing
 
-**Partly built.** Four routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — and the owner's edit surface at `/[handle]/edit`.
+**Partly built.** Five routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — the owner's edit surface at `/[handle]/edit`, and the "Find a Handle" lookup's target at `/find`.
+
+### Finding a Handle
+
+The home page's lookup ([#200](https://github.com/joshstothard/3moji/issues/200)) is a plain `GET` form, `components/handle-lookup.tsx`, submitting `q` to `/find`, so it works with JavaScript disabled. `app/find/page.tsx` is a page, not a route handler, and so — like `/[handle]` — not one of the API boundaries below.
+
+- **It is not a second resolver.** `findHandleAlias` in `packages/core/src/handle/find-handle.ts` only decides where the term boundaries fall and hands each reading to `resolveAlias`. Dotted input (`ice-cube.ice-cube.ice-cube`) has the one reading it spells. Undotted input treats spaces, hyphens, commas and case alike, and every cut of its words into three terms is a reading (`ice cube ice cube ice cube`).
+- **Found redirects to the alias path**, `/ice-cube.ice-cube.ice-cube`, and that page decides the rest as it does for a pasted link — a Profile, a listing, the claim call to action. The lookup reveals nothing the alias path would not.
+- **Not found renders on `/find`**, with the words back in the field. It is the answer for unknown words, for input over 200 characters, and for words with **two readings naming different Handles** — `curry rice wine pizza` is `curry` + `rice wine` + `pizza` and `curry rice` + `wine` + `pizza` (ADR-0008's parse ambiguity) — where redirecting to either would invent an answer. The message suggests the dots that settle it. A bare `/find` redirects to `/`, and the page asks not to be indexed.
+- **The spoken form is not read here.** `three ice cubes` is not found; parsing number words is [#201](https://github.com/joshstothard/3moji/issues/201).
 
 **The privacy notice at `/privacy` and the terms of use at `/terms`** are static pages ([#196](https://github.com/joshstothard/3moji/issues/196)), both rendered by `components/legal-document.tsx` from the `Legal` namespace of `packages/shared/messages/en.json`. They are **drafts pending the owner's review, not legal advice**, and say so in a visible marker (`DraftMarker`, one place to remove it). Anything identifying the operator is a bracketed placeholder for the owner, never a name or address. **The privacy notice restates what is stored and when it is deleted** — from [data-model.md](data-model.md), [auth.md](auth.md) and Better Auth 1.7.4's defaults (sessions: 7 days, renewed at most daily; reset tokens: 1 hour) — so a change to either must change that copy in the same pull request. A static segment takes precedence over `/[handle]`, so neither path is ever read as a Handle or a word alias. Nothing links to them yet ([#198](https://github.com/joshstothard/3moji/issues/198)).
 
@@ -42,37 +51,39 @@ Every API boundary writes **exactly one** structured JSON line per call, on succ
 
 The boundaries, enumerated from the code — `src/lib/api-boundaries.test.ts` walks `src` for `route.ts` files and `"use server"` modules and fails unless every export has a case there, and every case writes one line:
 
-| File                                | Export                       | `boundary`               |
-| ----------------------------------- | ---------------------------- | ------------------------ |
-| `app/api/auth/[...all]/route.ts`    | `GET` / `POST`               | `auth.get` / `auth.post` |
-| `app/claim/verify/route.ts`         | `GET`                        | `claim.verify`           |
-| `components/availability-action.ts` | `checkAvailability`          | `availability.check`     |
-| `components/claim-action.ts`        | `submitClaimAction`          | `claim.submit`           |
-| `components/claim-action.ts`        | `claimFormAction`            | `claim.form`             |
-| `components/sign-in-action.ts`      | `signInAction`               | `sign-in.submit`         |
-| `components/sign-in-action.ts`      | `signInFormAction`           | `sign-in.form`           |
-| `components/profile-edit-action.ts` | `saveProfileAction`          | `profile.save`           |
-| `components/resend-action.ts`       | `requestNewVerificationLink` | `verification.resend`    |
-| `app/og-image/route.ts`             | `GET`                        | `og-image.generic`       |
-| `app/[handle]/og-image/route.ts`    | `GET`                        | `og-image.handle`        |
+| File                                  | Export                           | `boundary`               |
+| ------------------------------------- | -------------------------------- | ------------------------ |
+| `app/api/auth/[...all]/route.ts`      | `GET` / `POST`                   | `auth.get` / `auth.post` |
+| `app/claim/verify/route.ts`           | `GET`                            | `claim.verify`           |
+| `components/availability-action.ts`   | `checkAvailability`              | `availability.check`     |
+| `components/claim-action.ts`          | `submitClaimAction`              | `claim.submit`           |
+| `components/claim-action.ts`          | `claimFormAction`                | `claim.form`             |
+| `components/sign-in-action.ts`        | `signInAction`                   | `sign-in.submit`         |
+| `components/sign-in-action.ts`        | `signInFormAction`               | `sign-in.form`           |
+| `components/profile-edit-action.ts`   | `saveProfileAction`              | `profile.save`           |
+| `components/resend-action.ts`         | `requestNewVerificationLink`     | `verification.resend`    |
+| `components/password-reset-action.ts` | `requestPasswordResetFormAction` | `password-reset.request` |
+| `components/password-reset-action.ts` | `setNewPasswordFormAction`       | `password-reset.set`     |
+| `app/og-image/route.ts`               | `GET`                            | `og-image.generic`       |
+| `app/[handle]/og-image/route.ts`      | `GET`                            | `og-image.handle`        |
 
 The two image routes ([#161](https://github.com/joshstothard/3moji/issues/161)) log `ok` whenever they answer with an image and `failed` when the render throws. **`og-image.handle` logs `ok` for a claimed Profile and for the generic image alike**, so the log is no more a record of which Handles are held than the image is.
 
 `outcome` is one of six values, chosen to describe what happened rather than who asked:
 
-| `outcome`      | Meaning                                 | Where it comes from                                                                                                                                                                                                                                                      |
-| -------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ok`           | answered with a value or a 2xx          | an availability state; an auth 2xx                                                                                                                                                                                                                                       |
-| `redirected`   | succeeded, and the answer is a redirect | a Claim held (fresh **and** collision); signed in, or sent to an unverified hold screen; a Profile saved; a resend `sent` (for any address); a Claim finalised (`claimed`, `already-claimed`); an auth 3xx                                                               |
-| `rejected`     | the input was refused                   | a claim `invalid`/`taken`/`not-claimable`/`not-a-handle`; a sign-in `invalid`; a Profile `forbidden`/`invalid`; a resend `invalid`; a link `link-unknown`/`-superseded`/`-expired`/`hold-expired`; a non-string availability segment; an auth 4xx other than 404 and 429 |
-| `rate-limited` | refused because of a limit              | a claim `rate-limited` (#157); a resend `too-soon`/`too-many`; an auth 429                                                                                                                                                                                               |
-| `not-found`    | `notFound()` or a 404                   | Next.js's `notFound()`; an auth 404 (including the refused `/sign-up/email`)                                                                                                                                                                                             |
-| `failed`       | could not answer                        | anything thrown that is not Next.js control flow; a `failed` state; an availability read that degraded to `unknown`; an auth 5xx                                                                                                                                         |
+| `outcome`      | Meaning                                 | Where it comes from                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ok`           | answered with a value or a 2xx          | an availability state; an auth 2xx                                                                                                                                                                                                                                                                                                                                                         |
+| `redirected`   | succeeded, and the answer is a redirect | a Claim held (fresh **and** collision); signed in, or sent to an unverified hold screen; a Profile saved; a resend `sent` (for any address); a password reset request `sent` (for any address); a password set; a Claim finalised (`claimed`, `already-claimed`); an auth 3xx                                                                                                              |
+| `rejected`     | the input was refused                   | a claim `invalid`/`taken`/`not-claimable`/`not-a-handle`; a sign-in `invalid`; a Profile `forbidden`/`invalid`; a resend `invalid`; a reset request `invalid`; a reset link that no longer works, or a new password refused as too short or too long; a link `link-unknown`/`-superseded`/`-expired`/`hold-expired`; a non-string availability segment; an auth 4xx other than 404 and 429 |
+| `rate-limited` | refused because of a limit              | a claim `rate-limited` (#157); a resend `too-soon`/`too-many`; a reset request `rate-limited` (#192); an auth 429                                                                                                                                                                                                                                                                          |
+| `not-found`    | `notFound()` or a 404                   | Next.js's `notFound()`; an auth 404 (including the refused `/sign-up/email`)                                                                                                                                                                                                                                                                                                               |
+| `failed`       | could not answer                        | anything thrown that is not Next.js control flow; a `failed` state; an availability read that degraded to `unknown`; an auth 5xx                                                                                                                                                                                                                                                           |
 
 Three rules hold it together:
 
 - **A redirect is not a failure.** `redirect()` and `notFound()` work by throwing. `atBoundary` identifies them with Next.js's own digest checks (`isRedirectError`, `isHTTPAccessFallbackError` — what `unstable_rethrow` uses), never by message, logs the outcome the boundary recorded before throwing (else `redirected` / `not-found`), and **always rethrows**. Anything else thrown is `failed` and rethrown untouched: the wrapper adds a line, never a catch, so `/claim/verify`'s deliberate 500 is unchanged. `boundary-log.test.ts` throws the real functions, so an upgrade that changes them fails the build.
-- **Non-enumeration holds in the log.** Every refusal of claim input is the one `rejected`, and a collision records the same `redirected` as a fresh Claim. `durationMs` is taken around the whole call, so the 500 ms response floor inside `submitClaim` and `resendVerification` is inside it. `claim-non-enumeration.test.tsx` runs the real `submitClaim` for a registered and an unregistered address and asserts the two lines are identical but for `durationMs`, and both durations are at least the floor.
+- **Non-enumeration holds in the log.** Every refusal of claim input is the one `rejected`, and a collision records the same `redirected` as a fresh Claim. `durationMs` is taken around the whole call, so the 500 ms response floor inside `submitClaim`, `resendVerification` and `requestPasswordReset` is inside it. `claim-non-enumeration.test.tsx` runs the real `submitClaim` for a registered and an unregistered address and asserts the two lines are identical but for `durationMs`, and both durations are at least the floor.
 - **One line per HTTP call.** `claimFormAction` and `signInFormAction` share an unexported implementation with their siblings instead of calling them, so a form submission cannot write two lines.
 
 **The auth route never logs its path.** `endpoint` is matched against Better Auth's own endpoint list (`AUTH_ENDPOINTS`); `/reset-password/<token>` logs `reset-password/:token` and `/callback/<id>` logs `callback/:id`, and anything unlisted logs `other`. The query string and body are never read.
@@ -164,6 +175,13 @@ The availability read is the same `checkAvailability` server action the home pag
 - **It appears on the Profile view only, to every visitor, whichever grammar they arrived by** — the emoji path or the word alias. It is not offered for an unedited, held, reserved, unknown or unclaimed Handle, nor on a listing, and the unit suite asserts each absence. It sits after the owner's Links, so the first tab stop on a Profile is still the owner's content. It is not on `/[handle]/edit`: sharing is for every visitor, the owner reaches the public Profile like anybody else, and the edit form is a write surface.
 - **Accessibility:** a real `<button>`, never disabled, so focus stays on it after a successful copy; the outcome is announced in a `role="status"` region present and empty from the first render. When the Clipboard API is missing or refuses, the control says so rather than claiming a copy, and shows the link in a labelled read-only field with the whole link selected and **focus moved into it** — a selection in an unfocused field cannot be copied.
 - Dotted alias paths are still unverified on Vercel's CDN ([#32](https://github.com/joshstothard/3moji/issues/32)); the control copies the right link regardless.
+
+**A claimed Handle offers "Report this page"** ([#197](https://github.com/joshstothard/3moji/issues/197)): a plain `mailto:` to the address in `REPORT_CONTACT_EMAIL`, with the Handle's percent-encoded canonical path in the subject — the emoji path, whichever grammar the reporter arrived by, because it names exactly one Handle (ADR-0008 decision 5). What happens to a report is [the takedown runbook](../runbooks/takedown.md). It is reporting, not moderation: nothing inspects a Profile.
+
+- **Optional, and read directly**, as `siteOrigin()` reads `BETTER_AUTH_URL` — it is not a sixth `lib/services.ts` variable, so a clone without it still starts. **Unset or unusable means no link**, never a dead one or a guessed mailbox.
+- **One plain address or nothing.** `lib/report-link.ts` accepts only letters, digits and `._+-` around a single `@` and a dotted domain, at most 254 characters, and does not trim. So `?`, `&`, `%`, `#`, `,`, `<`, whitespace and CR/LF — everything that could add a recipient or a header to the mailto — make the link disappear rather than be repaired, and the whole subject goes through `encodeURIComponent`. `report-link.test.ts` asserts each injection produces no link.
+- **Same page for every visitor.** The href is a function of configuration and the path alone; rendering it reads no header and no cookie, which `page.report-link.test.tsx` asserts with both mocked, and `e2e/report-link.spec.ts` compares the link with and without a session cookie.
+- **Where it appears:** after everything else on a Profile, and under an unedited claimed Handle too, since a Handle itself can be the thing reported. Never on an available, held, reserved or unknown Handle, nor on a listing. A server component with no client code, so it works without JavaScript.
 
 ### A Profile's Open Graph card
 

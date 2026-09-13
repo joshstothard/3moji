@@ -93,7 +93,12 @@ const finaliseClaim = jest.fn();
 const resendVerification = jest.fn();
 const editProfile = jest.fn();
 const handleAvailability = jest.fn();
+const requestPasswordReset = jest.fn();
+const setNewPassword = jest.fn();
 jest.mock("@template/core", () => ({
+  requestPasswordReset: (input: unknown): unknown =>
+    requestPasswordReset(input),
+  setNewPassword: (input: unknown): unknown => setNewPassword(input),
   submitClaim: (input: unknown): unknown => submitClaim(input),
   finaliseClaim: (input: unknown): unknown => finaliseClaim(input),
   resendVerification: (input: unknown): unknown => resendVerification(input),
@@ -153,6 +158,7 @@ import * as genericImageRoute from "../app/og-image/route";
 import * as handleImageRoute from "../app/[handle]/og-image/route";
 import * as availabilityAction from "../components/availability-action";
 import * as claimAction from "../components/claim-action";
+import * as passwordResetAction from "../components/password-reset-action";
 import * as profileEditAction from "../components/profile-edit-action";
 import * as resendAction from "../components/resend-action";
 import * as signInAction from "../components/sign-in-action";
@@ -183,6 +189,8 @@ function healthy(): void {
     claimRateLimiter: {},
     resendClientRateLimiter: {},
     signInClientRateLimiter: { admit: signInAdmit },
+    resetRequestClientRateLimiter: {},
+    passwordResetter: {},
   }));
   submitClaim.mockResolvedValue({
     state: "pending",
@@ -196,6 +204,8 @@ function healthy(): void {
   resendVerification.mockResolvedValue({ state: "sent" });
   editProfile.mockResolvedValue({ state: "saved" });
   handleAvailability.mockResolvedValue({ state: "available" });
+  requestPasswordReset.mockResolvedValue({ state: "sent" });
+  setNewPassword.mockResolvedValue({ state: "reset" });
   signInEmail.mockResolvedValue({});
   signInAdmit.mockResolvedValue({ state: "admitted" });
   byEmail.mockResolvedValue({ userId: "user-1", email: EMAIL });
@@ -217,6 +227,7 @@ function personalForm(): FormData {
   data.set("bio", `${PASSWORD} ${IP}`);
   data.set("link-0-title", TOKEN);
   data.set("link-0-url", `https://example.com/?email=${EMAIL}`);
+  data.set("token", TOKEN);
   return data;
 }
 
@@ -426,6 +437,31 @@ const CASES: readonly BoundaryCase[] = [
     fail: () => {
       resendVerification.mockRejectedValue(leakyError());
       return resendAction.requestNewVerificationLink(personalForm());
+    },
+    logsFailure: true,
+  },
+  {
+    file: "components/password-reset-action.ts",
+    exportName: "requestPasswordResetFormAction",
+    boundary: "password-reset.request",
+    answer: () =>
+      passwordResetAction.requestPasswordResetFormAction(personalForm()),
+    answered: "redirected",
+    fail: () => {
+      requestPasswordReset.mockRejectedValue(leakyError());
+      return passwordResetAction.requestPasswordResetFormAction(personalForm());
+    },
+    logsFailure: true,
+  },
+  {
+    file: "components/password-reset-action.ts",
+    exportName: "setNewPasswordFormAction",
+    boundary: "password-reset.set",
+    answer: () => passwordResetAction.setNewPasswordFormAction(personalForm()),
+    answered: "redirected",
+    fail: () => {
+      setNewPassword.mockRejectedValue(leakyError());
+      return passwordResetAction.setNewPasswordFormAction(personalForm());
     },
     logsFailure: true,
   },
@@ -641,6 +677,50 @@ describe("the sign-in form's per-client-address limit (#180)", () => {
           event: "sign_in_rate_limit_failed",
           correlationId: ID,
         }),
+      ]);
+      expectNoPersonalData();
+    },
+  );
+});
+
+describe("the password reset form actions (#192)", () => {
+  it("hands the reset request limiter the client address, writing it nowhere, and logs a refusal as rate-limited", async () => {
+    requestPasswordReset.mockResolvedValue({ state: "rate-limited" });
+
+    await insideRequest(() =>
+      passwordResetAction.requestPasswordResetFormAction(personalForm()),
+    );
+
+    expect(requestPasswordReset).toHaveBeenCalledWith(
+      expect.objectContaining({ clientAddress: IP, email: EMAIL }),
+    );
+    expect(boundaryLines()).toEqual([
+      expect.objectContaining({
+        boundary: "password-reset.request",
+        outcome: "rate-limited",
+      }),
+    ]);
+    expectNoPersonalData();
+  });
+
+  it.each([
+    [{ state: "invalid-link" }, "rejected"],
+    [{ state: "password-too-short" }, "rejected"],
+    [{ state: "password-too-long" }, "rejected"],
+  ] as const)(
+    "logs a set-new-password answer of %j as %s, with no token or password",
+    async (answer, outcome) => {
+      setNewPassword.mockResolvedValue(answer);
+
+      await insideRequest(() =>
+        passwordResetAction.setNewPasswordFormAction(personalForm()),
+      );
+
+      expect(setNewPassword).toHaveBeenCalledWith(
+        expect.objectContaining({ token: TOKEN, newPassword: PASSWORD }),
+      );
+      expect(boundaryLines()).toEqual([
+        expect.objectContaining({ boundary: "password-reset.set", outcome }),
       ]);
       expectNoPersonalData();
     },

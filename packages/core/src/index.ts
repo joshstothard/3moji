@@ -78,6 +78,12 @@ export {
   resolveAlias,
 } from "./handle/alias";
 export type { AliasCandidate, AliasResolution } from "./handle/alias";
+export {
+  aliasReadingsOf,
+  findHandleAlias,
+  LOOKUP_MAX_LENGTH,
+} from "./handle/find-handle";
+export type { HandleLookup } from "./handle/find-handle";
 
 export { canonicalise, HANDLE_LENGTH } from "./handle/canonicalise";
 export type {
@@ -272,6 +278,29 @@ export type {
   SignInClientRateLimiter,
   SignInClientRateLimiterInput,
 } from "./auth/sign-in-rate-limit";
+export {
+  RESET_REQUEST_CLIENT_RATE_LIMIT,
+  createResetRequestClientRateLimiter,
+  resetRequestClientBucket,
+} from "./auth/reset-request-rate-limit";
+export type {
+  ResetRequestClientAdmission,
+  ResetRequestClientRateLimiter,
+  ResetRequestClientRateLimiterInput,
+} from "./auth/reset-request-rate-limit";
+export { requestPasswordReset, setNewPassword } from "./auth/password-reset";
+export type {
+  PasswordResetRequestOutcome,
+  PasswordResetter,
+  RequestPasswordResetInput,
+  SetNewPasswordInput,
+  SetNewPasswordOutcome,
+} from "./auth/password-reset";
+export { createBetterAuthPasswordResetter } from "./auth/adapters/better-auth-password-resetter";
+export {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from "./auth/password-length";
 export { resendVerification } from "./auth/resend-verification";
 export type {
   ResendOutcome,

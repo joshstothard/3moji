@@ -1,4 +1,5 @@
 import { HandleBuilder } from "../components/handle-builder";
+import { HandleLookup } from "../components/handle-lookup";
 import { checkAvailability } from "../components/availability-action";
 import { claimFormAction } from "../components/claim-action";
 import en from "../../../../packages/shared/messages/en.json";
@@ -22,6 +23,8 @@ export default function Home() {
         </h1>
         <p className="text-lg text-slate-500">{en.Home.tagline}</p>
       </div>
+
+      <HandleLookup />
 
       <HandleBuilder
         checkAvailability={checkAvailability}

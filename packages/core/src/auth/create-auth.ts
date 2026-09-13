@@ -9,6 +9,7 @@ import {
   authClientAddressOptions,
   authRateLimitOptions,
 } from "./auth-rate-limit";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-length";
 import type { EmailSender } from "./ports/email-sender";
 import { safeDatabaseAdapter } from "./safe-database-adapter";
 import { verificationTokenFingerprint } from "./verification-token";
@@ -76,6 +77,29 @@ function verificationLink(baseUrl: string, token: string): string {
  * when the installed tree or this literal stops matching them. The recheck is
  * docs/architecture/auth.md § Rechecking the Account-creation audit.
  */
+/**
+ * Where a password-reset link points: **our page, with the token as a path
+ * segment** ([#192](https://github.com/joshstothard/3moji/issues/192)).
+ *
+ * Better Auth builds `{baseURL}/api/auth/reset-password/<token>?callbackURL=…`
+ * and hands it to `sendResetPassword`. That is its `GET` callback, which checks
+ * the token and then redirects to the callback with the token moved into a
+ * **query string** — or, for a bad token, to `?error=INVALID_TOKEN` with the
+ * token gone; with no callback at all it redirects to its own error page. So
+ * the link is rewritten, for the reasons `verificationLink` gives: the page
+ * that renders the set-new-password form is ours, and a bad token is answered
+ * there, in our words, when the form is submitted — `auth.api.resetPassword`
+ * consumes the token and checks its expiry itself.
+ *
+ * The token stays a **path segment**, the shape Better Auth uses for reset,
+ * and never becomes a query parameter: the two link shapes differ, and a
+ * helper that handles only one passes every test of the other
+ * (`quality-strategy.md`).
+ */
+function passwordResetLink(baseUrl: string, token: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/reset-password/${encodeURIComponent(token)}`;
+}
+
 const HTTP_DISABLED_AUTH_PATHS: readonly string[] = [
   "/sign-up/email",
   "/sign-in/social",
@@ -175,13 +199,15 @@ export function createAuth(input: CreateAuthInput) {
       enabled: true,
       requireEmailVerification: true,
       revokeSessionsOnPasswordReset: true,
-      sendResetPassword: async ({ user, url }) => {
+      minPasswordLength: PASSWORD_MIN_LENGTH,
+      maxPasswordLength: PASSWORD_MAX_LENGTH,
+      sendResetPassword: async ({ user, token }) => {
         await emailSender.send({
           to: user.email,
           subject: "Reset your 3moji password",
           // The token travels in the URL only, never the subject: subjects are
           // logged and previewed far more widely than bodies.
-          text: `Reset your password: ${url}\n\nIf you did not ask for this, ignore this email and nothing will change.\n\nFrom ${from}`,
+          text: `Reset your password: ${passwordResetLink(input.baseUrl, token)}\n\nThe link works once, for an hour.\n\nIf you did not ask for this, ignore this email and nothing will change.\n\nFrom ${from}`,
         });
       },
     },
