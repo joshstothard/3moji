@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import type { ClaimFormState } from "./claim-action";
+import { LinkedSentence } from "./linked-sentence";
 import en from "../../../../packages/shared/messages/en.json";
 
 const copy = en.Claim;
@@ -59,6 +60,10 @@ const IDLE: ClaimFormState = { state: "idle" };
 const SECTION_ID = "claim";
 const HEADING_ID = "claim-heading";
 const MESSAGE_ID = "claim-message";
+
+/** The privacy and terms links in the sentence under the email field. */
+const LEGAL_LINK =
+  "font-medium text-indigo-700 underline hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
 
 const FIELD =
   "rounded-xl border border-slate-500 px-4 py-3 text-base text-slate-900 aria-invalid:border-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
@@ -158,6 +163,36 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
             type="email"
             value={email}
           />
+          {/* Before submission, beside the address it is about (#198). In a
+              new tab, because the Handle lives in this page's client state and
+              following a link in place would lose it. */}
+          <p className="text-sm leading-6 text-slate-700">
+            <LinkedSentence
+              links={{
+                privacy: (
+                  <a
+                    className={LEGAL_LINK}
+                    href="/privacy"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {copy.claimPrivacyLink}
+                  </a>
+                ),
+                terms: (
+                  <a
+                    className={LEGAL_LINK}
+                    href="/terms"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {copy.claimTermsLink}
+                  </a>
+                ),
+              }}
+              text={copy.claimLegalNote}
+            />
+          </p>
         </div>
 
         <div className="flex flex-col gap-2">

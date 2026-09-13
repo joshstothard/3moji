@@ -246,6 +246,59 @@ test("the claim form's field borders meet non-text contrast", async ({
   );
 });
 
+test("the claim form's privacy and terms links meet text contrast (#198)", async ({
+  page,
+}) => {
+  await page.goto(unclaimedHandlePath());
+
+  for (const name of [claimCopy.claimPrivacyLink, claimCopy.claimTermsLink]) {
+    const link = page.getByRole("link", { name });
+    await expect(link).toBeVisible();
+    const measured = await measureContrast(link);
+    const account = describeContrast(`claim form link "${name}"`, measured);
+    console.log(account);
+
+    expect.soft(measured.ratio, account).toBeGreaterThanOrEqual(TEXT_CONTRAST);
+  }
+});
+
+test("the footer's links and text meet text contrast (#198)", async ({
+  page,
+}) => {
+  // axe's color-contrast covers these on every page it checks; this measures
+  // them directly, on a static page and on a Profile, which have different
+  // content above the footer but must paint the footer the same.
+  const seeded = await seedClaimedHandle();
+  const footerCopy = en.Footer;
+
+  for (const path of ["/privacy", seeded.path]) {
+    await page.goto(path);
+    const footer = page.getByRole("contentinfo");
+    const targets = [
+      footer.getByRole("link", { name: footerCopy.privacy }),
+      footer.getByRole("link", { name: footerCopy.terms }),
+      footer.getByRole("link", { name: footerCopy.report }),
+      footer.getByRole("link", { name: footerCopy.emojiCreditTwemoji }),
+      footer.getByRole("link", { name: footerCopy.emojiCreditLicence }),
+      footer.getByText(/^UI: v/),
+    ];
+
+    for (const target of targets) {
+      await expect(target).toBeVisible();
+      const measured = await measureContrast(target);
+      const account = describeContrast(
+        `footer on ${path}: ${(await target.textContent()) ?? ""}`,
+        measured,
+      );
+      console.log(account);
+
+      expect
+        .soft(measured.ratio, account)
+        .toBeGreaterThanOrEqual(TEXT_CONTRAST);
+    }
+  }
+});
+
 test("the hold screen's resend field border meets non-text contrast", async ({
   page,
 }) => {
