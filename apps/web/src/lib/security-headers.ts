@@ -12,8 +12,9 @@ export interface ResponseHeader {
 }
 
 export const STATIC_SECURITY_HEADERS: readonly ResponseHeader[] = [
-  // Two years, the preload list's minimum. `preload` itself is left out: it is
-  // a commitment for the whole domain that is slow to undo, and the owner's.
+  // Two years, the value the preload list recommends (its minimum is one).
+  // `preload` itself is left out: it commits the whole domain, is slow to
+  // undo, and is the owner's call.
   {
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains",
