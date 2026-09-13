@@ -87,6 +87,7 @@
     "signInSubmit": "Sign in",
     "signInInvalid": "That email address and password do not match an account.",
     "signInFailed": "We could not sign you in just now. Try again in a moment.",
+    "signInRateLimited": "Too many sign-in attempts from this connection. Wait a few minutes, then try again.",
     "claimHeading": "Make it yours",
     "claimBody": "Enter your email address and choose a password. We will hold this Handle for you for 24 hours while you confirm the address.",
     "claimEmailLabel": "Email address",

@@ -104,6 +104,7 @@ jest.mock("@template/core", () => ({
 }));
 
 const signInEmail = jest.fn();
+const signInAdmit = jest.fn();
 const byEmail = jest.fn();
 const handleOf = jest.fn();
 const getServices = jest.fn();
@@ -157,6 +158,7 @@ function healthy(): void {
     emailSender: {},
     claimRateLimiter: {},
     resendClientRateLimiter: {},
+    signInClientRateLimiter: { admit: signInAdmit },
   }));
   submitClaim.mockResolvedValue({
     state: "pending",
@@ -171,6 +173,7 @@ function healthy(): void {
   editProfile.mockResolvedValue({ state: "saved" });
   handleAvailability.mockResolvedValue({ state: "available" });
   signInEmail.mockResolvedValue({});
+  signInAdmit.mockResolvedValue({ state: "admitted" });
   byEmail.mockResolvedValue({ userId: "user-1", email: EMAIL });
   handleOf.mockResolvedValue({ key: ICE });
   handlerGet.mockResolvedValue(
@@ -541,6 +544,51 @@ describe("the resend action's per-client-address limit (#158)", () => {
     ]);
     expectNoPersonalData();
   });
+});
+
+describe("the sign-in form's per-client-address limit (#180)", () => {
+  it.each([
+    ["sign-in.submit", () => signInAction.signInAction(personalForm())],
+    ["sign-in.form", () => signInAction.signInFormAction(personalForm())],
+  ] as const)(
+    "logs a refusal at %s as rate-limited, handing the limiter the client address but writing it nowhere",
+    async (boundary, call) => {
+      signInAdmit.mockResolvedValue({ state: "rate-limited" });
+
+      await insideRequest(call);
+
+      expect(signInAdmit.mock.calls).toEqual([[IP]]);
+      expect(signInEmail).not.toHaveBeenCalled();
+      expect(boundaryLines()).toEqual([
+        expect.objectContaining({ boundary, outcome: "rate-limited" }),
+      ]);
+      expectNoPersonalData();
+    },
+  );
+
+  it.each([
+    ["sign-in.submit", () => signInAction.signInAction(personalForm())],
+    ["sign-in.form", () => signInAction.signInFormAction(personalForm())],
+  ] as const)(
+    "logs a limiter that cannot count at %s as failed, through logFailure, with no personal data",
+    async (boundary, call) => {
+      signInAdmit.mockRejectedValue(leakyError());
+
+      await insideRequest(call);
+
+      expect(signInEmail).not.toHaveBeenCalled();
+      expect(boundaryLines()).toEqual([
+        expect.objectContaining({ boundary, outcome: "failed" }),
+      ]);
+      expect(failureLines()).toEqual([
+        expect.objectContaining({
+          event: "sign_in_rate_limit_failed",
+          correlationId: ID,
+        }),
+      ]);
+      expectNoPersonalData();
+    },
+  );
 });
 
 describe("the auth route", () => {

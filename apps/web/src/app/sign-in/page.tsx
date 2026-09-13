@@ -31,6 +31,9 @@ function errorFor(value: string | string[] | undefined): string | undefined {
   const candidate = typeof value === "string" ? value : value?.[0];
   if (candidate === "invalid") return copy.signInInvalid;
   if (candidate === "failed") return copy.signInFailed;
+  // Announced by the same live region as the other refusals, with no focus
+  // moved: a fresh render of the form, like them (#180).
+  if (candidate === "rate-limited") return copy.signInRateLimited;
   return undefined;
 }
 

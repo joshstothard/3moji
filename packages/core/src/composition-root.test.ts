@@ -65,6 +65,13 @@ describe("createCoreServices", () => {
     await close();
   });
 
+  it("wires the sign-in form's per-client-address limiter the same way (#180)", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(Object.keys(services.signInClientRateLimiter)).toEqual(["admit"]);
+    await close();
+  });
+
   it("wires the Claim's unit of work", async () => {
     const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
 

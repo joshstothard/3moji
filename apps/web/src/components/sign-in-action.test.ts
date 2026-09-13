@@ -25,12 +25,21 @@ const signInEmail = jest.fn();
 const byEmail = jest.fn();
 const handleOf = jest.fn();
 
+const admit = jest.fn();
+
 const getServices = jest.fn(() => ({
   auth: { api: { signInEmail } },
   accounts: { byEmail, handleOf },
+  signInClientRateLimiter: { admit },
 }));
 jest.mock("../lib/services", () => ({
   getServices: () => getServices(),
+}));
+
+const CLIENT = "203.0.113.7";
+jest.mock("next/headers", () => ({
+  headers: () =>
+    Promise.resolve(new Headers({ "x-vercel-forwarded-for": CLIENT })),
 }));
 
 /** Typed, so `redirect.mock.calls` is typed too and no assertion is needed. */
@@ -68,6 +77,7 @@ const CREDENTIALS = { email: "claimant@example.com", password: "hunter22222" };
 describe("signInAction", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    admit.mockResolvedValue({ state: "admitted" });
     signInEmail.mockResolvedValue({ token: "session" });
     byEmail.mockResolvedValue({
       userId: "user-1",
@@ -227,9 +237,73 @@ describe("signInAction", () => {
   });
 });
 
+describe("the per-client-address limit (#180)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    admit.mockResolvedValue({ state: "admitted" });
+    signInEmail.mockResolvedValue({ token: "session" });
+  });
+
+  it("asks the limiter with the client address, and nothing else, before evaluating credentials", async () => {
+    const order: string[] = [];
+    admit.mockImplementation(() => {
+      order.push("admit");
+      return Promise.resolve({ state: "admitted" });
+    });
+    signInEmail.mockImplementation(() => {
+      order.push("signInEmail");
+      return Promise.resolve({ token: "session" });
+    });
+
+    await signInAction(form(CREDENTIALS));
+
+    expect(admit.mock.calls).toEqual([[CLIENT]]);
+    expect(order).toEqual(["admit", "signInEmail"]);
+  });
+
+  it("refuses beyond the limit without calling Better Auth or reading the address", async () => {
+    admit.mockResolvedValue({ state: "rate-limited" });
+
+    const result = await signInAction(form(CREDENTIALS));
+
+    expect(result).toEqual({ state: "rate-limited" });
+    expect(signInEmail).not.toHaveBeenCalled();
+    expect(byEmail).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("brings the form back with the refusal, so it works without JavaScript", async () => {
+    admit.mockResolvedValue({ state: "rate-limited" });
+
+    await signInFormAction(form(CREDENTIALS));
+
+    expect(redirect.mock.calls).toEqual([["/sign-in?error=rate-limited"]]);
+    expect(signInEmail).not.toHaveBeenCalled();
+  });
+
+  it("fails closed, logged, when the limiter cannot count", async () => {
+    const logged = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    admit.mockRejectedValue(
+      new Error(`connect ECONNREFUSED for ${CREDENTIALS.email}`),
+    );
+
+    const result = await signInAction(form(CREDENTIALS));
+
+    expect(result).toEqual({ state: "failed" });
+    expect(signInEmail).not.toHaveBeenCalled();
+    const output = JSON.stringify(logged.mock.calls);
+    expect(output).toContain("sign_in_rate_limit_failed");
+    expect(output).not.toContain(CREDENTIALS.email);
+    logged.mockRestore();
+  });
+});
+
 describe("signInFormAction", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    admit.mockResolvedValue({ state: "admitted" });
     byEmail.mockResolvedValue(undefined);
   });
 

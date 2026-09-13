@@ -67,6 +67,14 @@ describe("the sign-in page", () => {
     );
   });
 
+  it("announces a rate-limited attempt without saying anything about the account (#180)", async () => {
+    await renderPage({ error: "rate-limited" });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/too many sign-in attempts/i);
+    expect(alert).not.toHaveTextContent(/password|no account|not registered/i);
+  });
+
   it("ignores an error value it does not recognise", async () => {
     // A query string is public input and this one lands in copy a person reads.
     await renderPage({ error: "<script>alert(1)</script>" });

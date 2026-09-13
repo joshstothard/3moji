@@ -1,6 +1,7 @@
 "use server";
 
 import { canonicalise } from "@template/core";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
@@ -8,6 +9,7 @@ import {
   type BoundaryOutcome,
   type RecordOutcome,
 } from "../lib/boundary-log";
+import { clientAddressFrom } from "../lib/client-address";
 import { getServices } from "../lib/services";
 import { logFailure } from "../lib/log-error";
 
@@ -15,6 +17,7 @@ import { logFailure } from "../lib/log-error";
 export type SignInState =
   | { readonly state: "idle" }
   | { readonly state: "invalid" }
+  | { readonly state: "rate-limited" }
   | { readonly state: "failed" };
 
 /**
@@ -83,8 +86,45 @@ function outcomeOfSignIn(result: SignInState): BoundaryOutcome {
       return "ok";
     case "invalid":
       return "rejected";
+    case "rate-limited":
+      return "rate-limited";
     case "failed":
       return "failed";
+  }
+}
+
+/**
+ * Whether this client may attempt a sign-in at all (#180).
+ *
+ * **Better Auth's own limiter never sees this form.** It runs in its router's
+ * `onRequest`, and `auth.api.signInEmail` below is a server-side call that
+ * never passes through it — so without this, `POST /api/auth/sign-in/email`
+ * would be limited while the form in front of the same credential check
+ * accepted unbounded guesses.
+ *
+ * **Asked first, before the form is read or any credential evaluated**, and
+ * handed the client address alone. A registered and an unregistered address, a
+ * right and a wrong password, are therefore counted and refused identically —
+ * a correct password beyond the limit is refused exactly like a wrong one — and
+ * no credential-dependent work runs before the answer, so neither can its
+ * timing differ by one.
+ *
+ * **Fails closed, in its own `try`.** The credentials `try` below turns any
+ * throw into `invalid`; a store that cannot count must instead refuse, and be
+ * logged, rather than read as a wrong password.
+ */
+async function signInAdmission(): Promise<SignInState | undefined> {
+  try {
+    const { signInClientRateLimiter } = getServices();
+    const admission = await signInClientRateLimiter.admit(
+      clientAddressFrom(await headers()),
+    );
+    return admission.state === "rate-limited"
+      ? { state: "rate-limited" }
+      : undefined;
+  } catch (error) {
+    logFailure("sign_in_rate_limit_failed", error);
+    return { state: "failed" };
   }
 }
 
@@ -96,6 +136,9 @@ async function signIn(
   formData: FormData,
   record: RecordOutcome,
 ): Promise<SignInState> {
+  const refused = await signInAdmission();
+  if (refused !== undefined) return refused;
+
   const email = formData.get("email");
   const password = formData.get("password");
 
@@ -145,7 +188,8 @@ async function signIn(
  *
  * The query parameter says what went wrong and nothing about who: `invalid`
  * covers a wrong password and an address with no Account alike, because Better
- * Auth answers both with the same 401 and so must we.
+ * Auth answers both with the same 401 and so must we; `rate-limited` is decided
+ * before either is looked at (#180).
  */
 export async function signInFormAction(formData: FormData): Promise<void> {
   await atBoundary("sign-in.form", async (record) => {

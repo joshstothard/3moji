@@ -16,6 +16,11 @@ import {
   createResendClientRateLimiter,
   resendClientBucket,
 } from "./resend-rate-limit";
+import {
+  SIGN_IN_CLIENT_RATE_LIMIT,
+  createSignInClientRateLimiter,
+  signInClientBucket,
+} from "./sign-in-rate-limit";
 
 const url = process.env.DATABASE_URL;
 
@@ -73,6 +78,10 @@ const UNREADABLE_CLIENT_SIGN_IN_KEY = "127.0.0.1|/sign-in/email";
 const RESEND_NOW = new Date("2099-01-01T10:20:00.000Z");
 const RESEND_WINDOW_START = new Date("2099-01-01T10:00:00.000Z");
 
+/** Five minutes into a fifteen-minute sign-in window, likewise far away (#180). */
+const SIGN_IN_NOW = new Date("2099-01-01T12:05:00.000Z");
+const SIGN_IN_WINDOW_START = new Date("2099-01-01T12:00:00.000Z");
+
 /**
  * **Better Auth's rate limiter against a real Postgres** (#158).
  *
@@ -124,6 +133,9 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
     await forgetThisSuitesCounters();
     await db.execute(
       sql`DELETE FROM claim_rate_limit WHERE window_start = ${RESEND_WINDOW_START}`,
+    );
+    await db.execute(
+      sql`DELETE FROM claim_rate_limit WHERE window_start = ${SIGN_IN_WINDOW_START}`,
     );
     await db.execute(
       sql`DELETE FROM "user" WHERE email LIKE ${`${SUITE_TAG}%`}`,
@@ -559,6 +571,77 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
         bucketKind: "resend-client",
         addressStored: false,
       });
+    });
+  });
+  describe("the sign-in form's per-client-address limit (#180)", () => {
+    it("counts in claim_rate_limit under its own hashed bucket kind, refusing past the HTTP endpoint's maximum", async () => {
+      const secret = `${SUITE_TAG}-sign-in-secret-of-sufficient-length`;
+      const bucket = signInClientBucket(secret, `${V4}.88`);
+      const limiter = createSignInClientRateLimiter({
+        store: createDrizzleClaimRateLimitStore({ db }),
+        clock: { now: () => SIGN_IN_NOW },
+        secret,
+      });
+
+      const states: string[] = [];
+      for (
+        let attempt = 0;
+        attempt <= AUTH_RATE_LIMITS.signInEmail.max;
+        attempt += 1
+      ) {
+        states.push((await limiter.admit(`${V4}.88`)).state);
+      }
+
+      const rows = await db.execute<{ count: number }>(sql`
+        SELECT count FROM claim_rate_limit
+        WHERE window_start = ${SIGN_IN_WINDOW_START} AND bucket = ${bucket}
+      `);
+      const stored = rows.rows as { count: number }[];
+
+      expect({
+        states,
+        counts: stored.map((row) => row.count),
+        bucketKind: bucket.split(":")[0],
+        addressStored: bucket.includes(V4),
+      }).toEqual({
+        // The same threshold the HTTP endpoint is proved to hold above.
+        states: [
+          ...Array<string>(AUTH_RATE_LIMITS.signInEmail.max).fill("admitted"),
+          "rate-limited",
+        ],
+        counts: [SIGN_IN_CLIENT_RATE_LIMIT.maxPerWindow + 1],
+        bucketKind: "sign-in-client",
+        addressStored: false,
+      });
+    });
+
+    it("leaves a Claim's live counter on the shared table untouched when it prunes", async () => {
+      const secret = `${SUITE_TAG}-sign-in-prune-secret-of-sufficient-length`;
+      const store = createDrizzleClaimRateLimitStore({ db });
+      const claimBucket = `${SUITE_TAG}-claim-row`;
+      // A Claim's window from forty minutes before: older than sign-in's
+      // fifteen, inside the shared hour.
+      const claimWindow = new Date(SIGN_IN_NOW.getTime() - 40 * 60 * 1000);
+      await store.record(
+        [{ bucket: claimBucket, windowStart: claimWindow }],
+        claimWindow,
+      );
+
+      await createSignInClientRateLimiter({
+        store,
+        clock: { now: () => SIGN_IN_NOW },
+        secret,
+      }).admit(`${V4}.89`);
+
+      const rows = await db.execute<{ count: number }>(sql`
+        SELECT count FROM claim_rate_limit WHERE bucket = ${claimBucket}
+      `);
+      await db.execute(
+        sql`DELETE FROM claim_rate_limit WHERE bucket = ${claimBucket}`,
+      );
+      expect(
+        (rows.rows as { count: number }[]).map((row) => row.count),
+      ).toEqual([1]);
     });
   });
 });
