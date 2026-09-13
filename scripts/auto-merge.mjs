@@ -198,21 +198,26 @@ const isBlockedRun = (run) =>
 // created_at tie, since run ids increase. When nothing started, say so rather
 // than reporting the blocked run's conclusion as a verdict.
 export function selectCiRun(runs) {
+  // An unparseable created_at gives NaN, which is falsy, so ordering falls back
+  // to the id rather than leaving the comparator undefined.
   const newestFirst = [...runs].sort(
     (a, b) =>
-      Date.parse(b.created_at ?? 0) - Date.parse(a.created_at ?? 0) ||
-      b.id - a.id,
+      Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id,
   );
-  const shape = (run, neverStarted) => ({
+  const shape = (run, extra) => ({
     status: run.status,
     conclusion: run.conclusion,
     headSha: run.head_sha,
-    ...(neverStarted ? { neverStarted: true } : {}),
+    ...extra,
   });
   const started = newestFirst.find((run) => !isBlockedRun(run));
-  if (started) return shape(started, false);
-  return newestFirst.length > 0 ? shape(newestFirst[0], true) : null;
+  if (started) return shape(started);
+  return newestFirst.length > 0
+    ? shape(newestFirst[0], { neverStarted: true })
+    : null;
 }
+
+// The CI verdict for a commit, in the shape evaluate() consumes.
 
 export function latestCiRun(repo, sha, fetchJson = api) {
   const { workflow_runs: runs } = fetchJson(
