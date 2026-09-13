@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import en from "../../../../packages/shared/messages/en.json";
 import { AccountMenu } from "./account-menu";
+import { signOutFormAction } from "./sign-out-action";
 
 const copy = en.AccountMenu;
 
@@ -18,6 +19,12 @@ const copy = en.AccountMenu;
  * Without JavaScript the island never runs, so `<noscript>` offers the
  * sign-in link instead: the same markup for every visitor, and the sign-in
  * form itself works without JavaScript.
+ *
+ * **It offers the sign-out form beside it** (#194), for the same reason and on
+ * the same terms: a page without JavaScript cannot learn who is signed in
+ * without reading the session, so both are shown to everybody. The form is
+ * the identical markup for every visitor and reads nothing at render; posted
+ * by somebody already signed out, it lands on `/` and changes nothing.
  */
 export function Navbar() {
   return (
@@ -39,6 +46,14 @@ export function Navbar() {
               >
                 {copy.signIn}
               </Link>
+              <form action={signOutFormAction} className="inline">
+                <button
+                  type="submit"
+                  className="rounded-xl px-3 py-2 text-base font-semibold text-slate-900 underline hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  {copy.signOut}
+                </button>
+              </form>
             </noscript>
           </div>
         </div>

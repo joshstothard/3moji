@@ -397,4 +397,86 @@ describeWithDatabase("auth against a real Postgres", () => {
       ).toEqual({ state: "reset" });
     });
   });
+
+  describe("sign-out (#194)", () => {
+    /** A verified Account, with the email cleared for the next case. */
+    const verifiedAccount = async (name: string): Promise<string> => {
+      const email = addressFor(name);
+      await signUp(email);
+      await auth.api.verifyEmail({
+        query: { token: tokenFrom(emailSender.lastSent()?.text) },
+      });
+      emailSender.clear();
+      return email;
+    };
+
+    /** Signs in and returns the `Cookie` header a browser would send back. */
+    const signedIn = async (email: string): Promise<string> => {
+      const signIn = await auth.api.signInEmail({
+        body: { email, password: PASSWORD },
+        returnHeaders: true,
+      });
+      return signIn.headers
+        .getSetCookie()
+        .map((line) => line.split(";")[0])
+        .join("; ");
+    };
+
+    const sessionFor = (cookie: string) =>
+      auth.api.getSession({ headers: new Headers({ cookie }) });
+
+    /**
+     * The session token a cookie carries: its value is the URL-encoded
+     * `<token>.<signature>`, and the row is keyed on the token alone.
+     */
+    const tokenOf = (cookie: string): string => {
+      const pair = cookie
+        .split("; ")
+        .find((part) => part.startsWith("better-auth.session_token="));
+      const value = decodeURIComponent(pair?.split("=")[1] ?? "");
+      return value.slice(0, value.lastIndexOf("."));
+    };
+
+    const sessionRows = async (token: string): Promise<number> => {
+      const result = await db.execute<{ count: string }>(
+        sql`SELECT count(*) AS count FROM "session" WHERE token = ${token}`,
+      );
+      return Number((result.rows as { count: string }[])[0]?.count ?? "-1");
+    };
+
+    it("ends the session: its row is gone, a request with the old cookie reads as signed out, and the response expires the cookie", async () => {
+      const email = await verifiedAccount("sign-out");
+      const cookie = await signedIn(email);
+      const token = tokenOf(cookie);
+      // Live before: the cookie names a real row and a real session.
+      expect(token).not.toBe("");
+      expect(await sessionRows(token)).toBe(1);
+      expect((await sessionFor(cookie))?.user.email).toBe(email);
+
+      // What `signOutFormAction` calls: the request's own headers.
+      const signOut = await auth.api.signOut({
+        headers: new Headers({ cookie }),
+        returnHeaders: true,
+      });
+
+      expect(await sessionRows(token)).toBe(0);
+      expect(await sessionFor(cookie)).toBeNull();
+      const expiry = signOut.headers
+        .getSetCookie()
+        .find((line) => line.startsWith("better-auth.session_token="));
+      expect(expiry).toMatch(/Max-Age=0/i);
+    });
+
+    it("ends only the session it was asked with, so signing out on one device leaves another signed in", async () => {
+      const email = await verifiedAccount("sign-out-one-device");
+      const here = await signedIn(email);
+      const elsewhere = await signedIn(email);
+
+      await auth.api.signOut({ headers: new Headers({ cookie: here }) });
+
+      expect(await sessionFor(here)).toBeNull();
+      expect((await sessionFor(elsewhere))?.user.email).toBe(email);
+      expect(await sessionRows(tokenOf(elsewhere))).toBe(1);
+    });
+  });
 });

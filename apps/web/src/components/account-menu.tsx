@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import en from "../../../../packages/shared/messages/en.json";
+import { signOutFormAction } from "./sign-out-action";
 
 const copy = en.AccountMenu;
 
@@ -233,17 +234,51 @@ export function AccountMenu() {
               {copy.noHandle}
             </p>
           )}
-          {/*
-           * Sign-out (#194) attaches here: a form below the links, shown in
-           * both signed-in states, that dispatches VIEWER_CHANGED_EVENT once it
-           * has signed out.
-           *
-           * Account deletion (#195) attaches here too: a link to an owner page
-           * that reads the session server-side, never a control on this island.
-           */}
+          <SignOutForm />
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Sign-out ([#194](https://github.com/joshstothard/3moji/issues/194)), below
+ * the links in both signed-in states.
+ *
+ * **A form's submit button, never a link**, so signing out is always a POST.
+ * The same action is in the navbar's `<noscript>`, which is how a visitor
+ * without JavaScript signs out: this island never runs for them.
+ *
+ * The action lands on `/`. When that is the page it started from, the
+ * pathname does not change and nothing would ask `GET /api/viewer` again, so
+ * {@link VIEWER_CHANGED_EVENT} is dispatched once the request settles —
+ * **whether or not it succeeded**, because asking again is how the indicator
+ * shows what is true. A request that could not be sent is not rethrown: there
+ * is no error to show beyond the indicator still saying "Signed in".
+ */
+function SignOutForm() {
+  const signOutAndAskAgain = async (): Promise<void> => {
+    try {
+      await signOutFormAction();
+    } catch {
+      // Offline or refused. The session may be intact; asking again says so.
+    } finally {
+      window.dispatchEvent(new Event(VIEWER_CHANGED_EVENT));
+    }
+  };
+
+  return (
+    <form
+      action={signOutAndAskAgain}
+      className="mt-2 border-t border-slate-200 pt-2"
+    >
+      <button
+        type="submit"
+        className="block w-full rounded-lg px-3 py-2 text-left text-base text-slate-900 underline hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      >
+        {copy.signOut}
+      </button>
+    </form>
   );
 }
 

@@ -24,6 +24,11 @@ jest.mock("next/navigation", () => ({
   notFound: jest.fn(),
 }));
 
+// The sign-out server action (#194): rendered as a form here, never run.
+jest.mock("./sign-out-action", () => ({
+  signOutFormAction: (): Promise<void> => Promise.resolve(),
+}));
+
 import { AccountMenu } from "./account-menu";
 
 function answering(body: unknown): void {
@@ -62,6 +67,8 @@ describe("the signed-in indicator, checked by axe", () => {
 
     await user.click(toggle);
     await screen.findByRole("link", { name: copy.yourProfile });
+    // Sign-out (#194) is in the open list, so axe checks it too.
+    await screen.findByRole("button", { name: copy.signOut });
 
     const open = await checkAccessibility(container);
     expect(open.violations).toEqual([]);
@@ -77,6 +84,7 @@ describe("the signed-in indicator, checked by axe", () => {
     const { container } = render(<AccountMenu />);
     await user.click(await screen.findByRole("button", { name: copy.toggle }));
     await screen.findByText(copy.noHandle);
+    await screen.findByRole("button", { name: copy.signOut });
 
     const report = await checkAccessibility(container);
     expect(report.violations).toEqual([]);

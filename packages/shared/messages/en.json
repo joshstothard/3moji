@@ -371,6 +371,7 @@
     "yourProfile": "Your Profile",
     "editProfile": "Edit your Profile",
     "account": "Your account",
+    "signOut": "Sign out",
     "noHandle": "There is no Profile to show for this account just now."
   },
   "AccountPage": {

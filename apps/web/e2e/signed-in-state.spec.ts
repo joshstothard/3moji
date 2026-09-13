@@ -342,13 +342,35 @@ test("both states of the indicator pass axe", async ({
 
   await signInAs(context, baseURL, owner);
   await page.goto(owner.path);
-  await toggleIn(page).click();
-  await expect(menuLink(page, copy.editProfile)).toBeVisible();
+  await expect(toggleIn(page)).toBeVisible();
   const signedIn = await checkPage(page);
   expect(signedIn.violations).toEqual([]);
   expect(signedIn.incomplete).toEqual([]);
   expect(signedIn.passed).toEqual(
-    expect.arrayContaining(["button-name", "link-name", "list", "listitem"]),
+    expect.arrayContaining(["button-name", "link-name"]),
+  );
+
+  // With the list open, only the list is checked. On a narrow viewport the
+  // open list covers the Profile's own text, and axe cannot measure the
+  // contrast of text it cannot see, so it reports that text `incomplete`. That
+  // finding is about the page underneath, which is checked whole just above
+  // with the list closed. Nothing is disabled here, and `incomplete` still
+  // fails.
+  await toggleIn(page).click();
+  await expect(menuLink(page, copy.editProfile)).toBeVisible();
+  const listId = await toggleIn(page).getAttribute("aria-controls");
+  if (listId === null) throw new Error("the toggle names no list to check");
+  const openList = await checkPage(page, { include: `[id="${listId}"]` });
+  expect(openList.violations).toEqual([]);
+  expect(openList.incomplete).toEqual([]);
+  expect(openList.passed).toEqual(
+    expect.arrayContaining([
+      "button-name",
+      "color-contrast",
+      "link-name",
+      "list",
+      "listitem",
+    ]),
   );
 });
 
