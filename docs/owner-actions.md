@@ -82,6 +82,16 @@ Items are grouped by when they have to happen:
   - **Blocks:** the report link going live. It is built ([#197](https://github.com/joshstothard/3moji/issues/197)) and shows nothing until the variable is set.
   - **Detail:** [takedown runbook](runbooks/takedown.md), [workstream](workstreams/3moji-mvp.md) Phase 7, deliverable 3.
 
+- [ ] **Confirm the report response targets, and whether a mailto is enough**
+  - **What:** Two calls about handling reports:
+    - **Response targets.** The takedown runbook proposes acknowledging a report within 2 working days, and acting the same day on anything in its "act now" triage row. These are starting values, not yet a commitment.
+    - **A web form.** Reporting is a `mailto:` link, which needs a mail client. The runbook's Online Safety Act table marks "let users easily report illegal content" as only partly met, because a web form may be expected later.
+  - **Why it matters:** a target you can't meet is worse than none once it's published. A reporter with no mail client set up has no way to report.
+  - **Options:** accept the targets or change them. Keep the mailto for launch, or ask for a report form before launch.
+  - **Recommendation:** none recorded.
+  - **Blocks:** publishing any response time. A form would be a new issue.
+  - **Detail:** PR [#211](https://github.com/joshstothard/3moji/pull/211), [takedown runbook](runbooks/takedown.md) § 1 and § 6.
+
 - [ ] **Where nightly database backups are stored**
   - **What:** Neon's free plan can only restore to a point in the last 6 hours or so. A mistake noticed the next day, such as a bad migration or an accidental deletion, would lose every Handle, Account and Profile. A nightly copy kept somewhere else fixes that.
   - **Why it matters:** without it, one bad day could permanently wipe out every claimed Handle.
@@ -101,18 +111,49 @@ Items are grouped by when they have to happen:
   - **Blocks:** the public announcement.
   - **Detail:** [workstream](workstreams/3moji-mvp.md) Phase 7, deliverable 3.
 
+- [ ] **Review the privacy notice and terms before removing the draft marker**
+  - **What:** `/privacy` and `/terms` show "Draft — pending owner review" until you remove the marker (`DraftMarker` in `apps/web/src/components/legal-document.tsx`). Answer these first. The ICO fee and the Online Safety Act are in the item above.
+    1. **Operator identity and contact:** the controller name and contact address that replace `Legal.operatorPlaceholder` and `Legal.contactPlaceholder`. The contact could be the `REPORT_CONTACT_EMAIL` mailbox.
+    2. **Processor locations and transfers:** where Vercel, Neon and Resend process data, and the safeguards for any transfer outside the UK. Nothing in the repo establishes this.
+    3. **Lawful basis for each purpose:** as drafted, contract for the account and Profile, and legitimate interests for sessions, counters and logs.
+    4. **Plaintext IP addresses in `auth_rate_limit`:** acceptable as stated, or hashed or truncated? Better Auth offers no hook, so changing it would be a follow-up issue.
+    5. **`verification_dispatch` retention:** kept for the life of the account. Should it be pruned?
+    6. **Log and backup retention:** how long Vercel logs and Neon backups keep data on your plans. The page says only "for a limited time".
+    7. **Cookies:** confirm that no analytics or other cookies are added before launch. Today there are only Better Auth's session cookies.
+    8. **Minimum age** for claiming a Handle (a placeholder in the terms).
+    9. **Governing law:** England and Wales, Scotland or Northern Ireland. Also the "last updated" dates.
+    10. **Limitation of liability wording**, ideally with legal advice.
+    11. **The "within one month" reply** to rights requests, the UK GDPR default: confirm you can meet it.
+  - **Why it matters:** the pages are an agent's plain-English draft, and nobody with legal training has reviewed them. The footer and claim form now link to them from every page ([#198](https://github.com/joshstothard/3moji/issues/198)).
+  - **Options:** answer each yourself, or take the list to a legal review.
+  - **Recommendation:** none recorded beyond the item above.
+  - **Blocks:** removing the draft marker, and so the public announcement.
+  - **Detail:** PR [#210](https://github.com/joshstothard/3moji/pull/210) § Questions the owner must answer; `packages/shared/messages/en.json` `Legal` namespace.
+
 - [ ] **Confirm the rate-limit starting values**
   - **What:** The limits below are in code today. Each was flagged as a starting value for you to confirm. Changing one is a one-line constant, so this isn't a one-way door.
     - **Claiming a Handle:** 3 an hour per email address, 10 an hour per client IP address (`CLAIM_RATE_LIMITS`).
     - **Sign-in:** 10 in 15 minutes per client (`AUTH_RATE_LIMITS.signInEmail`; the sign-in form uses the same numbers).
     - **Password reset email and verification email:** 5 an hour per client each (`AUTH_RATE_LIMITS`).
     - **Resending a verification link:** 10 an hour per client IP address (`RESEND_CLIENT_RATE_LIMIT`), plus 3 an hour per Account with at least 60 seconds between them, the sign-up email included (`RESEND_LIMITS`).
+    - **The password reset request form:** 5 an hour per client (`RESET_REQUEST_CLIENT_RATE_LIMIT`), taken from `AUTH_RATE_LIMITS.requestPasswordReset` rather than set separately ([#192](https://github.com/joshstothard/3moji/issues/192)).
     - **Every other Better Auth endpoint:** 100 in 10 seconds per client (Better Auth's own default, stated explicitly).
   - **Why it matters:** too tight and real people get locked out on launch day; too loose and someone can use the site to spam inboxes or guess passwords.
   - **Options:** accept them as they are, or change individual values.
   - **Recommendation:** accept them for launch, then tune them from the logs.
   - **Blocks:** nothing.
   - **Detail:** [auth architecture](architecture/auth.md) § Resend, and its limits, § Better Auth's rate limit, § The Claim's rate limit; `packages/core/src/handle/claim-rate-limit.ts`, `packages/core/src/auth/`.
+
+- [ ] **How the password reset pages trade enumeration safety against honesty**
+  - **What:** Three calls left open when the reset pages were built:
+    1. **The answer when a send fails.** If Resend is down, a registered address gets "failed" while an unregistered one still gets "sent", so an outage reveals which addresses have accounts. Resend and Better Auth's own endpoint behave the same way. The alternative is to always answer "sent" and only log the failure, which hides the outage from the person waiting for the email.
+    2. **Sending in the background.** The 500 ms floor pads fast answers, but a real send that takes longer is still measurably slower. Sending with `waitUntil` would close that gap, at the cost of never learning that a send failed.
+    3. **No limit on the set-new-password form.** It guards a 24-character random token that expires in an hour, and bypasses Better Auth's HTTP limiter. Should it get its own limit?
+  - **Why it matters:** each choice trades not revealing who has an account against telling a real person that something went wrong.
+  - **Options:** keep the behaviour as built, or change any of the three.
+  - **Recommendation:** none recorded.
+  - **Blocks:** nothing technical.
+  - **Detail:** PR [#215](https://github.com/joshstothard/3moji/pull/215) § Open questions for the owner, [auth architecture](architecture/auth.md) § Password reset.
 
 - [ ] **Emoji picker buttons with no border**
   - **What:** The picker's category buttons and emoji buttons have a white fill on a near-white page (about 1.05:1 contrast) and no border.
