@@ -1,4 +1,10 @@
+import { createHeldBackgroundTasks } from "../adapters/held-background-tasks";
+import {
+  createBackgroundEmailSender,
+  DEFERRED_EMAIL_FAILURE_EVENTS,
+} from "../auth/adapters/background-email-sender";
 import { createRecordingEmailSender } from "../auth/adapters/recording-email-sender";
+import type { EmailSender } from "../auth/ports/email-sender";
 import { RESPONSE_FLOOR_MS } from "../auth/response-floor";
 import { toHandleKey } from "../db/handle-key";
 import type { AccountDirectory } from "../ports/account-directory";
@@ -157,8 +163,8 @@ describe("submitClaim", () => {
     });
 
     it("takes the same time either way, so the timing does not answer the question", async () => {
-      // A fresh Claim hashes a password and sends mail; a collision does one
-      // SELECT and rolls back. Padding the fast branch is what makes the two
+      // A fresh Claim hashes a password and writes two rows; a collision does
+      // one SELECT and rolls back. (Neither sends mail inside the floor, #216.) Padding the fast branch is what makes the two
       // indistinguishable — a body that reveals nothing is worthless if the
       // response time reveals everything.
       const fresh = build({ costMs: 120 });
@@ -423,5 +429,123 @@ describe("submitClaim", () => {
       expect(withCapitals).toEqual(asTyped);
       expect(mixedCase.observed()).toEqual(lowercase.observed());
     });
+  });
+});
+
+/**
+ * **The collision notice, sent the way production sends it**
+ * ([#216](https://github.com/joshstothard/3moji/issues/216)): through the
+ * background sender the composition root hands `submitClaim`. The provider
+ * takes two seconds, or fails, when it is finally asked. A fresh Claim sends
+ * nothing from inside `submitClaim` — its verification email leaves after the
+ * commit, from the claim store — so it is the baseline the collision must
+ * match.
+ */
+describe("submitClaim when the email provider is slow or failing (#216)", () => {
+  const PROVIDER_MS = 2_000;
+
+  const wired = (who: "fresh" | "collision", provider: "slow" | "failing") => {
+    const { clock, advance } = movableClock();
+    const delivered: string[] = [];
+    const tasks = createHeldBackgroundTasks();
+    const inner: EmailSender = {
+      send: (email) => {
+        advance(PROVIDER_MS);
+        delivered.push(email.to);
+        return provider === "slow"
+          ? Promise.resolve()
+          : Promise.reject(new Error("the provider is unavailable"));
+      },
+    };
+    const emailSender = createBackgroundEmailSender({
+      inner,
+      tasks,
+      event: DEFERRED_EMAIL_FAILURE_EVENTS.claimCollision,
+    });
+
+    const store: ClaimStore = {
+      async runInTransaction(work) {
+        const outcome = await work({
+          availabilityOf: () => Promise.resolve("available"),
+          freeExpiredHold: () => Promise.resolve({ freed: false }),
+          createAccount: () =>
+            Promise.resolve(
+              who === "fresh"
+                ? { ok: true, userId: "user-1" }
+                : { ok: false, reason: "email-taken" },
+            ),
+          holdHandle: () => Promise.resolve({ ok: true }),
+        });
+        return outcome.value;
+      },
+    };
+
+    const directory: AccountDirectory = {
+      byEmail: (email) =>
+        Promise.resolve({ userId: "user-9", email, emailVerified: true }),
+      handleOf: () =>
+        Promise.resolve({
+          key: KEY,
+          heldUntil: new Date("2026-09-13T12:00:00.000Z"),
+          claimedAt: new Date("2026-09-12T09:00:00.000Z"),
+        }),
+    };
+
+    const answer = async () => {
+      const started = clock.now().getTime();
+      const result = await submitClaim({
+        segment: ICE,
+        email: EMAIL,
+        password: PASSWORD,
+        store,
+        clock,
+        directory,
+        emailSender,
+        resetRequestUrl: RESET_URL,
+        from: FROM,
+        rateLimiter: admitsEverything,
+        clientAddress: CLIENT_ADDRESS,
+        sleep: (ms) => {
+          advance(ms);
+          return Promise.resolve();
+        },
+      });
+      return { result, tookMs: clock.now().getTime() - started };
+    };
+
+    return { answer, tasks, delivered };
+  };
+
+  it("answers a collision at the floor though its notice takes two seconds, exactly as a fresh Claim", async () => {
+    const fresh = wired("fresh", "slow");
+    const collision = wired("collision", "slow");
+
+    const answers = [await fresh.answer(), await collision.answer()];
+
+    expect(answers[1]).toEqual(answers[0]);
+    expect(answers[0]?.tookMs).toBe(RESPONSE_FLOOR_MS);
+    expect(answers[0]?.result.state).toBe("pending");
+    // Nothing reached the provider before the answer; afterwards, only the
+    // existing owner was told — the two really took different paths.
+    expect(collision.delivered).toEqual([]);
+    await Promise.all([fresh.tasks.release(), collision.tasks.release()]);
+    expect(collision.delivered).toEqual([EMAIL]);
+    expect(fresh.delivered).toEqual([]);
+  });
+
+  it("answers pending for a collision when its notice fails, and the failure is reported once, after the answer", async () => {
+    const fresh = wired("fresh", "failing");
+    const collision = wired("collision", "failing");
+
+    const answers = [await fresh.answer(), await collision.answer()];
+
+    expect(answers[1]).toEqual(answers[0]);
+    expect(answers[0]?.result.state).toBe("pending");
+    expect(collision.tasks.failures).toEqual([]);
+    await Promise.all([fresh.tasks.release(), collision.tasks.release()]);
+    expect(collision.tasks.failures.map((failure) => failure.event)).toEqual([
+      "claim_collision_email_failed",
+    ]);
+    expect(fresh.tasks.failures).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+import { createHeldBackgroundTasks } from "../adapters/held-background-tasks";
 import path from "node:path";
 
 import { sql } from "drizzle-orm";
@@ -120,17 +121,19 @@ describeWithDatabase("the Claim against a real Postgres", () => {
   let pool: Pool;
   let db: ReturnType<typeof drizzle<typeof authSchema>>;
   let emailSender: ReturnType<typeof createRecordingEmailSender>;
+  /** The Claim's email goes out after the answer (#216); released by `claim`. */
+  const tasks = createHeldBackgroundTasks();
   let store: ClaimStore;
 
-  const claim = (input: {
+  const claim = async (input: {
     segment: string;
     email: string;
     store?: ClaimStore;
     list?: ReservedHandleList;
     /** Moves time for the lazy-expiry cases. Never a sleep. */
     clock?: Clock;
-  }): Promise<ClaimResult> =>
-    claimHandle({
+  }): Promise<ClaimResult> => {
+    const result = await claimHandle({
       segment: input.segment,
       email: input.email,
       password: PASSWORD,
@@ -138,6 +141,11 @@ describeWithDatabase("the Claim against a real Postgres", () => {
       clock: input.clock ?? fixedClock,
       ...(input.list === undefined ? {} : { list: input.list }),
     });
+    // After the answer, as the app does it: every assertion below about what
+    // was mailed reads the provider once the background work has run.
+    await tasks.release();
+    return result;
+  };
 
   const userRow = async (email: string) => {
     const result = await db.execute<{ id: string; email_verified: boolean }>(
@@ -220,7 +228,7 @@ describeWithDatabase("the Claim against a real Postgres", () => {
         secret: "integration-test-secret-of-sufficient-length",
         from: "3moji <no-reply@mail.3moji.me>",
       });
-    store = createDrizzleClaimStore({ db, auth, emailSender });
+    store = createDrizzleClaimStore({ db, auth, emailSender, tasks });
   });
 
   afterAll(async () => {

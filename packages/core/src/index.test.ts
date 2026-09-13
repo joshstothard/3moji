@@ -1,3 +1,4 @@
+import { createHeldBackgroundTasks } from "./adapters/held-background-tasks";
 import {
   authSchema,
   BIO_MAX_LENGTH,
@@ -112,6 +113,7 @@ describe("package entry point", () => {
     const deps: CoreDependencies = {
       clock,
       db: handle.db,
+      backgroundTasks: createHeldBackgroundTasks(),
       auth: {
         emailSender: createRecordingEmailSender(),
         baseUrl: "http://localhost:3000",

@@ -9,6 +9,8 @@ import {
 } from "@template/core";
 import { nextCookies } from "better-auth/next-js";
 
+import { createAfterBackgroundTasks } from "./after-background-tasks";
+
 /**
  * The application's composition point.
  *
@@ -118,6 +120,10 @@ function build(): CoreServices {
   return createCoreServices({
     clock: createSystemClock(),
     db,
+    // Every email goes out after the response, through Next.js's `after()`,
+    // so no answer about an address waits on the provider or fails because of
+    // it (#216). The other framework-specific piece, beside the cookie plugin.
+    backgroundTasks: createAfterBackgroundTasks(),
     auth: {
       emailSender: sender,
       baseUrl: required("BETTER_AUTH_URL"),

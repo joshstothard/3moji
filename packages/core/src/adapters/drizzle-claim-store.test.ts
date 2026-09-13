@@ -1,4 +1,5 @@
 import { createRecordingEmailSender } from "../auth/adapters/recording-email-sender";
+import { createHeldBackgroundTasks } from "./held-background-tasks";
 import type { AuthFactory } from "../auth/auth-factory";
 import { createAuth } from "../auth/create-auth";
 import { createDatabase } from "../db/client";
@@ -72,7 +73,12 @@ const build = () => {
   return {
     emailSender,
     close: handle.close,
-    store: createDrizzleClaimStore({ db: handle.db, auth, emailSender }),
+    store: createDrizzleClaimStore({
+      db: handle.db,
+      auth,
+      emailSender,
+      tasks: createHeldBackgroundTasks(),
+    }),
   };
 };
 

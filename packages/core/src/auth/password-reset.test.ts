@@ -1,5 +1,11 @@
+import { createHeldBackgroundTasks } from "../adapters/held-background-tasks";
 import { createInMemoryClaimRateLimitStore } from "../adapters/in-memory-claim-rate-limit-store";
 import type { Clock } from "../ports/clock";
+import {
+  createBackgroundEmailSender,
+  DEFERRED_EMAIL_FAILURE_EVENTS,
+} from "./adapters/background-email-sender";
+import type { EmailSender } from "./ports/email-sender";
 import {
   requestPasswordReset,
   setNewPassword,
@@ -238,5 +244,113 @@ describe("setNewPassword", () => {
       }),
     ).toEqual({ state: "invalid-link" });
     expect(calls).toEqual([]);
+  });
+});
+
+/**
+ * **The send, as production wires it**
+ * ([#216](https://github.com/joshstothard/3moji/issues/216)): Better Auth calls
+ * the `sendResetPassword` hook for a registered address only, and that hook's
+ * sender is the background one the composition root builds. The provider takes
+ * two seconds, or fails, when it is finally asked.
+ */
+describe("requestPasswordReset when the email provider is slow or failing (#216)", () => {
+  const PROVIDER_MS = 2_000;
+
+  function wired(provider: "slow" | "failing") {
+    let now = NOW.getTime();
+    const clock: Clock = { now: () => new Date(now) };
+    const delivered: string[] = [];
+    const tasks = createHeldBackgroundTasks();
+    const inner: EmailSender = {
+      send: (email) => {
+        now += PROVIDER_MS;
+        delivered.push(email.to);
+        return provider === "slow"
+          ? Promise.resolve()
+          : Promise.reject(new Error("the provider is unavailable"));
+      },
+    };
+    const sender = createBackgroundEmailSender({
+      inner,
+      tasks,
+      event: DEFERRED_EMAIL_FAILURE_EVENTS.auth,
+    });
+    const resetter: PasswordResetter = {
+      request: async (email) => {
+        if (email === REGISTERED) {
+          await sender.send({
+            to: email,
+            subject: "Reset your 3moji password",
+            text: "Reset your password: https://3moji.me/reset-password/token",
+          });
+        }
+        return "accepted";
+      },
+      reset: () => Promise.resolve({ state: "reset" }),
+    };
+    const answer = async (email: string) => {
+      const started = now;
+      const outcome = await requestPasswordReset({
+        email,
+        clientAddress: CLIENT,
+        clientLimiter: { admit: () => Promise.resolve({ state: "admitted" }) },
+        resetter,
+        clock,
+        sleep: (ms) => {
+          now += ms;
+          return Promise.resolve();
+        },
+      });
+      return { outcome, tookMs: now - started };
+    };
+    return { answer, tasks, delivered };
+  }
+
+  it("answers a registered address at the floor though its email takes two seconds, exactly as an unregistered one", async () => {
+    const registered = wired("slow");
+    const unregistered = wired("slow");
+
+    const answers = [
+      await registered.answer(REGISTERED),
+      await unregistered.answer(UNREGISTERED),
+    ];
+
+    expect(answers[1]).toEqual(answers[0]);
+    expect(answers[0]).toEqual({
+      outcome: { state: "sent" },
+      tookMs: RESPONSE_FLOOR_MS,
+    });
+    // Nothing reached the provider before the answer; afterwards, only the
+    // registered address did, so the two really took different paths.
+    expect(registered.delivered).toEqual([]);
+    await Promise.all([
+      registered.tasks.release(),
+      unregistered.tasks.release(),
+    ]);
+    expect(registered.delivered).toEqual([REGISTERED]);
+    expect(unregistered.delivered).toEqual([]);
+  });
+
+  it("answers sent for a registered address when the provider fails, and the failure is reported once, after the answer", async () => {
+    const registered = wired("failing");
+    const unregistered = wired("failing");
+
+    const answers = [
+      await registered.answer(REGISTERED),
+      await unregistered.answer(UNREGISTERED),
+    ];
+
+    expect(answers[1]).toEqual(answers[0]);
+    expect(answers[0]?.outcome).toEqual({ state: "sent" });
+    expect(registered.tasks.failures).toEqual([]);
+    await Promise.all([
+      registered.tasks.release(),
+      unregistered.tasks.release(),
+    ]);
+    expect(registered.tasks.failures.map((failure) => failure.event)).toEqual([
+      "auth_email_send_failed",
+    ]);
+    expect(unregistered.tasks.failures).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+import { createHeldBackgroundTasks } from "../adapters/held-background-tasks";
 import path from "node:path";
 
 import { sql } from "drizzle-orm";
@@ -221,7 +222,12 @@ describeWithDatabase("Release against a real Postgres", () => {
         secret: "integration-test-secret-of-sufficient-length",
         from: "3moji <no-reply@mail.3moji.me>",
       });
-    claims = createDrizzleClaimStore({ db, auth, emailSender });
+    claims = createDrizzleClaimStore({
+      db,
+      auth,
+      emailSender,
+      tasks: createHeldBackgroundTasks(),
+    });
     releases = createDrizzleReleaseStore({ db });
     await removeOwnRows();
   });

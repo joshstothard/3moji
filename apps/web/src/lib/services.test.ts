@@ -11,6 +11,7 @@ interface AuthDeps {
 interface CoreDeps {
   readonly clock: unknown;
   readonly db: unknown;
+  readonly backgroundTasks: unknown;
   readonly auth: AuthDeps;
 }
 
@@ -40,6 +41,10 @@ jest.mock("@template/core", () => ({
 }));
 jest.mock("better-auth/next-js", () => ({
   nextCookies: () => ({ id: "next-cookies-plugin" }),
+}));
+const createAfterBackgroundTasks = jest.fn(() => "THE-BACKGROUND-TASKS");
+jest.mock("./after-background-tasks", () => ({
+  createAfterBackgroundTasks: () => createAfterBackgroundTasks(),
 }));
 
 const ENV = {
@@ -128,6 +133,16 @@ describe("getServices", () => {
     expect(auth.baseUrl).toBe(ENV.BETTER_AUTH_URL);
     expect(auth.secret).toBe(ENV.BETTER_AUTH_SECRET);
     expect(auth.from).toBe(ENV.RESEND_FROM);
+  });
+
+  it("wires Next.js's after(), so no answer waits on the email provider (#216)", async () => {
+    setEnv(ENV);
+    const { getServices } = await loadFresh();
+
+    getServices();
+
+    expect(createAfterBackgroundTasks).toHaveBeenCalledTimes(1);
+    expect(recordedDeps().backgroundTasks).toBe("THE-BACKGROUND-TASKS");
   });
 
   /**

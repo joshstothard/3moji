@@ -1,3 +1,4 @@
+import { createHeldBackgroundTasks } from "../adapters/held-background-tasks";
 import path from "node:path";
 
 import { sql } from "drizzle-orm";
@@ -148,6 +149,8 @@ describeWithDatabase("verification against a real Postgres", () => {
   let pool: Pool;
   let db: ReturnType<typeof drizzle<typeof authSchema>>;
   let emailSender: ReturnType<typeof createRecordingEmailSender>;
+  /** The Claim's email goes out after the answer (#216); released by `claim`. */
+  const tasks = createHeldBackgroundTasks();
   let dispatches: ReturnType<typeof createDrizzleVerificationDispatchStore>;
   let directory: ReturnType<typeof createDrizzleAccountDirectory>;
   let store: ReturnType<typeof createDrizzleClaimStore>;
@@ -216,8 +219,13 @@ describeWithDatabase("verification against a real Postgres", () => {
         from: "3moji <no-reply@mail.3moji.me>",
       });
 
-    store = createDrizzleClaimStore({ db, auth, emailSender });
-    finaliser = createDrizzleClaimFinaliser({ db, auth, emailSender });
+    store = createDrizzleClaimStore({ db, auth, emailSender, tasks });
+    finaliser = createDrizzleClaimFinaliser({
+      db,
+      auth,
+      emailSender,
+      tasks,
+    });
     mailer = createBetterAuthVerificationMailer(
       auth({ db, emailSender, dispatches }),
     );
@@ -272,6 +280,7 @@ describeWithDatabase("verification against a real Postgres", () => {
     if (result.state !== "held") {
       throw new Error(`the setup Claim did not hold: ${result.state}`);
     }
+    await tasks.release();
     const token = tokenFrom(emailSender.lastSent()?.text);
     return { email, key, token };
   };

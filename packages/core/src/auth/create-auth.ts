@@ -221,6 +221,9 @@ export function createAuth(input: CreateAuthInput) {
         // The other order puts a live link in somebody's inbox that we have no
         // record of, and an unrecorded link is one `finaliseClaim` can only
         // treat as unknown. The recoverable failure is the one to choose.
+        // Since #216 the composition root's sender schedules the send for
+        // after the response, so the row is still written first; a send that
+        // then fails is logged, not answered.
         await input.dispatches.record({
           userId: user.id,
           tokenHash: verificationTokenFingerprint(token),
