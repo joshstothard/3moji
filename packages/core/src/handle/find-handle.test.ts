@@ -88,8 +88,11 @@ describe("findHandleAlias", () => {
     expect(findHandleAlias("wibble wobble wubble")).toEqual({ found: false });
   });
 
-  it("does not read the spoken form with number words (#201)", () => {
-    expect(findHandleAlias("three ice cubes")).toEqual({ found: false });
+  it("reads the spoken form with number words (#201)", () => {
+    expect(findHandleAlias("three ice cubes")).toEqual({
+      found: true,
+      alias: ICE_ALIAS,
+    });
   });
 
   it("finds nothing, rather than guessing, when two readings name different Handles", () => {
