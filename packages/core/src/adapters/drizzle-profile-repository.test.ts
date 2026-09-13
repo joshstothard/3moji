@@ -59,4 +59,34 @@ describe("createDrizzleProfileRepository against an unreachable database", () =>
     expect(messagesOf(thrown)).toMatch(/ECONNREFUSED|connect/i);
     await handle.close();
   });
+
+  it("fails loudly rather than reporting no display names", async () => {
+    // Same reasoning as `profileOf` above, and the stakes are the listing's: an
+    // empty map is a real answer — it is what an unedited owner produces — so
+    // an outage must not be able to forge it. The route degrades this to
+    // emoji-only rows on purpose, and it can only do that if the adapter says
+    // the read failed.
+    const handle = createDatabase({ url: URL });
+    const repository = createDrizzleProfileRepository(handle.db);
+
+    const thrown: unknown = await repository
+      .displayNamesOf([KEY])
+      .then(() => undefined)
+      .catch((error: unknown) => error);
+
+    expect(messagesOf(thrown)).toMatch(/ECONNREFUSED|connect/i);
+    await handle.close();
+  });
+
+  it("asks nothing at all about an empty list of Handles", async () => {
+    // An empty `IN ()` is a round trip that cannot return a row, and Drizzle's
+    // `inArray` is a sharp edge on an empty list. That this resolves against a
+    // database refusing every connection is the proof no query was issued.
+    const handle = createDatabase({ url: URL });
+    const repository = createDrizzleProfileRepository(handle.db);
+
+    await expect(repository.displayNamesOf([])).resolves.toEqual(new Map());
+
+    await handle.close();
+  });
 });

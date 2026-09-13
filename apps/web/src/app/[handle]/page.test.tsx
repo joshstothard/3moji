@@ -133,9 +133,25 @@ const readProfile = jest.fn(
   (_segment: string, _state: AvailabilityState): Promise<ProfileState> =>
     Promise.resolve({ state: "none" }),
 );
+/**
+ * The listing's own read: every display name in **one** call, rather than a
+ * `readProfile` per row. Faked here for the reason `readProfile` is — what
+ * belongs on this page is the shape of the call, and the query behind it is
+ * asserted in `lib/profile.test.ts`.
+ *
+ * It answers a map keyed on the **percent-encoded segment**, and an absent key
+ * means "no display name to show" — which is one state covering both a Handle
+ * whose owner has never edited anything and one whose `displayName` is still
+ * `null`, so a row has one branch rather than three.
+ */
+const readDisplayNames = jest.fn(
+  (_segments: readonly string[]): Promise<ReadonlyMap<string, string>> =>
+    Promise.resolve(new Map()),
+);
 jest.mock("../../lib/profile", () => ({
   readProfile: (segment: string, state: AvailabilityState) =>
     readProfile(segment, state),
+  readDisplayNames: (segments: readonly string[]) => readDisplayNames(segments),
 }));
 
 /**
@@ -621,6 +637,7 @@ describe("a word alias", () => {
     // assertions below that expect the honest line would otherwise depend on
     // which `describe` ran first.
     readProfile.mockResolvedValue({ state: "none" });
+    readDisplayNames.mockResolvedValue(new Map());
   });
 
   it("tries the emoji grammar first, and never reaches the alias when it wins", async () => {
@@ -736,11 +753,12 @@ describe("a word alias", () => {
       ok: true,
       candidates: [redCandidate, greenCandidate],
     });
-    readAvailability.mockResolvedValue("claimed");
+    readAvailability.mockResolvedValue("available");
 
     render(await visit("apple.apple.apple"));
 
     expect(readProfile).not.toHaveBeenCalled();
+    expect(readDisplayNames).not.toHaveBeenCalled();
     expect(screen.getByText(copy.aliasSeveral)).toBeInTheDocument();
   });
 
@@ -784,19 +802,20 @@ describe("a word alias", () => {
     ).toBeInTheDocument();
   });
 
-  it.each([
-    ["several are claimed", "claimed"],
-    ["none is claimed", "available"],
-  ] as const)("says so and shows no listing when %s", async (_name, state) => {
-    // The listing is [#109](https://github.com/joshstothard/3moji/issues/109),
-    // and improvising one here would answer its privacy and ranking questions
-    // by accident. Counted in controls and in emoji rather than in copy: an
+  it("says so and shows no listing when several match and none is claimed", async () => {
+    // **Still #108's answer, and deliberately left alone.** ADR-0008 omits
+    // unclaimed Handles from a listing, and the claim call to action is a page
+    // for one specific Handle — which `apple.apple.apple` with nothing claimed
+    // does not name. That gap is
+    // [#121](https://github.com/joshstothard/3moji/issues/121) and needs an ADR
+    // of its own; #109 resolves the *claimed* row of decision 4 and nothing
+    // else. Counted in controls and in emoji rather than in copy: an
     // accidental listing is buttons and Handles however it is worded.
     resolveAlias.mockReturnValue({
       ok: true,
       candidates: [redCandidate, greenCandidate],
     });
-    readAvailability.mockResolvedValue(state);
+    readAvailability.mockResolvedValue("available");
 
     render(await visit("apple.apple.apple"));
 
@@ -819,11 +838,257 @@ describe("a word alias", () => {
       ok: true,
       candidates: [redCandidate, greenCandidate],
     });
-    readAvailability.mockResolvedValue("claimed");
+    readAvailability.mockResolvedValue("available");
 
     render(await visit("apple.apple.apple"));
 
     expect(canonicalLink()).toBeNull();
+  });
+});
+
+/**
+ * The listing: an alias that names more than one **claimed** Handle
+ * ([#109](https://github.com/joshstothard/3moji/issues/109), ADR-0008
+ * decision 4).
+ *
+ * Roughly one alias in ten needs a disambiguating tap, so this is not an edge
+ * case — it is the answer to 9.3% of three-term queries, and sending somebody
+ * to the wrong Profile is worse than asking which they meant.
+ *
+ * Two things are asserted here that the other branches cannot be: that the
+ * rows carry **emoji and a display name** (decision 6 — the words cannot tell
+ * 🍎🍎🍎 from 🍏🍏🍏, and no unique username is introduced to help them), and
+ * that the whole listing costs **one** display-name read rather than one per
+ * row.
+ */
+describe("a listing of the claimed Handles an alias names", () => {
+  const RED = "\u{1F34E}";
+  const GREEN = "\u{1F34F}";
+  const BLUE = "\u{1F7E6}";
+  const RED_KEY = `${RED}${RED}${RED}`;
+  const GREEN_KEY = `${GREEN}${GREEN}${GREEN}`;
+  const BLUE_KEY = `${BLUE}${BLUE}${BLUE}`;
+  const RED_ENCODED = encodeURIComponent(RED_KEY);
+  const GREEN_ENCODED = encodeURIComponent(GREEN_KEY);
+  const BLUE_ENCODED = encodeURIComponent(BLUE_KEY);
+  const RED_SPOKEN = "three red apples";
+  const GREEN_SPOKEN = "three green apples";
+
+  function candidateOf(emoji: string): StubCandidate {
+    const key = `${emoji}${emoji}${emoji}`;
+    return {
+      key,
+      encoded: encodeURIComponent(key),
+      emoji: [{ emoji }, { emoji }, { emoji }],
+    };
+  }
+
+  const redCandidate = candidateOf(RED);
+  const greenCandidate = candidateOf(GREEN);
+  const blueCandidate = candidateOf(BLUE);
+
+  function canonicalLink(): HTMLLinkElement | null {
+    return document.head.querySelector('link[rel="canonical"]');
+  }
+
+  /** The listing, by its accessible name rather than by a class or a test id. */
+  function listing(): HTMLElement {
+    return screen.getByRole("list", { name: copy.aliasListingLabel });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    canonicalise.mockReturnValue({ ok: false, reason: "unknown-codepoint" });
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [redCandidate, greenCandidate],
+    });
+    // Distinct per Handle, because a listing whose rows all announce the same
+    // name would pass an accessible-name assertion while telling a screen
+    // reader user nothing about which row is which — the exact failure the
+    // acceptance criteria name.
+    spokenHandle.mockImplementation((codepoints: readonly string[]) =>
+      codepoints.at(0) === RED ? RED_SPOKEN : GREEN_SPOKEN,
+    );
+    readAvailability.mockResolvedValue("claimed");
+    checkAvailability.mockResolvedValue("available");
+    // Pinned here rather than left to the factory defaults, for the reason the
+    // alias suite above pins them: `jest.clearAllMocks()` does not clear a
+    // `mockResolvedValue` another suite set.
+    readProfile.mockResolvedValue({ state: "none" });
+    readDisplayNames.mockResolvedValue(
+      new Map([
+        [RED_ENCODED, "Ada Rose"],
+        [GREEN_ENCODED, "Bruno Green"],
+      ]),
+    );
+  });
+
+  it("renders one row per claimed match, in the resolver's order", async () => {
+    // The order is the candidate set's, not a ranking. ADR-0008 leaves ranking
+    // open, and sorting by name or by recency here would answer it by accident.
+    render(await visit("apple.apple.apple"));
+
+    const rows = within(listing()).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("Ada Rose");
+    expect(rows[1]).toHaveTextContent("Bruno Green");
+  });
+
+  it("shows each row's emoji and the owner's display name", async () => {
+    // Decision 6: the display name is what disambiguates, and the emoji are
+    // what actually distinguish these two Handles when the words cannot.
+    render(await visit("apple.apple.apple"));
+
+    expect(screen.getByRole("img", { name: RED_SPOKEN })).toHaveTextContent(
+      RED_KEY,
+    );
+    expect(screen.getByRole("img", { name: GREEN_SPOKEN })).toHaveTextContent(
+      GREEN_KEY,
+    );
+    expect(screen.getByText("Ada Rose")).toBeInTheDocument();
+    expect(screen.getByText("Bruno Green")).toBeInTheDocument();
+  });
+
+  it("links each row to that Handle's own canonical emoji URL", async () => {
+    render(await visit("apple.apple.apple"));
+
+    const links = within(listing()).getAllByRole("link");
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveAttribute("href", `/${RED_ENCODED}`);
+    expect(links[1]).toHaveAttribute("href", `/${GREEN_ENCODED}`);
+  });
+
+  it("names each row by its Spoken Name and its owner, not by a pile of pictographs", async () => {
+    // Three unlabelled code points announce one at a time as "red apple red
+    // apple red apple", which is what `role="img"` and the Spoken Name exist to
+    // replace. The name is computed from the row's content rather than set with
+    // `aria-label` on the anchor, so the owner's name is part of it.
+    render(await visit("apple.apple.apple"));
+
+    expect(
+      screen.getByRole("link", { name: `${RED_SPOKEN} Ada Rose` }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: `${GREEN_SPOKEN} Bruno Green` }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to the Handle itself when there is no way to say it", async () => {
+    // `spokenHandle` answers `undefined` outside the curated set, and a row
+    // named "undefined" is worse than a row named by its own emoji.
+    spokenHandle.mockReturnValue(undefined);
+
+    render(await visit("apple.apple.apple"));
+
+    expect(screen.getByRole("img", { name: RED_KEY })).toBeInTheDocument();
+  });
+
+  it("is keyboard operable, one tab stop per row, with visible focus", async () => {
+    // WCAG 2.1.1 and 2.4.7. A listing whose rows are not real links is a
+    // listing a keyboard user cannot use at all.
+    const user: UserEvent = userEvent.setup();
+    render(await visit("apple.apple.apple"));
+
+    const links = within(listing()).getAllByRole("link");
+    await user.tab();
+    expect(links[0]).toHaveFocus();
+    await user.tab();
+    expect(links[1]).toHaveFocus();
+    // Focus must be *visible*, not merely reachable: the browser's default
+    // outline is what a `focus:outline-none` in a hover style would remove.
+    expect(links[0]).toHaveClass("focus-visible:outline-2");
+  });
+
+  it("keeps a row whose owner has never set a display name", async () => {
+    // The row exists because the Handle is **claimed**, not because a
+    // `display_name` was filled in. Dropping it would make the listing
+    // disagree with the count that chose to render a listing at all — and
+    // would hide a real owner's Handle behind a field they left blank.
+    readDisplayNames.mockResolvedValue(new Map([[RED_ENCODED, "Ada Rose"]]));
+
+    render(await visit("apple.apple.apple"));
+
+    const rows = within(listing()).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(screen.getByRole("link", { name: GREEN_SPOKEN })).toHaveAttribute(
+      "href",
+      `/${GREEN_ENCODED}`,
+    );
+  });
+
+  it("omits the matches nobody has claimed", async () => {
+    // "An entry exists because a Profile exists" — an unclaimed or Reserved
+    // Handle has no owner to name, and listing one would advertise a Handle
+    // that is not somebody's.
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [redCandidate, greenCandidate, blueCandidate],
+    });
+    readAvailability.mockImplementation((segment: string) =>
+      Promise.resolve(segment === BLUE_ENCODED ? "not-claimable" : "claimed"),
+    );
+
+    render(await visit("apple.apple.apple"));
+
+    expect(within(listing()).getAllByRole("listitem")).toHaveLength(2);
+    expect(document.body.textContent).not.toMatch(new RegExp(BLUE, "u"));
+  });
+
+  it("costs one display-name read for the whole listing, and asks only about the rows it shows", async () => {
+    // The availability read already costs one per candidate — ADR-0008's worst
+    // measured alias is 64 of them — so the names must not double it. One
+    // batched read keeps the page at N + 1.
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [redCandidate, greenCandidate, blueCandidate],
+    });
+    readAvailability.mockImplementation((segment: string) =>
+      Promise.resolve(segment === BLUE_ENCODED ? "available" : "claimed"),
+    );
+
+    render(await visit("apple.apple.apple"));
+
+    expect(readDisplayNames).toHaveBeenCalledTimes(1);
+    expect(readDisplayNames).toHaveBeenCalledWith([RED_ENCODED, GREEN_ENCODED]);
+    // The single-Profile path must not also run: a listing shows no bio and no
+    // Links, so a Profile read here would be work done for nothing — and a
+    // Profile fetched for a Handle the visitor was not sent to.
+    expect(readProfile).not.toHaveBeenCalled();
+  });
+
+  it("still renders the listing when the display names cannot be read", async () => {
+    // The names decorate the rows; the emoji are the identity. A refused
+    // connection must degrade to emoji-only rows rather than to no page.
+    readDisplayNames.mockResolvedValue(new Map());
+
+    render(await visit("apple.apple.apple"));
+
+    expect(within(listing()).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByRole("img", { name: RED_SPOKEN })).toBeInTheDocument();
+  });
+
+  it("declares no canonical URL, because it is showing no single Handle", async () => {
+    // Decision 5 points `rel="canonical"` at *the* emoji path. A listing has
+    // several, and picking one would assert a meaning the alias does not have.
+    render(await visit("apple.apple.apple"));
+
+    expect(canonicalLink()).toBeNull();
+  });
+
+  it("neither redirects nor 404s", async () => {
+    render(await visit("apple.apple.apple"));
+
+    expect(permanentRedirect).not.toHaveBeenCalled();
+    expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it("grows no controls of its own", async () => {
+    // The tripwire the other branches carry: this route offers no buttons, and
+    // a listing is the branch most likely to sprout a filter or a sort.
+    render(await visit("apple.apple.apple"));
+
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });
 

@@ -9,7 +9,7 @@ import {
   type ProfileState,
 } from "@template/core";
 import { readAvailability } from "../../lib/availability";
-import { readProfile } from "../../lib/profile";
+import { readDisplayNames, readProfile } from "../../lib/profile";
 import { safeLinkHref } from "../../lib/safe-link";
 import { HandleBuilder } from "../../components/handle-builder";
 import { checkAvailability } from "../../components/availability-action";
@@ -118,10 +118,19 @@ type RenderedHandle = Pick<CanonicalHandle, "key" | "emoji">;
  * alias URL, and `rel="canonical"` — which is for machines, not for the address
  * bar — points at the emoji path instead (decision 5).
  *
- * **Several matches are a listing, and the listing is
- * [#109](https://github.com/joshstothard/3moji/issues/109).** Until it exists
- * this says so in one line and shows nothing: a listing rendered ahead of its
- * own issue would be the half of it that leaks Handles nobody claimed.
+ * **More than one claimed match is a listing** (decision 4,
+ * [#109](https://github.com/joshstothard/3moji/issues/109)): roughly one alias
+ * in ten needs a disambiguating tap, and sending somebody to the wrong Profile
+ * is worse than asking which they meant. Unclaimed and Reserved candidates are
+ * omitted from it — a row exists because the Handle is somebody's.
+ *
+ * **Several candidates of which none is claimed is still the one honest line**,
+ * and deliberately so. Decision 4's `none` row is the claim call to action,
+ * which is a page for one specific Handle; `apple.apple.apple` with nothing
+ * claimed does not name one, and a listing cannot cover it either because the
+ * ADR omits unclaimed Handles from listings. That gap is
+ * [#121](https://github.com/joshstothard/3moji/issues/121) and needs an ADR of
+ * its own — an accepted ADR cannot be edited, so it is not resolved here.
  */
 async function AliasedHandle({ segment }: { readonly segment: string }) {
   const alias = resolveAlias(segment);
@@ -143,6 +152,21 @@ async function AliasedHandle({ segment }: { readonly segment: string }) {
   );
 
   const claimed = matches.filter((match) => match.state === "claimed");
+
+  if (claimed.length > 1) {
+    /*
+     * The listing, and **one read for all of its names**. The rows are the
+     * claimed matches in the resolver's order — not sorted by name and not by
+     * recency, because ADR-0008 leaves ranking open and an order invented here
+     * would answer it by accident.
+     */
+    const listed = claimed.map((match) => match.candidate);
+    const displayNames = await readDisplayNames(
+      listed.map((candidate) => candidate.encoded),
+    );
+    return <AliasListing candidates={listed} displayNames={displayNames} />;
+  }
+
   // Exactly one claimed match is the Profile to show. Failing that, an alias
   // that names exactly one Handle still has a page — unclaimed, held, reserved
   // or unknown, whatever the read says — and it is the same page the emoji
@@ -189,13 +213,122 @@ async function AliasedHandle({ segment }: { readonly segment: string }) {
 }
 
 /**
- * An alias that could be more than one Handle.
+ * An alias that could be more than one Handle, **none of which anybody has**.
  *
- * It says so and stops. No emoji, no Handles, no controls: which of them to
- * show — and the privacy and ranking questions an index of Profiles brings —
- * is [#109](https://github.com/joshstothard/3moji/issues/109), and a listing
- * improvised here would answer those questions by accident.
+ * It says so and stops. No emoji, no Handles, no controls — and that is the
+ * only branch left saying it, now that more than one claimed match renders
+ * {@link AliasListing}. ADR-0008 omits unclaimed Handles from a listing, so
+ * there is nothing here a listing may show; and the claim call to action is a
+ * page for one specific Handle, which an alias naming eight does not give it.
+ * Choosing between them is
+ * [#121](https://github.com/joshstothard/3moji/issues/121), which needs its own
+ * ADR — decision 4's `none` row assumes a single candidate, and an accepted ADR
+ * cannot be edited.
  */
+/**
+ * One Handle as a listing shows it: what to render, and where it lives.
+ *
+ * {@link RenderedHandle} plus the one field a row needs that a rendered Handle
+ * does not — the emoji path to link to. Still no `isCanonical`, for the reason
+ * `RenderedHandle` drops it.
+ */
+type ListedHandle = RenderedHandle & { readonly encoded: string };
+
+/**
+ * The listing: the claimed Handles an alias could mean (ADR-0008 decision 4,
+ * [#109](https://github.com/joshstothard/3moji/issues/109)).
+ *
+ * **It is a list, and the semantics are the accessibility.** A `<ul>` with an
+ * accessible name announces "list, 8 items" and lets a screen reader user move
+ * through it by item; a stack of `<div>`s announces nothing and is the usual
+ * way a listing like this becomes unusable. Each row is one real `<a>`, so the
+ * keyboard path is the browser's own — one tab stop per row, `Enter` to follow,
+ * and a visible focus ring (WCAG 2.1.1 and 2.4.7).
+ *
+ * **The order is the resolver's.** ADR-0008 explicitly leaves ranking open, and
+ * sorting by display name or by recency here would answer that question by
+ * accident — and would make a listing whose order changed under somebody
+ * between two visits.
+ *
+ * **No `rel="canonical"` is emitted.** Decision 5 points it at *the* emoji path;
+ * a listing has several, and choosing one would assert a meaning the alias does
+ * not have.
+ */
+function AliasListing({
+  candidates,
+  displayNames,
+}: {
+  readonly candidates: readonly ListedHandle[];
+  readonly displayNames: ReadonlyMap<string, string>;
+}) {
+  return (
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="text-center">
+        <h1 className="text-3xl sm:text-4xl mb-4 tracking-tight text-slate-900">
+          {copy.aliasSeveralHeading}
+        </h1>
+        <p className="text-lg text-slate-500">{copy.aliasListing}</p>
+      </div>
+      <ul aria-label={copy.aliasListingLabel} className="mt-10 space-y-3">
+        {candidates.map((candidate) => (
+          <li key={candidate.key}>
+            <AliasListingRow
+              candidate={candidate}
+              displayName={displayNames.get(candidate.encoded)}
+            />
+          </li>
+        ))}
+      </ul>
+    </main>
+  );
+}
+
+/**
+ * One matching Handle, and its owner.
+ *
+ * **The accessible name is computed from the row's content**, deliberately, not
+ * set with an `aria-label` on the anchor: a label would discard everything
+ * inside it, so the owner's name would have to be repeated into it and could
+ * then drift from what is on screen. As written the link announces "three red
+ * apples, Ada Rose" — the Spoken Name, which is what stops three code points
+ * being read out one at a time, plus the thing that actually distinguishes this
+ * row from 🍏🍏🍏.
+ *
+ * **The display name is omitted when there is none**, rather than rendered as a
+ * gap. A claimed Handle whose owner has never edited anything is still
+ * somebody's and still belongs in the list; it is announced by its Handle
+ * alone, which is exactly what `UneditedHandle` says on its own page.
+ */
+function AliasListingRow({
+  candidate,
+  displayName,
+}: {
+  readonly candidate: ListedHandle;
+  readonly displayName: string | undefined;
+}) {
+  const spoken = spokenHandle(candidate.emoji.map((entry) => entry.emoji));
+
+  return (
+    <a
+      href={`/${candidate.encoded}`}
+      className="flex items-center gap-4 rounded-xl bg-white px-5 py-4 shadow-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+    >
+      <span
+        className="text-4xl"
+        role="img"
+        aria-label={spoken ?? candidate.key}
+      >
+        {candidate.key}
+      </span>
+      {displayName !== undefined && (
+        <span className="text-lg text-slate-900 break-words">
+          {displayName}
+        </span>
+      )}
+    </a>
+  );
+}
+
 function AmbiguousAlias() {
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
