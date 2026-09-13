@@ -102,7 +102,9 @@ Every schema change requires a versioned migration file committed in the same PR
 
 ### Styling
 
-This project uses **Tailwind CSS v4** (CSS-first, no `tailwind.config.ts` needed). The PostCSS plugin is `@tailwindcss/postcss`. Global styles live in `apps/web/src/app/globals.css` and consist of a single `@import "tailwindcss"` directive.
+This project uses **Tailwind CSS v4** (CSS-first, no `tailwind.config.ts` needed). The PostCSS plugin is `@tailwindcss/postcss`. Global styles live in `apps/web/src/app/globals.css`: the `@import "tailwindcss"` directive, and one `@theme` block registering the Handle builder's rare three-of-a-kind animations, `animate-rare-pop` and `animate-rare-hop` ([#202](https://github.com/joshstothard/3moji/issues/202)).
+
+**Motion is opt-in and brief.** Apply an animation only through the `motion-safe:` variant, so `prefers-reduced-motion: reduce` gets none and a static equivalent carries the meaning; run it once (never `infinite`) and within about a second; and animate `transform` rather than `opacity`, so text rests fully opaque and its contrast can be measured. A CSS animation replays when its element is inserted, so to play one again, remount the element with a `key` rather than toggling a class on a permanent control.
 
 Design tokens in use: `slate` for neutrals, `indigo-600` for the primary accent, `rounded-xl` cards, `shadow-sm` elevation, `bg-slate-50` page background. Keep new UI consistent with these.
 

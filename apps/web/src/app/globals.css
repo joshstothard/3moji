@@ -1,1 +1,38 @@
 @import "tailwindcss";
+
+/*
+ * The rare three-of-a-kind celebration in the Handle builder (#202).
+ *
+ * Registered as theme animations so they are used like any other Tailwind
+ * utility, and only ever through `motion-safe:`: under
+ * `prefers-reduced-motion: reduce` neither class applies, and the static badge
+ * is all that shows. Each runs once, well inside a second, and animates
+ * `transform` alone — never `opacity` — so the badge rests fully opaque and its
+ * contrast is what it measures.
+ */
+@theme {
+  --animate-rare-pop: rare-pop 800ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-rare-hop: rare-hop 500ms ease-out both;
+
+  @keyframes rare-pop {
+    0% {
+      transform: scale(0.4) rotate(-8deg);
+    }
+    60% {
+      transform: scale(1.15) rotate(3deg);
+    }
+    100% {
+      transform: none;
+    }
+  }
+
+  @keyframes rare-hop {
+    0%,
+    100% {
+      transform: none;
+    }
+    40% {
+      transform: translateY(-0.5rem) scale(1.15);
+    }
+  }
+}
