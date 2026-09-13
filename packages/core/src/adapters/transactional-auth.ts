@@ -29,7 +29,13 @@ export interface TransactionalAuthInput {
   readonly db: Database;
   /** Rebuilds auth against the transaction. Supplied by the composition root. */
   readonly auth: AuthFactory;
-  /** The real sender. Wrapped per transaction, never called during one. */
+  /**
+   * The real sender. Wrapped per transaction, never called during one.
+   * **The raw provider, never a background sender** (#216): `flush` drops an
+   * email only once `send` resolves, so a sender that merely schedules would
+   * let a failed delivery vanish from the held list. The flush itself is what
+   * goes to the background.
+   */
   readonly emailSender: EmailSender;
   /** Where the post-commit flush runs: after the answer, not inside it (#216). */
   readonly tasks: BackgroundTasks;
