@@ -1,6 +1,11 @@
 import {
   authSchema,
+  BIO_MAX_LENGTH,
   BLOCKED_EMOJI,
+  DISPLAY_NAME_MAX_LENGTH,
+  LINK_LIMIT,
+  LINK_TITLE_MAX_LENGTH,
+  validateProfile,
   candidateEmojiSet,
   claimableHandle,
   createCoreServices,
@@ -8,6 +13,10 @@ import {
   createRecordingEmailSender,
   createResendEmailSender,
   createSystemClock,
+  createDrizzleProfileStore,
+  editProfile,
+  profileEditAuthority,
+  toHandleKey,
   findEmojiByCodepoint,
   isClaimableEmoji,
   isReservedHandle,
@@ -24,6 +33,9 @@ import type {
   CoreDependencies,
   CoreServices,
   EmojiSetEntry,
+  ProfileDraft,
+  ProfileEditAuthority,
+  ProfileValidationResult,
 } from "./index";
 
 describe("package entry point", () => {
@@ -126,5 +138,59 @@ describe("package entry point", () => {
     // not compile if `ReleaseStore` is not exported.
     const store: ReleaseStore | undefined = undefined;
     expect(store).toBeUndefined();
+  });
+
+  /**
+   * The Profile's field limits, through the public API alone. The form and the
+   * server action that call this are #106's; an export left out here is a
+   * limit that lives nowhere the transport layer can reach, which is the exact
+   * failure `data-model.md` § Profile says the domain enforcement exists to
+   * prevent.
+   */
+  it("exports the Profile field limits and their guard", () => {
+    expect(DISPLAY_NAME_MAX_LENGTH).toBe(30);
+    expect(BIO_MAX_LENGTH).toBe(160);
+    expect(LINK_LIMIT).toBe(10);
+    expect(LINK_TITLE_MAX_LENGTH).toBe(40);
+
+    const draft: ProfileDraft = {
+      displayName: "Ice Cube",
+      bio: "Three emoji, said aloud.",
+      links: [{ title: "Home", url: "javascript:alert(1)" }],
+    };
+    const result: ProfileValidationResult = validateProfile(draft);
+    expect(result).toEqual({
+      ok: false,
+      violations: [
+        {
+          field: "link.url",
+          index: 0,
+          rule: "unsupported-scheme",
+          scheme: "javascript:",
+        },
+      ],
+    });
+  });
+
+  /**
+   * The Profile write path, reached from `apps/web` — the edit route, its
+   * server action, and the transport-side authority composition all import
+   * these. An export left out here is a rule the transport cannot reach, which
+   * is how a limit or an authorisation check ends up reimplemented in a form.
+   */
+  it("exports the Profile write path and its authority rule", () => {
+    expect(typeof editProfile).toBe("function");
+    expect(typeof createDrizzleProfileStore).toBe("function");
+    expect(typeof profileEditAuthority).toBe("function");
+
+    const key = toHandleKey("\u{1F9CA}\u{1F9CA}\u{1F9CA}");
+    if (key === undefined) throw new Error("the test Handle must canonicalise");
+
+    const verdict: ProfileEditAuthority = profileEditAuthority({
+      viewer: { userId: "somebody-else" },
+      owned: undefined,
+      requested: key,
+    });
+    expect(verdict).toEqual({ state: "no-handle" });
   });
 });

@@ -175,7 +175,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 **Acceptance criteria:**
 
 - [ ] A visitor at a claimed Handle sees the display name, bio, and ordered Links.
-- [ ] An unclaimed Handle renders the builder pre-filled with those three emoji and a claim call to action.
+- [x] An unclaimed Handle renders the builder pre-filled with those three emoji and a claim call to action. Done by [#105](https://github.com/joshstothard/3moji/issues/105): the same `HandleBuilder`, given `initialEmoji` from the path. Reserved and `unknown` deliberately do **not** render it.
 - [ ] A held Handle reveals nothing about who holds it, and shows no expiry timestamp.
 - [ ] Limits are enforced in `packages/core`: 30, 160, 10, and 40 characters, with `http` and `https` URLs only.
 - [ ] A mutation revalidates the cache before redirecting, so the change is visible immediately.
@@ -183,6 +183,10 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - [ ] Dotted path segments survive the deployed environment, not only `next dev` — ADR-0008's evidence for this was measured locally only, and Vercel's CDN may treat a dotted segment as a static-file request.
 
 **Dependencies:** Phase 3. [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
+
+**Status:** In progress. Planned as epic [#101](https://github.com/joshstothard/3moji/issues/101).
+
+**The storage layer is built** — [#102](https://github.com/joshstothard/3moji/issues/102): the `profile` and `link` tables, their migration, and the read port that resolves a canonical `HandleKey` to a Profile. A Profile is keyed on the Account, so Release takes it and its Links with it; Links carry an explicit order, and "at most ten" is enforced by the schema rather than by the write path. "Claimed but unedited" is a named state rather than an empty object. See [`data-model.md` § Profile](../architecture/data-model.md#profile). The field limits themselves are [#103](https://github.com/joshstothard/3moji/issues/103)'s and the write path is [#106](https://github.com/joshstothard/3moji/issues/106)'s; there is no page yet.
 
 **Issues:**
 

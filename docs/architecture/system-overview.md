@@ -23,7 +23,7 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 ## Routing
 
-**Partly built.** Three routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, and the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊`.
+**Partly built.** Four routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — and the owner's edit surface at `/[handle]/edit`.
 
 ### The home page
 
@@ -47,11 +47,11 @@ A swap suggestion is the one control that **cannot** be permanent: taking it mak
 
 `apps/web/src/app/[handle]/page.tsx` is a thin transport adapter: it hands the received path segment to `canonicalise` in `packages/core`, asks `lib/availability.ts` what is true about the Handle, and formats the answer. It holds no canonicalisation logic and decides nothing about availability itself.
 
-| `canonicalise` says           | The route answers                                              |
-| ----------------------------- | -------------------------------------------------------------- |
-| not a Handle, for any reason  | `notFound()` — 404. Junk is never redirected                   |
-| a Handle, spelled oddly       | `permanentRedirect("/" + encoded)` — 308 to the canonical path |
-| a Handle, spelled canonically | 200, and one honest line about its availability                |
+| `canonicalise` says           | The route answers                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------- |
+| not a Handle, for any reason  | `notFound()` — 404. Junk is never redirected                                           |
+| a Handle, spelled oddly       | `permanentRedirect("/" + encoded)` — 308 to the canonical path                         |
+| a Handle, spelled canonically | 200: the Profile if it is claimed, the builder if it is free, an honest line otherwise |
 
 Two constraints from [the emoji URL report](../reports/2026-09-11-emoji-urls.md) bind any future work on this route, and both were re-confirmed against the pinned Next.js version:
 
@@ -62,11 +62,49 @@ A malformed escape such as `/%F0%9F` never reaches the page: Next.js rejects it 
 
 **The dynamic segment is one segment, not a catch-all**, so it cannot claim `/api/auth/...` or any other multi-segment path. An end-to-end test asserts that, because `[...handle]` would compile, match those paths and 404 them.
 
-That line comes from `lib/availability.ts`, the one availability read, shared with the builder's server action so the two surfaces cannot drift. It is a Handle's state and nothing more: **available, taken, on hold, reserved, or "we could not check this Handle just now"**. A reserved Handle — `/🍕🍕🍕`, `/🔪🔪🔪` — resolves rather than 404ing, and says neither which kind of reservation it is nor, when held, who holds it or until when: the read answers with a state name, so neither the `Reservation` nor an expiry ever crosses out of `packages/core` to be rendered by accident ([#68](https://github.com/joshstothard/3moji/issues/68), ADR-0004). The unclaimed state is still one line rather than the pre-filled builder the Profile section of [data-model.md](data-model.md) describes; that is Phase 4.
+That line comes from `lib/availability.ts`, the one availability read, shared with the builder's server action so the two surfaces cannot drift. It is a Handle's state and nothing more: **available, taken, on hold, reserved, or "we could not check this Handle just now"**. A reserved Handle — `/🍕🍕🍕`, `/🔪🔪🔪` — resolves rather than 404ing, and says neither which kind of reservation it is nor, when held, who holds it or until when: the read answers with a state name, so neither the `Reservation` nor an expiry ever crosses out of `packages/core` to be rendered by accident ([#68](https://github.com/joshstothard/3moji/issues/68), ADR-0004). Two states are the exception, and neither is a line. **Unclaimed** renders the builder, holding those three emoji ([#105](https://github.com/joshstothard/3moji/issues/105)) — see § The unclaimed Handle below. **Claimed** renders the Profile ([#104](https://github.com/joshstothard/3moji/issues/104)) — see § The claimed Handle below.
 
 **The read runs after both early exits, and degrades rather than failing.** `notFound()` and `permanentRedirect()` signal by throwing, so the read — which has a `try/catch` of its own — sits below them; catching around them would swallow the 404 and the 308. When `lib/services.ts` cannot be built (a clone with no environment, CI's E2E job with one variable of five), the read falls back to `claimableHandle`, which is pure: _reserved_ and _not a Handle_ still answer with certainty, and only the three ownership-dependent states degrade to "unknown".
 
-**Swap suggestions belong to the builder, not to this route.** When the builder's pick comes back taken, held or reserved, it offers three alternatives from `swapSuggestions` in `packages/core` — each replacing one emoji with another from the **same Unicode group** ([ADR-0005](../adr/0005-the-emoji-set.md) decision 4), deterministic, never a Reserved Handle, and never the pick itself. It promises "well-formed and not Reserved", not "free": proving free would be a database read per suggestion. Taking a suggestion replaces the whole Handle and **moves focus to the slot that changed**, because the suggestion button that had focus is unmounted by its own success. A Handle typed into the address bar is not a pick, so `/[handle]` stays free of controls; its test asserts that as the tripwire for growing past its remit. The builder on `/` still offers no Claim of its own — that is #81's own route.
+**Swap suggestions belong to the builder, not to this route.** When the builder's pick comes back taken, held or reserved, it offers three alternatives from `swapSuggestions` in `packages/core` — each replacing one emoji with another from the **same Unicode group** ([ADR-0005](../adr/0005-the-emoji-set.md) decision 4), deterministic, never a Reserved Handle, and never the pick itself. It promises "well-formed and not Reserved", not "free": proving free would be a database read per suggestion. Taking a suggestion replaces the whole Handle and **moves focus to the slot that changed**, because the suggestion button that had focus is unmounted by its own success. A Handle typed into the address bar is not a pick, so `/[handle]` offers no suggestions of its own — but when the Handle is unclaimed it renders the builder, which brings its own (§ The unclaimed Handle). For the four answers that are a line, the route stays free of controls, and its test counts buttons as the tripwire for growing past its remit. The builder on `/` still offers no Claim of its own — that is #81's own route.
+
+### The unclaimed Handle
+
+`/🧊🧊🧊` with nobody holding it renders **the home page's builder, pre-filled**. Somebody who typed a Handle into the address bar has already made the pick, so the page opens on it: three full slots, the spoken tagline, the live URL preview, the category tabs and search, and one line inviting the claim. `docs/architecture/data-model.md` § Profile has described this since Phase 2.
+
+**It is the same component, not a second one.** `HandleBuilder` grew one optional prop — `initialEmoji`, applied through a lazy `useState` initialiser so a re-render cannot throw away what the visitor has picked since — and the route passes the emoji `canonicalise` already returned. A forked builder would have drifted within a week, and would have taken the permanent-control focus behaviour with it; the route's own suite therefore re-asserts #78's focus regression and #79's category tabs against the real builder rendered from this route.
+
+The availability read is the same `checkAvailability` server action the home page injects, over the same `lib/availability.ts` the route just called, so the live line under the slots cannot disagree with the answer that put the builder on the page.
+
+**Four answers must not render it, and two of those are defects if they ever do.** Taken and held are somebody else's Handle. **Reserved** can never be claimed, so inviting a claim would be [#68](https://github.com/joshstothard/3moji/issues/68) in a new form. **`unknown`** means the read failed — it cannot know the Handle is free, and on a machine with no database _every_ claimable Handle answers `unknown`, so a builder rendered there would be an invitation issued on no evidence at all. The route holds this in the type: its copy `Record` is keyed on the resolved states **with `available` excluded**, and "This Handle is available." has left the `HandlePage` namespace entirely — the wording now belongs to the builder, which owns the live line. The unit suite counts controls rather than copy (the builder _is_ buttons: three slots and 307 emoji), and asserts zero of them for all four.
+
+### The claimed Handle
+
+`/🧊🧊🧊` with an owner behind it renders **the Profile** — the page the product exists to show ([#104](https://github.com/joshstothard/3moji/issues/104)). The shape of the three states, the field-by-field rules and the Link safety are in [data-model.md](data-model.md) § Profile; what belongs here is the routing.
+
+**It is a second read, and it runs only when the first answered `claimed`.** `lib/availability.ts` stays exactly what it was — one state name, shared with the builder's server action — and `lib/profile.ts` sits beside it, composing that answer with `ProfileRepository.profileOf` through the pure `profileStateOf`. Both reads are handed the **same percent-encoded segment**, so the two answers cannot be about different Handles. The 404 and the 308 still run before either of them.
+
+**Nothing widened to carry a Profile through.** `AvailabilityState` is still `HandleAvailability["state"] | "unknown"`, so the `Reservation` and the hold expiry still never leave `packages/core` ([#80](https://github.com/joshstothard/3moji/issues/80)). The Profile arrives as its own value, on its own read, gated on `claimed` three times over: `readProfile` issues no query otherwise, `profileStateOf` composes nothing otherwise, and the route's branch is nested under `claimed`. The unit suite forces the hostile case — a fully-populated Profile pushed at the page for a held, reserved and unknown Handle — and asserts the page still shows nothing but its line, because "I did not render it" is not evidence and a future debug view is exactly how this leaks.
+
+**A failed Profile read degrades to the line, not to an empty page.** `lib/services.ts` needs five environment variables, so on a clone with none the availability read already answers `unknown` and no Profile is ever fetched; when the Handle _is_ claimed and the Profile read fails anyway, the answer is `none` and the route falls back to "This Handle is taken." — never `unedited`, which would be a statement about an owner the query never reached.
+
+### Editing the Profile
+
+`/🧊🧊🧊/edit` is the owner's surface ([#106](https://github.com/joshstothard/3moji/issues/106)): the display name, the bio, and a list of Links that can be added to, changed and removed. Reordering is not here — it is [#107](https://github.com/joshstothard/3moji/issues/107), and until it lands the row order **is** the order.
+
+It canonicalises its segment exactly as `/[handle]` does, and redirects a non-canonical spelling to `/{encoded}/edit` rather than to the Profile, so an oddly-spelled URL does not silently drop the owner out of the form they asked for.
+
+**Authorisation is two independent layers, and the action's is the one that matters.** The page decides whether a form is rendered; `saveProfileAction` decides whether a write happens, and it enforces the rule itself rather than trusting that the form was ever shown — a server action is a public HTTP endpoint, so it can be posted to directly, with any Handle in the body, by anyone holding a session cookie. The rule is `profileEditAuthority` in `packages/core`, pure and composed by `lib/profile-edit.ts` from two server-side facts: who the **session** says is asking (`lib/session.ts`, the one place an identity enters the application) and what the Account directory says that id owns. The Handle in the request is the thing compared, never the thing trusted.
+
+It refuses four ways — signed out, no Handle, a Claim that is not final, and the Handle being somebody else's. The page sends the first to `/sign-in` and answers the rest `notFound()`, which says nothing about whether the Handle exists or who owns it; the action collapses all four into one `forbidden`. **The middle case is the one an authorisation bug actually reaches**: `profile.user_id` is the primary key, so a write derived from the session with no comparison would not fail loudly — it would quietly rewrite the requester's *own* Profile while they were asking about somebody else's.
+
+**Failing to read is refusing.** `lib/services.ts` needs five environment variables and every read here can be refused; each such failure answers "not signed in" or "owns nothing" rather than an error, because "we could not check" must never open an edit form. The same caution runs the other way for the Profile itself: a Profile that could not be **read** renders a notice instead of a blank form, since blanks offered to an owner are an invitation to save them over content that is still there, and the write replaces the whole Link list.
+
+**A rejected save keeps what was typed and says what to fix.** The limits are `validateProfile`'s and are not restated in the form: the action passes the draft to `editProfile`, and the form renders the violations that come back — each one associated with its own control by `aria-invalid` and `aria-describedby`, since a message merely sitting beside an input is invisible to a screen reader. The numbers in the messages are the violation's own, so a limit that moves in the domain moves here with it.
+
+**The save revalidates before it redirects**, in that order: without busting the cache first, Next serves the cached Handle page and the edit appears not to have taken effect (`docs/development/engineering-standards.md` § Frontend). The path is the percent-encoded segment, never the raw key.
+
+**There is no link to it from the public Handle page yet**, and that is deliberate rather than forgotten: rendering an owner-only control there means reading the session on the most-read page in the product, which makes it per-visitor and uncacheable. An owner reaches the form by URL until that trade-off is decided.
 
 ### The word alias
 

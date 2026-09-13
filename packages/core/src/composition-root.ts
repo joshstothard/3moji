@@ -7,6 +7,8 @@ import { createDrizzleAccountDirectory } from "./adapters/drizzle-account-direct
 import { createDrizzleClaimFinaliser } from "./adapters/drizzle-claim-finaliser";
 import { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
 import { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
+import { createDrizzleProfileRepository } from "./adapters/drizzle-profile-repository";
+import { createDrizzleProfileStore } from "./adapters/drizzle-profile-store";
 import { createDrizzleReleaseStore } from "./adapters/drizzle-release-store";
 import { createDrizzleVerificationDispatchStore } from "./adapters/drizzle-verification-dispatch-store";
 import type { Database } from "./db/client";
@@ -16,6 +18,8 @@ import type { Clock } from "./ports/clock";
 import type { ClaimStore } from "./ports/claim-store";
 import type { ReleaseStore } from "./ports/release-store";
 import type { HandleRepository } from "./ports/handle-repository";
+import type { ProfileRepository } from "./ports/profile-repository";
+import type { ProfileStore } from "./ports/profile-store";
 import type { VerificationDispatchStore } from "./ports/verification-dispatch-store";
 
 /**
@@ -56,6 +60,20 @@ export interface CoreServices {
    */
   readonly verificationMailer: VerificationMailer;
   readonly handles: HandleRepository;
+  /**
+   * The Profile behind a Handle, for the page a visitor lands on. Read-only for
+   * the reason {@link handles} is: editing a Profile rewrites the row and its
+   * whole Link list as one act (#106), so those writes belong on a unit of work
+   * and not on the port a page read holds.
+   */
+  readonly profiles: ProfileRepository;
+  /**
+   * The Profile's unit of work: the row and its whole Link list, rewritten as
+   * one act (#106). Separate from {@link profiles}, which is read-only by
+   * design — the writes exist only on the object the transaction hands out, so
+   * a page read cannot rewrite somebody's Links.
+   */
+  readonly profileEdits: ProfileStore;
   /**
    * The Claim's unit of work. Separate from {@link handles}, which is read-only
    * by design: the writes exist only on the object the transaction hands out,
@@ -152,6 +170,11 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     auth,
     verificationMailer: createBetterAuthVerificationMailer(auth),
     handles: createDrizzleHandleRepository(deps.db),
+    profiles: createDrizzleProfileRepository(deps.db),
+    // A plain transaction, like the Release's: an edit writes no Better Auth
+    // row and sends no email, so there is nothing to rebind and nothing to
+    // defer until the commit.
+    profileEdits: createDrizzleProfileStore({ db: deps.db }),
     claims: createDrizzleClaimStore(transactional),
     claimFinaliser: createDrizzleClaimFinaliser(transactional),
     // No auth rebinding and no deferred sender: a Release writes no Better Auth
