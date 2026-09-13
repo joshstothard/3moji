@@ -17,6 +17,7 @@ import { createDrizzleProfileRepository } from "./drizzle-profile-repository";
 import { createDrizzleProfileStore } from "./drizzle-profile-store";
 import { createDrizzleReleaseStore } from "./drizzle-release-store";
 import { createDrizzleVerificationDispatchStore } from "./drizzle-verification-dispatch-store";
+import { createHeldBackgroundTasks } from "./held-background-tasks";
 
 /**
  * **No bound query parameter leaves a `packages/core` adapter inside an error**
@@ -165,6 +166,7 @@ describe("errors leaving a transactional store (#144)", () => {
       db: scriptedDatabase(),
       auth: authFactory,
       emailSender: createRecordingEmailSender(),
+      tasks: createHeldBackgroundTasks(),
     });
 
     const error = await rejectionOf(
@@ -226,6 +228,7 @@ describe("errors leaving a transactional store (#144)", () => {
       db: scriptedDatabase(),
       auth: authFactory,
       emailSender: createRecordingEmailSender(),
+      tasks: createHeldBackgroundTasks(),
     });
 
     const error = await rejectionOf(
@@ -330,6 +333,7 @@ describe("what the stores still pass through untouched (#144)", () => {
       db: scriptedDatabase(),
       auth: authFactory,
       emailSender: createRecordingEmailSender(),
+      tasks: createHeldBackgroundTasks(),
     });
     const own = new Error("the domain's own failure");
 

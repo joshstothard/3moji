@@ -1,3 +1,4 @@
+import { createHeldBackgroundTasks } from "../adapters/held-background-tasks";
 import { createInMemoryClaimRateLimitStore } from "../adapters/in-memory-claim-rate-limit-store";
 import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import type {
@@ -5,6 +6,11 @@ import type {
   AccountRecord,
 } from "../ports/account-directory";
 import type { Clock } from "../ports/clock";
+import {
+  createBackgroundEmailSender,
+  DEFERRED_EMAIL_FAILURE_EVENTS,
+} from "./adapters/background-email-sender";
+import type { EmailSender } from "./ports/email-sender";
 import { RESEND_LIMITS } from "./resend-allowance";
 import {
   resendVerification,
@@ -307,5 +313,104 @@ describe("resendVerification", () => {
     await resend();
 
     expect(dispatches.recorded).toEqual([]);
+  });
+});
+
+/**
+ * **The send, as production wires it**
+ * ([#216](https://github.com/joshstothard/3moji/issues/216)): Better Auth's
+ * `sendVerificationEmail` hook runs for an unverified Account only, and its
+ * sender is the background one the composition root builds.
+ */
+describe("resendVerification when the email provider is slow or failing (#216)", () => {
+  const PROVIDER_MS = 2_000;
+
+  function wired(provider: "slow" | "failing") {
+    let now = NOW.getTime();
+    const clock: Clock = { now: () => new Date(now) };
+    const delivered: string[] = [];
+    const tasks = createHeldBackgroundTasks();
+    const inner: EmailSender = {
+      send: (email) => {
+        now += PROVIDER_MS;
+        delivered.push(email.to);
+        return provider === "slow"
+          ? Promise.resolve()
+          : Promise.reject(new Error("the provider is unavailable"));
+      },
+    };
+    const sender = createBackgroundEmailSender({
+      inner,
+      tasks,
+      event: DEFERRED_EMAIL_FAILURE_EVENTS.auth,
+    });
+    const mailer: VerificationMailer = {
+      send: (email) =>
+        sender.send({
+          to: email,
+          subject: "Verify your email to claim your 3moji handle",
+          text: "Verify your email: https://3moji.me/claim/verify?token=token",
+        }),
+    };
+    const answer = async (account: AccountRecord | undefined) => {
+      const started = now;
+      const outcome = await resendVerification({
+        email: STORED_EMAIL,
+        clientAddress: "203.0.113.7",
+        clientLimiter: { admit: () => Promise.resolve({ state: "admitted" }) },
+        directory: {
+          byEmail: () => Promise.resolve(account),
+          handleOf: () => Promise.resolve(undefined),
+        },
+        dispatches: createInMemoryVerificationDispatchStore(),
+        mailer,
+        clock,
+        sleep: (ms) => {
+          now += ms;
+          return Promise.resolve();
+        },
+      });
+      return { outcome, tookMs: now - started };
+    };
+    return { answer, tasks, delivered };
+  }
+
+  it("answers an unverified Account at the floor though its email takes two seconds, exactly as an unknown address", async () => {
+    const known = wired("slow");
+    const unknown = wired("slow");
+
+    const answers = [
+      await known.answer(UNVERIFIED),
+      await unknown.answer(undefined),
+    ];
+
+    expect(answers[1]).toEqual(answers[0]);
+    expect(answers[0]).toEqual({
+      outcome: { state: "sent" },
+      tookMs: RESPONSE_FLOOR_MS,
+    });
+    expect(known.delivered).toEqual([]);
+    await Promise.all([known.tasks.release(), unknown.tasks.release()]);
+    expect(known.delivered).toEqual([STORED_EMAIL]);
+    expect(unknown.delivered).toEqual([]);
+  });
+
+  it("answers sent when the provider fails, and the failure is reported once, after the answer", async () => {
+    const known = wired("failing");
+    const unknown = wired("failing");
+
+    const answers = [
+      await known.answer(UNVERIFIED),
+      await unknown.answer(undefined),
+    ];
+
+    expect(answers[1]).toEqual(answers[0]);
+    expect(answers[0]?.outcome).toEqual({ state: "sent" });
+    expect(known.tasks.failures).toEqual([]);
+    await Promise.all([known.tasks.release(), unknown.tasks.release()]);
+    expect(known.tasks.failures.map((failure) => failure.event)).toEqual([
+      "auth_email_send_failed",
+    ]);
+    expect(unknown.tasks.failures).toEqual([]);
   });
 });

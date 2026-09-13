@@ -1,6 +1,8 @@
+import { DEFERRED_EMAIL_FAILURE_EVENTS } from "../auth/adapters/background-email-sender";
 import { createDeferredEmailSender } from "../auth/adapters/deferred-email-sender";
 import type { Auth, AuthFactory } from "../auth/auth-factory";
 import type { EmailSender } from "../auth/ports/email-sender";
+import type { BackgroundTasks } from "../ports/background-tasks";
 import type { Database, DatabaseOrTransaction } from "../db/client";
 import { toSafeDatabaseError } from "../db/database-error";
 import type { TransactionOutcome } from "../ports/claim-store";
@@ -27,8 +29,16 @@ export interface TransactionalAuthInput {
   readonly db: Database;
   /** Rebuilds auth against the transaction. Supplied by the composition root. */
   readonly auth: AuthFactory;
-  /** The real sender. Wrapped per transaction, never called during one. */
+  /**
+   * The real sender. Wrapped per transaction, never called during one.
+   * **The raw provider, never a background sender** (#216): `flush` drops an
+   * email only once `send` resolves, so a sender that merely schedules would
+   * let a failed delivery vanish from the held list. The flush itself is what
+   * goes to the background.
+   */
   readonly emailSender: EmailSender;
+  /** Where the post-commit flush runs: after the answer, not inside it (#216). */
+  readonly tasks: BackgroundTasks;
 }
 
 /**
@@ -42,9 +52,13 @@ export interface TransactionalAuthInput {
  * 1. **Auth rebound to the transaction.** Better Auth's Drizzle adapter issues
  *    every statement through the client it was constructed with, so an instance
  *    built on the pool would put its rows outside the transaction.
- * 2. **Email held until the commit.** An email cannot be rolled back. Better
- *    Auth sends from inside `signUpEmail`, so the sender is wrapped, flushed
- *    after a commit and discarded after a rollback.
+ * 2. **Email held until the commit, and sent after the answer.** An email
+ *    cannot be rolled back. Better Auth sends from inside `signUpEmail`, so
+ *    the sender is wrapped, flushed after a commit and discarded after a
+ *    rollback — and the flush is handed to the background (#216), because a
+ *    fresh Claim's verification email sent inside the request would make it
+ *    the one branch of the Claim that waits on the email provider, or fails
+ *    because of it.
  * 3. **The dispatch store bound to the same transaction**, for the same reason
  *    as auth: the `sendVerificationEmail` hook records the link it issued, and
  *    a row written outside would outlive the rollback and invalidate a link for
@@ -90,8 +104,15 @@ export async function runWithTransactionalAuth<T>(
   }
 
   if (outcome.commit) {
-    // After the commit, never inside it: an email cannot be rolled back.
-    await deferred.flush();
+    // After the commit, never inside it: an email cannot be rolled back. And
+    // after the answer (#216). **One task for the whole flush**, not one per
+    // email: Next.js runs separate `after()` callbacks through a queue that is
+    // not serial, and the held emails are ordered messages to one person.
+    if (deferred.held.length > 0) {
+      input.tasks.run(DEFERRED_EMAIL_FAILURE_EVENTS.claimVerification, () =>
+        deferred.flush(),
+      );
+    }
   } else {
     deferred.discard();
   }

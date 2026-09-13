@@ -5,6 +5,7 @@ import {
   claimHandle,
   createCoreServices,
   createDatabase,
+  createHeldBackgroundTasks,
   createRecordingEmailSender,
   createSystemClock,
   curatedEmojiSet,
@@ -99,6 +100,8 @@ export async function seedClaimedHandle(
   const chooseEmoji = options.chooseEmoji ?? randomHandleEmoji;
   const reserved = unclaimedSeveralHandleKeys();
   const emailSender = createRecordingEmailSender();
+  // Email goes out after the answer (#216); released before the link is read.
+  const tasks = createHeldBackgroundTasks();
   const clock = createSystemClock();
   const { db, close } = createDatabase({ url: requiredEnv("DATABASE_URL") });
 
@@ -106,6 +109,7 @@ export async function seedClaimedHandle(
     const services = createCoreServices({
       clock,
       db,
+      backgroundTasks: tasks,
       auth: {
         emailSender,
         baseUrl: requiredEnv("BETTER_AUTH_URL"),
@@ -141,6 +145,7 @@ export async function seedClaimedHandle(
         throw new Error(`The seed Claim answered "${claim.state}".`);
       }
 
+      await tasks.release();
       const finalised = await finaliseClaim({
         token: verificationTokenFrom(emailSender.lastSent()?.text),
         dispatches: services.dispatches,
@@ -214,6 +219,7 @@ export async function sessionCookieFor(credentials: {
     const services = createCoreServices({
       clock: createSystemClock(),
       db,
+      backgroundTasks: createHeldBackgroundTasks(),
       auth: {
         emailSender: createRecordingEmailSender(),
         baseUrl: requiredEnv("BETTER_AUTH_URL"),
@@ -267,6 +273,8 @@ export async function requestPasswordResetLink(
   email: string,
 ): Promise<{ readonly token: string; readonly path: string }> {
   const emailSender = createRecordingEmailSender();
+  // Email goes out after the answer (#216); released before the link is read.
+  const tasks = createHeldBackgroundTasks();
   const clock = createSystemClock();
   const { db, close } = createDatabase({ url: requiredEnv("DATABASE_URL") });
 
@@ -274,6 +282,7 @@ export async function requestPasswordResetLink(
     const services = createCoreServices({
       clock,
       db,
+      backgroundTasks: tasks,
       auth: {
         emailSender,
         baseUrl: requiredEnv("BETTER_AUTH_URL"),
@@ -285,6 +294,7 @@ export async function requestPasswordResetLink(
     if ((await services.passwordResetter.request(email)) !== "accepted") {
       throw new Error("The seed reset request was refused as invalid.");
     }
+    await tasks.release();
     return resetLinkFrom(emailSender.lastSent()?.text);
   } finally {
     await close();
@@ -302,6 +312,7 @@ export async function claimCollisionResetPath(): Promise<string> {
     const services = createCoreServices({
       clock: createSystemClock(),
       db,
+      backgroundTasks: createHeldBackgroundTasks(),
       auth: {
         emailSender: createRecordingEmailSender(),
         baseUrl: requiredEnv("BETTER_AUTH_URL"),

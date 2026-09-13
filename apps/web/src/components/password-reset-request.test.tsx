@@ -44,9 +44,24 @@ const { DatabaseQueryFailed } = jest.requireActual<{
   ) => Error;
 }>("../../../../packages/core/src/db/database-error");
 
+const { createBackgroundEmailSender } = jest.requireActual<{
+  readonly createBackgroundEmailSender: typeof Core.createBackgroundEmailSender;
+}>("../../../../packages/core/src/auth/adapters/background-email-sender");
+
 jest.mock("@template/core", () => ({
   requestPasswordReset: (input: Core.RequestPasswordResetInput) =>
     requestPasswordReset(input),
+}));
+
+/**
+ * Next.js's `after()`, held: what the real `createAfterBackgroundTasks` hands
+ * it, run by a test once the response is complete (#216).
+ */
+const afterResponse: (() => Promise<void>)[] = [];
+jest.mock("next/server", () => ({
+  after: (callback: () => Promise<void>) => {
+    afterResponse.push(callback);
+  },
 }));
 
 /** Better Auth's HTTP limit: what the form must not exceed. */
@@ -99,12 +114,14 @@ const resetter: Core.PasswordResetter = {
   reset: () => Promise.resolve({ state: "reset" }),
 };
 
+let activeResetter: Core.PasswordResetter = resetter;
+
 jest.mock("../lib/services", () => ({
   getServices: () => ({
     // The real clock: the floor is measured in real time here.
     clock: { now: () => new Date() },
     resetRequestClientRateLimiter: world.limiter,
-    passwordResetter: resetter,
+    passwordResetter: activeResetter,
   }),
 }));
 
@@ -150,6 +167,7 @@ jest.mock("next/link", () => ({
 
 import ResetPasswordPage from "../app/reset-password/page";
 import { requestPasswordResetFormAction } from "./password-reset-action";
+import { createAfterBackgroundTasks } from "../lib/after-background-tasks";
 
 function messageOf(error: unknown): unknown {
   return typeof error === "object" && error !== null && "message" in error
@@ -392,5 +410,118 @@ describe("the password reset request form (#192)", () => {
     expect(outcome.observable.boundary).toEqual([
       expect.objectContaining({ outcome: "failed" }),
     ]);
+  });
+});
+
+/**
+ * **A slow or failing email provider, sent the way production sends it**
+ * ([#216](https://github.com/joshstothard/3moji/issues/216)). Better Auth
+ * calls the reset hook for a registered address only; the hook's sender is the
+ * **real** background sender over the **real** `after()` adapter, with
+ * `after()` itself held so the test runs its callbacks once the response is
+ * complete. The provider really takes two seconds, or really fails.
+ */
+describe("the password reset request form when the email provider is slow or failing (#216)", () => {
+  jest.setTimeout(30_000);
+
+  const PROVIDER_MS = 2_000;
+  let delivered: string[] = [];
+
+  function backgroundResetter(
+    provider: "slow" | "failing",
+  ): Core.PasswordResetter {
+    const sender = createBackgroundEmailSender({
+      inner: {
+        send: async (email) => {
+          if (provider === "failing") {
+            throw new Error(`Resend refused ${email.to}`);
+          }
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, PROVIDER_MS);
+          });
+          delivered.push(email.to);
+        },
+      },
+      tasks: createAfterBackgroundTasks(),
+      event: "auth_email_send_failed",
+    });
+    return {
+      request: async (email) => {
+        world.requests += 1;
+        if (email === REGISTERED) {
+          await sender.send({
+            to: email,
+            subject: "Reset your 3moji password",
+            text: "Reset your password: https://3moji.me/reset-password/token",
+          });
+        }
+        return "accepted";
+      },
+      reset: () => Promise.resolve({ state: "reset" }),
+    };
+  }
+
+  /** Everything `after()` was handed, run now the responses are complete. */
+  async function afterTheResponses(): Promise<void> {
+    for (const callback of afterResponse.splice(0)) await callback();
+  }
+
+  beforeEach(() => {
+    delivered = [];
+    afterResponse.length = 0;
+  });
+
+  afterEach(() => {
+    activeResetter = resetter;
+  });
+
+  it("answers a registered and an unregistered address identically, and well before a two-second send", async () => {
+    activeResetter = backgroundResetter("slow");
+
+    const registered = await submit(REGISTERED);
+    const unregistered = await submit(UNREGISTERED);
+
+    expect(unregistered.observable).toEqual(registered.observable);
+    expect(registered.observable.redirected).toEqual([
+      "/reset-password?notice=sent",
+    ]);
+    for (const outcome of [registered, unregistered]) {
+      expect(outcome.tookMs).toBeGreaterThanOrEqual(
+        RESPONSE_FLOOR_MS - FLOOR_TOLERANCE_MS,
+      );
+      expect(outcome.tookMs).toBeLessThan(PROVIDER_MS);
+    }
+
+    // Nothing was delivered before the responses; afterwards, only the
+    // registered address was, so the two really took different paths.
+    expect(delivered).toEqual([]);
+    await afterTheResponses();
+    expect(delivered).toEqual([REGISTERED]);
+  });
+
+  it("answers identically when the provider fails, and logs the failure once, after the response, without the address", async () => {
+    activeResetter = backgroundResetter("failing");
+
+    const registered = await submit(REGISTERED);
+    const unregistered = await submit(UNREGISTERED);
+
+    expect(unregistered.observable).toEqual(registered.observable);
+    expect(registered.observable.redirected).toEqual([
+      "/reset-password?notice=sent",
+    ]);
+
+    written.length = 0;
+    await afterTheResponses();
+
+    const failures = written.filter((line) =>
+      line.includes("auth_email_send_failed"),
+    );
+    expect(failures).toHaveLength(1);
+    expect(JSON.parse(failures[0] ?? "null")).toEqual({
+      event: "auth_email_send_failed",
+      correlationId: "none",
+      error: { name: "Error" },
+    });
+    expect(written.join("\n")).not.toContain(REGISTERED);
   });
 });

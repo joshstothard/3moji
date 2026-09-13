@@ -103,6 +103,17 @@ export type { CreateAuthInput } from "./auth/create-auth";
 export type { Auth, AuthFactory, AuthFactoryInput } from "./auth/auth-factory";
 export { createDeferredEmailSender } from "./auth/adapters/deferred-email-sender";
 export type { DeferredEmailSender } from "./auth/adapters/deferred-email-sender";
+export type { BackgroundTasks } from "./ports/background-tasks";
+export { createHeldBackgroundTasks } from "./adapters/held-background-tasks";
+export type {
+  HeldBackgroundTasks,
+  HeldTaskFailure,
+} from "./adapters/held-background-tasks";
+export {
+  createBackgroundEmailSender,
+  DEFERRED_EMAIL_FAILURE_EVENTS,
+} from "./auth/adapters/background-email-sender";
+export type { BackgroundEmailSenderInput } from "./auth/adapters/background-email-sender";
 
 export type { HandleRepository } from "./ports/handle-repository";
 export { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";

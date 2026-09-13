@@ -162,58 +162,33 @@ describe("logFailure", () => {
       expect(JSON.stringify(line)).not.toContain("forged");
     });
 
-    it("carries an id it is given, for a caller that holds the request but may not be inside its store (#203)", () => {
-      const output: unknown[] = [];
+    /** A line written with an id handed in, outside any request's store. */
+    function lineWithExplicitId(correlationId: string): unknown {
       const spy = jest
         .spyOn(console, "error")
-        .mockImplementation((...args: unknown[]) => {
-          output.push(args[0]);
-        });
+        .mockImplementation(() => undefined);
       try {
-        logFailure("request_failed", new Error("boom"), ID);
+        logFailure("auth_email_send_failed", new Error("boom"), correlationId);
+        expect(spy).toHaveBeenCalledTimes(1);
+        const line: unknown = spy.mock.calls[0]?.[0];
+        return JSON.parse(typeof line === "string" ? line : "null");
       } finally {
         spy.mockRestore();
       }
+    }
 
-      expect(output.map((line): unknown => JSON.parse(String(line)))).toEqual([
-        expect.objectContaining({ event: "request_failed", correlationId: ID }),
-      ]);
-    });
-
-    it("never writes a forged id it is given, and reads the store instead", () => {
-      const output: unknown[] = [];
-      const spy = jest
-        .spyOn(console, "error")
-        .mockImplementation((...args: unknown[]) => {
-          output.push(args[0]);
-        });
-      try {
-        Reflect.apply(
-          workUnitAsyncStorage.run.bind(workUnitAsyncStorage),
-          undefined,
-          [
-            {
-              type: "request",
-              headers: new Headers({ "x-correlation-id": ID }),
-            },
-            () => {
-              logFailure(
-                "request_failed",
-                new Error("boom"),
-                `"},{"event":"forged`,
-              );
-            },
-          ],
-        );
-      } finally {
-        spy.mockRestore();
-      }
-
-      expect(output).toHaveLength(1);
-      expect(JSON.parse(String(output[0]))).toMatchObject({
+    it("carries an id handed to it, for a failure logged after its request's store has gone (#216)", () => {
+      expect(lineWithExplicitId(ID)).toMatchObject({
+        event: "auth_email_send_failed",
         correlationId: ID,
       });
-      expect(String(output[0])).not.toContain("forged");
+    });
+
+    it("never writes a forged id handed to it", () => {
+      const line = lineWithExplicitId(`"},{"event":"forged`);
+
+      expect(line).toMatchObject({ correlationId: "none" });
+      expect(JSON.stringify(line)).not.toContain("forged");
     });
 
     it("does not throw when the request store cannot be read", () => {

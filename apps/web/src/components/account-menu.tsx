@@ -223,6 +223,10 @@ export function AccountMenu() {
                   {copy.editProfile}
                 </AccountLink>
               </li>
+              <li>
+                {/* An owner page that reads the session itself (#195). */}
+                <AccountLink href="/account">{copy.account}</AccountLink>
+              </li>
             </ul>
           ) : (
             <p className="px-3 py-2 text-base text-slate-700">

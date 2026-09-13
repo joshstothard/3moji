@@ -1,4 +1,4 @@
-import { isSafeCorrelationId } from "./correlation-id";
+import { isSafeCorrelationId, NO_CORRELATION_ID } from "./correlation-id";
 import { currentCorrelationId } from "./request-context";
 
 /**
@@ -189,10 +189,11 @@ export function describeError(error: unknown): ErrorDescriptor {
  * it is the literal `"none"`. It is read synchronously, so the line is still
  * written before this returns, and reading it never throws.
  *
- * A caller that holds the request itself — `onRequestError`, which Next.js
- * calls from outside the render (#203) — passes the id it read from the
- * request's headers. It gets the same allow-list as the store: an id that
- * fails it is ignored, and the store is read instead.
+ * **`correlationId` is passed in by a failure logged after its request**
+ * (#216): an email sent through `after()` fails once the response has gone, so
+ * `createAfterBackgroundTasks` reads the id while the request is still current
+ * and hands it over. A value passed in meets the same allow-list as one read
+ * from the request, and anything else is written as `"none"`.
  */
 export function logFailure(
   event: string,
@@ -202,11 +203,14 @@ export function logFailure(
   console.error(
     JSON.stringify({
       event,
-      correlationId:
-        correlationId !== undefined && isSafeCorrelationId(correlationId)
-          ? correlationId
-          : currentCorrelationId(),
+      correlationId: correlationIdFor(correlationId),
       error: describeError(error),
     }),
   );
+}
+
+/** The id handed in if it is safe, the request's if none was, else `"none"`. */
+function correlationIdFor(given: string | undefined): string {
+  if (given === undefined) return currentCorrelationId();
+  return isSafeCorrelationId(given) ? given : NO_CORRELATION_ID;
 }

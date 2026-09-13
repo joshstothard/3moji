@@ -216,6 +216,14 @@ Items are grouped by when they have to happen:
   - **Blocks:** the CSP part of #205. HSTS, `nosniff`, `Referrer-Policy` and `X-Frame-Options` already ship without it.
   - **Detail:** [the #205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123), with the measurements, the recommended policy and the open questions.
 
+- [ ] **Accept that a failed email no longer tells the person it failed**
+  - **What:** Since [#216](https://github.com/joshstothard/3moji/issues/216), reset links, verification links and "you already have an account" notices are sent after the page has answered. If the email provider fails, the person still sees "a link is on its way", and the failure shows up only in the logs, as `auth_email_send_failed`, `claim_collision_email_failed` or `claim_verification_email_failed`.
+  - **Why it matters:** before, a provider outage showed "something went wrong", but only for registered addresses, which told anyone who asked that the address had an account. Now nobody is told, including the real owner, who waits for an email that never comes.
+  - **Options:** accept it and read the logs when someone reports a missing email; or alert on those three events once error tracking exists.
+  - **Recommendation:** accept it, and alert on those three events when Phase 8's error tracking lands. Every one of those emails can be asked for again from the page the person is already on.
+  - **Blocks:** nothing.
+  - **Detail:** [Authentication](architecture/auth.md#what-an-operator-sees-when-a-send-fails).
+
 ## Decide after launch
 
 - [ ] **Limit sign-in attempts per Account, not only per client**

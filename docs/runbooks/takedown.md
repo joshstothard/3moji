@@ -101,7 +101,7 @@ COMMIT;
 
 Release is **account deletion**: the Account, its sessions, its Profile and its Links all go, and the Handle returns to the pool immediately ([ADR-0004](../adr/0004-the-handle-model.md) decision 5, [ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)). It cannot be undone.
 
-The domain path is `releaseHandle` in `packages/core/src/handle/release-handle.ts`, which takes the owner's user id. It has no user interface or command yet, so until one exists the equivalent SQL is below. It must do what `releaseHandle` does, **in the same order and in one transaction**:
+The domain path is `releaseHandle` in `packages/core/src/handle/release-handle.ts`, which takes the owner's user id. **An owner can now do this themselves**: the account page at `/account`, reached from the signed-in indicator, deletes their own Account through `releaseHandle` ([#195](https://github.com/joshstothard/3moji/issues/195)), so an owner who asks for their Account to be deleted can be pointed there. It only ever deletes the signed-in person's own Account, so **a takedown still goes through the SQL below**, and there is still no admin interface or command. The SQL must do what `releaseHandle` does, **in the same order and in one transaction**:
 
 1. Read the Handle's key **before** deleting anything — `handle.user_id` cascades on `user`, so the key is gone the moment the Account is.
 2. Write the `released_handle` tombstone (the key and the time).
