@@ -106,9 +106,13 @@ jest.mock("@template/core", () => ({
   handleAvailability: (input: unknown): unknown => handleAvailability(input),
   claimableHandle: () => ({ ok: true }),
   canonicalise: (segment: string) => realCanonicalise.canonicalise(segment),
+  viewerSummary: (input: unknown): unknown => viewerSummary(input),
 }));
 
+const viewerSummary = jest.fn();
 const signInEmail = jest.fn();
+/** The session read `lib/session.ts` makes: a signed-in owner, by default. */
+const getSession = jest.fn();
 const signInAdmit = jest.fn();
 const byEmail = jest.fn();
 const handleOf = jest.fn();
@@ -156,6 +160,7 @@ import * as authRoute from "../app/api/auth/[...all]/route";
 import * as verifyRoute from "../app/claim/verify/route";
 import * as genericImageRoute from "../app/og-image/route";
 import * as handleImageRoute from "../app/[handle]/og-image/route";
+import * as viewerRoute from "../app/api/viewer/route";
 import * as availabilityAction from "../components/availability-action";
 import * as claimAction from "../components/claim-action";
 import * as passwordResetAction from "../components/password-reset-action";
@@ -174,7 +179,7 @@ import {
 function healthy(): void {
   ogImage.fails = false;
   getServices.mockImplementation(() => ({
-    auth: { api: { signInEmail } },
+    auth: { api: { signInEmail, getSession } },
     accounts: { byEmail, handleOf },
     claims: {},
     clock: { now: () => new Date(0) },
@@ -207,6 +212,8 @@ function healthy(): void {
   requestPasswordReset.mockResolvedValue({ state: "sent" });
   setNewPassword.mockResolvedValue({ state: "reset" });
   signInEmail.mockResolvedValue({});
+  getSession.mockResolvedValue({ user: { id: "user-1", email: EMAIL } });
+  viewerSummary.mockReturnValue({ state: "owner", key: ICE, encoded: ENCODED });
   signInAdmit.mockResolvedValue({ state: "admitted" });
   byEmail.mockResolvedValue({ userId: "user-1", email: EMAIL });
   handleOf.mockResolvedValue({ key: ICE });
@@ -338,6 +345,24 @@ const CASES: readonly BoundaryCase[] = [
       return handleImageRoute.GET(verifyRequest(), {
         params: Promise.resolve({ handle: ENCODED }),
       });
+    },
+    logsFailure: false,
+  },
+  {
+    // The one per-visitor response (#193). Answered for a signed-in owner, and
+    // logged `ok` whatever the state, so the log cannot become a record of who
+    // was signed in. Every read inside it fails closed, so the collaborator
+    // that breaks is the rule itself.
+    file: "app/api/viewer/route.ts",
+    exportName: "GET",
+    boundary: "viewer.read",
+    answer: () => viewerRoute.GET(),
+    answered: "ok",
+    fail: () => {
+      viewerSummary.mockImplementation(() => {
+        throw leakyError();
+      });
+      return viewerRoute.GET();
     },
     logsFailure: false,
   },
