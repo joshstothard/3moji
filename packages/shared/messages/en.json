@@ -6,6 +6,17 @@
     "heading": "3moji",
     "tagline": "A web address you can say out loud."
   },
+  "HandleLookup": {
+    "heading": "Find a Handle",
+    "label": "The words you heard",
+    "hint": "For example: ice cube ice cube ice cube",
+    "submit": "Find"
+  },
+  "FindPage": {
+    "title": "Find a Handle",
+    "notFoundHeading": "No Handle found",
+    "notFound": "We could not find a Handle for those words. Check the spelling, or put a dot between each emoji name, like ice-cube.ice-cube.ice-cube."
+  },
   "HandleBuilder": {
     "builderHeading": "Build your Handle",
     "slotsLabel": "Your Handle",
@@ -52,7 +63,9 @@
     "shareCopy": "Copy link",
     "shareCopied": "Link copied.",
     "shareManual": "Copying did not work, so the link is selected below. Copy it from there.",
-    "shareManualLabel": "Link to this Handle"
+    "shareManualLabel": "Link to this Handle",
+    "report": "Report this page",
+    "reportSubject": "Report a 3moji page: {path}"
   },
   "Claim": {
     "spoken": "Say it: {spoken}",

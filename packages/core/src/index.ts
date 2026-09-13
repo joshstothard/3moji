@@ -78,6 +78,12 @@ export {
   resolveAlias,
 } from "./handle/alias";
 export type { AliasCandidate, AliasResolution } from "./handle/alias";
+export {
+  aliasReadingsOf,
+  findHandleAlias,
+  LOOKUP_MAX_LENGTH,
+} from "./handle/find-handle";
+export type { HandleLookup } from "./handle/find-handle";
 
 export { canonicalise, HANDLE_LENGTH } from "./handle/canonicalise";
 export type {

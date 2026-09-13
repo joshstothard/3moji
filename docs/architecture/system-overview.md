@@ -23,7 +23,16 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 ## Routing
 
-**Partly built.** Four routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — and the owner's edit surface at `/[handle]/edit`.
+**Partly built.** Five routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — the owner's edit surface at `/[handle]/edit`, and the "Find a Handle" lookup's target at `/find`.
+
+### Finding a Handle
+
+The home page's lookup ([#200](https://github.com/joshstothard/3moji/issues/200)) is a plain `GET` form, `components/handle-lookup.tsx`, submitting `q` to `/find`, so it works with JavaScript disabled. `app/find/page.tsx` is a page, not a route handler, and so — like `/[handle]` — not one of the API boundaries below.
+
+- **It is not a second resolver.** `findHandleAlias` in `packages/core/src/handle/find-handle.ts` only decides where the term boundaries fall and hands each reading to `resolveAlias`. Dotted input (`ice-cube.ice-cube.ice-cube`) has the one reading it spells. Undotted input treats spaces, hyphens, commas and case alike, and every cut of its words into three terms is a reading (`ice cube ice cube ice cube`).
+- **Found redirects to the alias path**, `/ice-cube.ice-cube.ice-cube`, and that page decides the rest as it does for a pasted link — a Profile, a listing, the claim call to action. The lookup reveals nothing the alias path would not.
+- **Not found renders on `/find`**, with the words back in the field. It is the answer for unknown words, for input over 200 characters, and for words with **two readings naming different Handles** — `curry rice wine pizza` is `curry` + `rice wine` + `pizza` and `curry rice` + `wine` + `pizza` (ADR-0008's parse ambiguity) — where redirecting to either would invent an answer. The message suggests the dots that settle it. A bare `/find` redirects to `/`, and the page asks not to be indexed.
+- **The spoken form is not read here.** `three ice cubes` is not found; parsing number words is [#201](https://github.com/joshstothard/3moji/issues/201).
 
 ### The proxy
 
@@ -162,6 +171,13 @@ The availability read is the same `checkAvailability` server action the home pag
 - **It appears on the Profile view only, to every visitor, whichever grammar they arrived by** — the emoji path or the word alias. It is not offered for an unedited, held, reserved, unknown or unclaimed Handle, nor on a listing, and the unit suite asserts each absence. It sits after the owner's Links, so the first tab stop on a Profile is still the owner's content. It is not on `/[handle]/edit`: sharing is for every visitor, the owner reaches the public Profile like anybody else, and the edit form is a write surface.
 - **Accessibility:** a real `<button>`, never disabled, so focus stays on it after a successful copy; the outcome is announced in a `role="status"` region present and empty from the first render. When the Clipboard API is missing or refuses, the control says so rather than claiming a copy, and shows the link in a labelled read-only field with the whole link selected and **focus moved into it** — a selection in an unfocused field cannot be copied.
 - Dotted alias paths are still unverified on Vercel's CDN ([#32](https://github.com/joshstothard/3moji/issues/32)); the control copies the right link regardless.
+
+**A claimed Handle offers "Report this page"** ([#197](https://github.com/joshstothard/3moji/issues/197)): a plain `mailto:` to the address in `REPORT_CONTACT_EMAIL`, with the Handle's percent-encoded canonical path in the subject — the emoji path, whichever grammar the reporter arrived by, because it names exactly one Handle (ADR-0008 decision 5). What happens to a report is [the takedown runbook](../runbooks/takedown.md). It is reporting, not moderation: nothing inspects a Profile.
+
+- **Optional, and read directly**, as `siteOrigin()` reads `BETTER_AUTH_URL` — it is not a sixth `lib/services.ts` variable, so a clone without it still starts. **Unset or unusable means no link**, never a dead one or a guessed mailbox.
+- **One plain address or nothing.** `lib/report-link.ts` accepts only letters, digits and `._+-` around a single `@` and a dotted domain, at most 254 characters, and does not trim. So `?`, `&`, `%`, `#`, `,`, `<`, whitespace and CR/LF — everything that could add a recipient or a header to the mailto — make the link disappear rather than be repaired, and the whole subject goes through `encodeURIComponent`. `report-link.test.ts` asserts each injection produces no link.
+- **Same page for every visitor.** The href is a function of configuration and the path alone; rendering it reads no header and no cookie, which `page.report-link.test.tsx` asserts with both mocked, and `e2e/report-link.spec.ts` compares the link with and without a session cookie.
+- **Where it appears:** after everything else on a Profile, and under an unedited claimed Handle too, since a Handle itself can be the thing reported. Never on an available, held, reserved or unknown Handle, nor on a listing. A server component with no client code, so it works without JavaScript.
 
 ### A Profile's Open Graph card
 

@@ -210,6 +210,9 @@ jobs:
       # Email goes to the recording sender, never Resend. lib/services.ts
       # refuses this switch in any production environment.
       TEST_EMAIL_SENDER: recording
+      # The report link's mailbox (#197): a placeholder on the reserved
+      # example.com domain, so the Profile renders its report link under test.
+      REPORT_CONTACT_EMAIL: reports@example.com
     services:
       postgres:
         image: postgres:16
