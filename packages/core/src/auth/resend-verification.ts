@@ -6,6 +6,7 @@ import {
   resendAllowance,
   type ResendLimits,
 } from "./resend-allowance";
+import type { ResendClientRateLimiter } from "./resend-rate-limit";
 import { realSleep, withResponseFloor } from "./response-floor";
 
 /**
@@ -45,6 +46,13 @@ export interface VerificationMailer {
 export interface ResendVerificationInput {
   /** The address as typed. Never trusted, never used as an identity. */
   readonly email: string;
+  /**
+   * The client's network address as the transport read it from the forwarded
+   * headers, or `undefined`. Not trusted: the limiter validates and groups it.
+   */
+  readonly clientAddress: string | undefined;
+  /** The per-client-address limit (#158), asked before anything else. */
+  readonly clientLimiter: ResendClientRateLimiter;
   readonly directory: AccountDirectory;
   readonly dispatches: VerificationDispatchStore;
   readonly mailer: VerificationMailer;
@@ -89,6 +97,17 @@ export async function resendVerification(
   };
 
   return withResponseFloor(floor, async (): Promise<ResendOutcome> => {
+    // 0. **The per-client-address limit, before the address is read** (#158).
+    //    Asked after the lookup, an unknown or verified address would answer
+    //    `sent` without ever being counted, and one client could walk a list
+    //    of addresses unlimited. Its refusal is `too-many` with its "when":
+    //    it depends on the client alone, so it reveals nothing about the
+    //    address, and the hold screen already knows how to say it.
+    const admission = await input.clientLimiter.admit(input.clientAddress);
+    if (admission.state === "rate-limited") {
+      return { state: "too-many", retryAfterMs: admission.retryAfterMs };
+    }
+
     const account = await input.directory.byEmail(input.email);
 
     // Nothing to send, and nothing to admit. Indistinguishable by design.

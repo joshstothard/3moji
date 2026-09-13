@@ -180,6 +180,7 @@ function healthy(): void {
     emailFrom: "3moji <no-reply@mail.3moji.me>",
     emailSender: {},
     claimRateLimiter: {},
+    resendClientRateLimiter: {},
   }));
   submitClaim.mockResolvedValue({
     state: "pending",
@@ -568,6 +569,32 @@ describe.each(CASES)("$file $exportName", (boundaryCase) => {
     for (const failure of failures) {
       expect(failure.correlationId).toBe(ID);
     }
+    expectNoPersonalData();
+  });
+});
+
+describe("the resend action's per-client-address limit (#158)", () => {
+  it("logs a refusal as rate-limited, handing the limiter the client address but writing it nowhere", async () => {
+    // What `resendVerification` answers when the per-client limit refuses:
+    // `too-many` with that window's "when", the notice the hold screen renders.
+    resendVerification.mockResolvedValue({
+      state: "too-many",
+      retryAfterMs: 1_200_000,
+    });
+
+    await insideRequest(() =>
+      resendAction.requestNewVerificationLink(personalForm()),
+    );
+
+    expect(resendVerification).toHaveBeenCalledWith(
+      expect.objectContaining({ clientAddress: IP }),
+    );
+    expect(boundaryLines()).toEqual([
+      expect.objectContaining({
+        boundary: "verification.resend",
+        outcome: "rate-limited",
+      }),
+    ]);
     expectNoPersonalData();
   });
 });
