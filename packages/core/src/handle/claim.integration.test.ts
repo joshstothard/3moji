@@ -741,6 +741,10 @@ describeWithDatabase("the Claim against a real Postgres", () => {
           emailSender,
           resetRequestUrl: "http://localhost:3000/reset-password",
           from: "3moji <no-reply@mail.3moji.me>",
+          // Not the limit under test here; that is
+          // `claim-rate-limit.integration.test.ts` (#157).
+          rateLimiter: { admit: () => Promise.resolve("admitted") },
+          clientAddress: undefined,
           sleep: (ms) => {
             slept.push(ms);
             return Promise.resolve();

@@ -102,9 +102,15 @@ const services = () => ({
   },
   resetRequestUrl: "http://localhost:3000/reset-password",
   emailFrom: "3moji <no-reply@mail.3moji.me>",
+  // Not the limit under test here: `claim-rate-limit.test.tsx` is (#157).
+  claimRateLimiter: { admit: () => Promise.resolve("admitted") },
 });
 jest.mock("../lib/services", () => ({
   getServices: () => services(),
+}));
+jest.mock("next/headers", () => ({
+  headers: () =>
+    Promise.resolve(new Headers({ "x-vercel-forwarded-for": "203.0.113.7" })),
 }));
 
 /**

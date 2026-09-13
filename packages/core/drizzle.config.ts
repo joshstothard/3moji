@@ -19,6 +19,7 @@ export default defineConfig({
     "./src/db/released-handle.ts",
     "./src/db/profile.ts",
     "./src/db/link.ts",
+    "./src/db/claim-rate-limit.ts",
   ],
   out: "./migrations",
   dialect: "postgresql",

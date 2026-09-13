@@ -43,6 +43,9 @@ const REJECTION_COPY: Readonly<Record<Rejection, string>> = {
   "not-claimable": copy.claimNotClaimable,
   "not-a-handle": copy.claimNotAHandle,
   invalid: copy.claimInvalid,
+  // One sentence for both limits, and no "try again in": which limit bound is
+  // exactly what it must not say (#157).
+  "rate-limited": copy.claimRateLimited,
   failed: copy.claimFailed,
 };
 

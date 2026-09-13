@@ -142,6 +142,7 @@ describe("the claim form", () => {
     ["not a Handle", { state: "not-a-handle" }, copy.claimNotAHandle],
     ["missing a field", { state: "invalid" }, copy.claimInvalid],
     ["a failure", { state: "failed" }, copy.claimFailed],
+    ["too many attempts", { state: "rate-limited" }, copy.claimRateLimited],
   ] as const)(
     "renders a rejection for %s",
     async (_name, state: ClaimFormState, message) => {
@@ -247,6 +248,21 @@ describe("the claim form", () => {
     for (const control of [emailField(), passwordField(), submitButton()]) {
       expect(control.className).toMatch(/focus-visible:outline-indigo-600/);
     }
+  });
+
+  it("renders and announces a rate-limited answer, blaming neither field (#157)", async () => {
+    const { user } = renderForm(answering({ state: "rate-limited" }));
+
+    await fillAndSubmit(user);
+
+    await waitFor(() => {
+      expect(alertRegion()).toHaveTextContent(copy.claimRateLimited);
+    });
+    // One sentence whichever limit bound, so it names neither.
+    expect(copy.claimRateLimited).not.toMatch(/email|address|network/i);
+    expect(emailField()).not.toHaveAttribute("aria-invalid");
+    expect(passwordField()).not.toHaveAttribute("aria-invalid");
+    expect(submitButton()).toHaveAttribute("aria-describedby", "claim-message");
   });
 
   it("has no success state of its own: an accepted Claim is a redirect", async () => {

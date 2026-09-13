@@ -25,6 +25,15 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 **Partly built.** Four routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — and the owner's edit surface at `/[handle]/edit`.
 
+### The proxy
+
+Every request passes through `apps/web/src/proxy.ts` (Next.js 16 renamed `middleware.ts` to `proxy.ts`) before it is routed. It does one thing: give the request a **correlation id** ([#155](https://github.com/joshstothard/3moji/issues/155)). The id is a well-formed `x-vercel-id` when Vercel sent one, otherwise a random UUID; it is set on the request the application sees and returned on the response as `x-correlation-id`.
+
+- **It changes no routing.** It always answers `NextResponse.next()`, so the Handle route 308, the alias grammar and `/api/auth` behave exactly as they did; `apps/web/e2e/handle-url.spec.ts` is the proof.
+- **Its matcher skips only Next.js static output and the metadata files** (`_next/static`, `_next/image`, `favicon.ico`, `sitemap.xml`, `robots.txt`). `/api` stays in, because the auth API is a boundary worth correlating, and nothing is excluded by a dot or an extension, because a word alias (`/ice-cube.ice-cube.ice-cube`) is a page and server actions POST to the page path. `proxy.test.ts` pins both lists.
+- **A client cannot choose the id text.** An incoming value is accepted only if it is ASCII letters, digits, `:`, `-` or `_`, at most 128 characters (`lib/correlation-id.ts`); anything else is replaced and never echoed, and an incoming `x-correlation-id` is always overwritten. The rule bounds characters and length rather than a grammar, because Vercel does not document the format of `x-vercel-id`.
+- **Reading it.** A route handler or server action calls `readCorrelationId()` in `lib/request-context.ts`, which goes through `headers()`. `logFailure` is synchronous, so it uses `currentCorrelationId()`, which reads the same per-request store synchronously. That store is a Next.js internal, and a contract test fails the build if an upgrade moves it. Both re-apply the allow-list and return the literal `"none"` when there is no request.
+
 ### The home page
 
 `apps/web/src/app/page.tsx` is a server component that holds no state and fetches nothing. Its whole job is composition: it hands `HandleBuilder` the availability read and lets the builder own the interaction.
