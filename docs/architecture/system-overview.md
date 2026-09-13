@@ -58,6 +58,19 @@ Every request passes through `apps/web/src/proxy.ts` (Next.js 16 renamed `middle
 - **A client cannot choose the id text.** An incoming value is accepted only if it is ASCII letters, digits, `:`, `-` or `_`, at most 128 characters (`lib/correlation-id.ts`); anything else is replaced and never echoed, and an incoming `x-correlation-id` is always overwritten. The rule bounds characters and length rather than a grammar, because Vercel does not document the format of `x-vercel-id`.
 - **Reading it.** A route handler or server action calls `readCorrelationId()` in `lib/request-context.ts`, which goes through `headers()`. `logFailure` is synchronous, so it uses `currentCorrelationId()`, which reads the same per-request store synchronously. That store is a Next.js internal, and a contract test fails the build if an upgrade moves it. Both re-apply the allow-list and return the literal `"none"` when there is no request.
 
+### Security headers
+
+Every response carries four headers that don't change per request ([#205](https://github.com/joshstothard/3moji/issues/205)):
+
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `X-Frame-Options: DENY`
+
+They are listed in `apps/web/src/lib/security-headers.ts` and sent from `next.config.ts` `headers()` on `/:path*`, **not from the proxy**. The proxy's matcher skips `_next/static`, `_next/image` and the metadata files, and HSTS and `nosniff` belong on those as much as on a page, on route handlers and on the Open Graph images. `security-headers.test.ts` pins both the values and the rule's `source`. HSTS leaves out `preload`, which commits the whole domain and is slow to undo; that is the owner's call.
+
+**There is no Content Security Policy yet.** Every strict option has a cost, so the choice is waiting on the owner ([owner actions](../owner-actions.md), Decide before launch). The measurements behind it are in [the #205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123).
+
 ### API boundary logging
 
 Every API boundary writes **exactly one** structured JSON line per call, on success and on failure, to `console.log` ([#156](https://github.com/joshstothard/3moji/issues/156)): `{ event: "api_boundary", boundary, outcome, durationMs, correlationId }`, plus `endpoint` on the auth route. It is written by `atBoundary` in `apps/web/src/lib/boundary-log.ts`, and **nothing free-text reaches it**: every value is a literal from a fixed list in that file, a rounded number, or the allow-listed correlation id. A failure still gets its own `logFailure` line on `console.error`, from the boundary's own catch; the two share `correlationId`.
