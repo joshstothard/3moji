@@ -659,7 +659,7 @@ function LinkFields({
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           title={copy.dragLinkHandle.replace("{position}", position)}
-          className="cursor-grab px-1 text-slate-400 select-none"
+          className="cursor-grab px-1 text-slate-500 select-none"
         >
           ⠿
         </span>
