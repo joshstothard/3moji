@@ -15,6 +15,8 @@ import {
   type ProfileDraft,
 } from "@template/core";
 
+import { unclaimedSeveralHandleKeys } from "./aliases";
+
 /**
  * Seeding for end-to-end specs, **through the domain's use cases and never
  * through SQL** ([#151](https://github.com/joshstothard/3moji/issues/151)).
@@ -95,6 +97,7 @@ export async function seedClaimedHandle(
 ): Promise<SeededHandle> {
   const profile = options.profile ?? DEFAULT_PROFILE;
   const chooseEmoji = options.chooseEmoji ?? randomHandleEmoji;
+  const reserved = unclaimedSeveralHandleKeys();
   const emailSender = createRecordingEmailSender();
   const clock = createSystemClock();
   const { db, close } = createDatabase({ url: requiredEnv("DATABASE_URL") });
@@ -114,6 +117,12 @@ export async function seedClaimedHandle(
     for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
       const emoji = chooseEmoji();
       const segment = emoji.map((entry) => entry.emoji).join("");
+      // handle-url.spec.ts needs these Handles unclaimed, and the database is
+      // shared by every spec, so a pick naming one is drawn again — whichever
+      // chooser made it (#187).
+      if (reserved.has(canonicalHandle(segment).key)) {
+        continue;
+      }
       const email = `e2e-${randomUUID()}@example.com`;
       const password = randomUUID();
 
@@ -162,7 +171,7 @@ export async function seedClaimedHandle(
 
       return {
         key: claim.handle.key,
-        path: `/${canonicalPath(segment)}`,
+        path: `/${canonicalHandle(segment).encoded}`,
         emoji,
         profile,
         credentials: { email, password },
@@ -203,12 +212,15 @@ function randomHandleEmoji(): readonly CuratedEmoji[] {
   });
 }
 
-function canonicalPath(segment: string): string {
+function canonicalHandle(segment: string): {
+  readonly key: string;
+  readonly encoded: string;
+} {
   const result = canonicalise(segment);
   if (!result.ok) {
     throw new Error(`The seed picked a segment that is not a Handle.`);
   }
-  return result.encoded;
+  return { key: result.key, encoded: result.encoded };
 }
 
 /**

@@ -1,12 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  aliasTermSlugs,
   canonicalise,
   curatedEmojiSet,
   HANDLE_LENGTH,
   isReservedHandle,
-  resolveAlias,
-  type AliasCandidate,
   type CuratedEmoji,
 } from "@template/core";
 import en from "../../../packages/shared/messages/en.json";
@@ -17,7 +14,11 @@ import {
   PAGE_RULES,
   type PageReport,
 } from "./support/axe";
-import { UNCLAIMED_SEVERAL_ALIAS } from "./support/aliases";
+import {
+  listingAliases,
+  UNCLAIMED_SEVERAL_ALIAS,
+  unclaimedSeveralHandleKeys,
+} from "./support/aliases";
 import {
   describeBorderContrast,
   describeContrast,
@@ -393,8 +394,32 @@ test("a claimed Profile has no WCAG A or AA violations", async ({ page }) => {
   expectLandmarksContained(await checkLandmarks(page));
 });
 
+test("the alias listing never seeds a Handle handle-url.spec.ts needs unclaimed", () => {
+  // Every spec shares one database, and handle-url.spec.ts needs every Handle
+  // UNCLAIMED_SEVERAL_ALIAS names to stay unclaimed. Another alias can name the
+  // same Handles in other words, so the listing's candidates are checked by the
+  // Handles they resolve to, not by their text (#187).
+  const reserved = unclaimedSeveralHandleKeys();
+  const eligible = listingAliases();
+  expect(eligible.length, "aliases the listing can seed under").toBeGreaterThan(
+    0,
+  );
+
+  const overlapping = eligible
+    .filter(({ candidates }) =>
+      candidates.some((candidate) => reserved.has(candidate.key)),
+    )
+    .map(({ alias }) => alias);
+  expect(
+    overlapping,
+    `listing aliases naming a Handle ${UNCLAIMED_SEVERAL_ALIAS} names`,
+  ).toEqual([]);
+});
+
 test("an alias listing has no WCAG A or AA violations", async ({ page }) => {
-  const { alias, candidates } = aliasNamingSeveralHandles();
+  // Picked at random from the domain's own vocabulary, so both Playwright
+  // projects and retries spread their seeds across many aliases.
+  const { alias, candidates } = randomOf(listingAliases());
   const chooseEmoji = (): readonly CuratedEmoji[] => randomOf(candidates).emoji;
 
   // Two claimed Handles the one alias names, so the route answers with the
@@ -415,32 +440,6 @@ test("an alias listing has no WCAG A or AA violations", async ({ page }) => {
   expectAccessible(await checkPage(page), ["list", "listitem", "role-img-alt"]);
   expectLandmarksContained(await checkLandmarks(page));
 });
-
-/**
- * An alias whose one term names more than one emoji, chosen from the domain's
- * own vocabulary rather than hard-coded, so a change to the curated names
- * cannot leave this spec pointing at a word that no longer exists.
- *
- * The term is picked at random, so both Playwright projects and retries spread
- * their seeds across many aliases instead of exhausting one.
- */
-function aliasNamingSeveralHandles(): {
-  readonly alias: string;
-  readonly candidates: readonly AliasCandidate[];
-} {
-  const eligible = aliasTermSlugs().flatMap((term) => {
-    const alias = [term, term, term].join(".");
-    // Another spec needs this alias to stay unclaimed; seeding it made that
-    // spec fail on every attempt when the random pick landed here (#177).
-    if (alias === UNCLAIMED_SEVERAL_ALIAS) return [];
-    const resolution = resolveAlias(alias);
-    return resolution.ok && resolution.candidates.length > 1
-      ? [{ alias, candidates: resolution.candidates }]
-      : [];
-  });
-
-  return randomOf(eligible);
-}
 
 function randomOf<T>(items: readonly T[]): T {
   const item = items[Math.floor(Math.random() * items.length)];
