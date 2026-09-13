@@ -47,16 +47,20 @@ Search the logs for:
 - The failure events: `claim_submit_failed`, `availability_check_failed`, `profile_read_failed`, `editable_profile_read_failed`, `edit_authority_read_failed`, `display_names_read_failed`, `hold_screen_lookup_failed`, `session_read_failed`, `viewer_summary_read_failed`, `profile_save_failed`, `verification_resend_failed`, `sign_in_rate_limit_failed`, `password_reset_request_failed`, `password_reset_set_failed`.
 - A reporter's correlation id, to pair their boundary line with its failure line.
 
+`claim_submit_failed`, `verification_resend_failed` and `password_reset_request_failed` mean the action itself could not answer: the database, a limiter, or configuration. They are no longer logged for a failed email.
+
+**Email failures come after the boundary line, and never fail it.** Every email is sent after the response ([#216](https://github.com/joshstothard/3moji/issues/216)), so a failed send is logged as `auth_email_send_failed`, `claim_collision_email_failed` or `claim_verification_email_failed` once the request's `api_boundary` line has already been written, under the same `correlationId`. That boundary line says `redirected` or `ok`. These three events belong to [email not arriving](email-not-arriving.md), not to this runbook.
+
 Page renders (`/`, a Profile) are not boundaries and write no `api_boundary` line. A failed Profile read still writes `profile_read_failed`, and a crash in a page shows in Vercel's own request log as a 500 **(verify on deploy)**.
 
 ### Reading the `error` descriptor
 
-| What the line shows                                                                                            | Likely cause                                                                                                                      |
-| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `"missing":"DATABASE_URL"` (or `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `RESEND_API_KEY`, `RESEND_FROM`)       | An environment variable is unset for Production. Services are built on first request, so the build passed and every request fails |
-| `"name":"DatabaseQueryFailed"` with `"code":"ECONNREFUSED"`, `ETIMEDOUT` or `ENOTFOUND`                        | The database is unreachable: Neon down, compute suspended, or a wrong connection string                                           |
-| `"name":"DatabaseQueryFailed"` with a SQLSTATE such as `42P01` (undefined table) or `42703` (undefined column) | The code expects a schema the database does not have: a migration did not run                                                     |
-| `"name":"ResendRequestRejected"`                                                                               | Email, not the site. Go to [email not arriving](email-not-arriving.md)                                                            |
+| What the line shows                                                                                            | Likely cause                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"missing":"DATABASE_URL"` (or `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `RESEND_API_KEY`, `RESEND_FROM`)       | An environment variable is unset for Production. Services are built on first request, so the build passed and every request fails               |
+| `"name":"DatabaseQueryFailed"` with `"code":"ECONNREFUSED"`, `ETIMEDOUT` or `ENOTFOUND`                        | The database is unreachable: Neon down, compute suspended, or a wrong connection string                                                         |
+| `"name":"DatabaseQueryFailed"` with a SQLSTATE such as `42P01` (undefined table) or `42703` (undefined column) | The code expects a schema the database does not have: a migration did not run                                                                   |
+| `"name":"ResendRequestRejected"`                                                                               | Email, not the site. It appears under one of the three email events, after the boundary line. Go to [email not arriving](email-not-arriving.md) |
 
 ### The providers
 
@@ -115,7 +119,7 @@ Work down the table. Stop at the first row that matches.
 ### After any recovery
 
 - Load `/` and one claimed Profile, and check the logs show `ok` and `redirected` outcomes again, not `failed`.
-- If a Claim or email was lost during the outage, see [email not arriving](email-not-arriving.md) § 5a. A Claim that failed after its commit leaves a held Handle with no email.
+- If emails were lost during the outage, see [email not arriving](email-not-arriving.md) § 5a. A Claim whose email fails still succeeds and holds its Handle; the claimant resends from the hold screen once the cause is fixed.
 
 ## 6. Record
 
