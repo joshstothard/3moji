@@ -15,8 +15,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} h-full bg-slate-50 antialiased`}>
-        <div className="min-h-full flex flex-col">
+      {/* `min-h-full`, not `h-full`: a fixed-height body stops painting its
+          background at one viewport, and axe cannot decide the contrast of
+          text that straddles that edge on a page taller than the screen (#196). */}
+      <body
+        className={`${inter.className} min-h-full flex flex-col bg-slate-50 antialiased`}
+      >
+        <div className="flex flex-1 flex-col">
           <Navbar />
           <div className="flex-1">{children}</div>
           <Footer />
