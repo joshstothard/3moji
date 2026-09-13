@@ -176,12 +176,17 @@ function bucketKeyFrom(secret: string): Buffer {
 /**
  * What a bucket counts. The kind is both the stored prefix and part of the
  * hashed input, so two kinds never share a counter for the same value.
- * `resend-client` is the resend action's per-client limit (#158) and
- * `sign-in-client` the sign-in form's (#180); both share this table rather
- * than adding one.
+ * `resend-client` is the resend action's per-client limit (#158),
+ * `sign-in-client` the sign-in form's (#180) and `reset-request-client` the
+ * password reset request form's (#192); all share this table rather than
+ * adding one.
  */
 export type RateLimitBucketKind =
-  "client" | "email" | "resend-client" | "sign-in-client";
+  | "client"
+  | "email"
+  | "resend-client"
+  | "sign-in-client"
+  | "reset-request-client";
 
 /**
  * How long every limiter on `claim_rate_limit` keeps a window before pruning

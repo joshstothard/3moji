@@ -49,37 +49,39 @@ Every API boundary writes **exactly one** structured JSON line per call, on succ
 
 The boundaries, enumerated from the code — `src/lib/api-boundaries.test.ts` walks `src` for `route.ts` files and `"use server"` modules and fails unless every export has a case there, and every case writes one line:
 
-| File                                | Export                       | `boundary`               |
-| ----------------------------------- | ---------------------------- | ------------------------ |
-| `app/api/auth/[...all]/route.ts`    | `GET` / `POST`               | `auth.get` / `auth.post` |
-| `app/claim/verify/route.ts`         | `GET`                        | `claim.verify`           |
-| `components/availability-action.ts` | `checkAvailability`          | `availability.check`     |
-| `components/claim-action.ts`        | `submitClaimAction`          | `claim.submit`           |
-| `components/claim-action.ts`        | `claimFormAction`            | `claim.form`             |
-| `components/sign-in-action.ts`      | `signInAction`               | `sign-in.submit`         |
-| `components/sign-in-action.ts`      | `signInFormAction`           | `sign-in.form`           |
-| `components/profile-edit-action.ts` | `saveProfileAction`          | `profile.save`           |
-| `components/resend-action.ts`       | `requestNewVerificationLink` | `verification.resend`    |
-| `app/og-image/route.ts`             | `GET`                        | `og-image.generic`       |
-| `app/[handle]/og-image/route.ts`    | `GET`                        | `og-image.handle`        |
+| File                                  | Export                           | `boundary`               |
+| ------------------------------------- | -------------------------------- | ------------------------ |
+| `app/api/auth/[...all]/route.ts`      | `GET` / `POST`                   | `auth.get` / `auth.post` |
+| `app/claim/verify/route.ts`           | `GET`                            | `claim.verify`           |
+| `components/availability-action.ts`   | `checkAvailability`              | `availability.check`     |
+| `components/claim-action.ts`          | `submitClaimAction`              | `claim.submit`           |
+| `components/claim-action.ts`          | `claimFormAction`                | `claim.form`             |
+| `components/sign-in-action.ts`        | `signInAction`                   | `sign-in.submit`         |
+| `components/sign-in-action.ts`        | `signInFormAction`               | `sign-in.form`           |
+| `components/profile-edit-action.ts`   | `saveProfileAction`              | `profile.save`           |
+| `components/resend-action.ts`         | `requestNewVerificationLink`     | `verification.resend`    |
+| `components/password-reset-action.ts` | `requestPasswordResetFormAction` | `password-reset.request` |
+| `components/password-reset-action.ts` | `setNewPasswordFormAction`       | `password-reset.set`     |
+| `app/og-image/route.ts`               | `GET`                            | `og-image.generic`       |
+| `app/[handle]/og-image/route.ts`      | `GET`                            | `og-image.handle`        |
 
 The two image routes ([#161](https://github.com/joshstothard/3moji/issues/161)) log `ok` whenever they answer with an image and `failed` when the render throws. **`og-image.handle` logs `ok` for a claimed Profile and for the generic image alike**, so the log is no more a record of which Handles are held than the image is.
 
 `outcome` is one of six values, chosen to describe what happened rather than who asked:
 
-| `outcome`      | Meaning                                 | Where it comes from                                                                                                                                                                                                                                                      |
-| -------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ok`           | answered with a value or a 2xx          | an availability state; an auth 2xx                                                                                                                                                                                                                                       |
-| `redirected`   | succeeded, and the answer is a redirect | a Claim held (fresh **and** collision); signed in, or sent to an unverified hold screen; a Profile saved; a resend `sent` (for any address); a Claim finalised (`claimed`, `already-claimed`); an auth 3xx                                                               |
-| `rejected`     | the input was refused                   | a claim `invalid`/`taken`/`not-claimable`/`not-a-handle`; a sign-in `invalid`; a Profile `forbidden`/`invalid`; a resend `invalid`; a link `link-unknown`/`-superseded`/`-expired`/`hold-expired`; a non-string availability segment; an auth 4xx other than 404 and 429 |
-| `rate-limited` | refused because of a limit              | a claim `rate-limited` (#157); a resend `too-soon`/`too-many`; an auth 429                                                                                                                                                                                               |
-| `not-found`    | `notFound()` or a 404                   | Next.js's `notFound()`; an auth 404 (including the refused `/sign-up/email`)                                                                                                                                                                                             |
-| `failed`       | could not answer                        | anything thrown that is not Next.js control flow; a `failed` state; an availability read that degraded to `unknown`; an auth 5xx                                                                                                                                         |
+| `outcome`      | Meaning                                 | Where it comes from                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ok`           | answered with a value or a 2xx          | an availability state; an auth 2xx                                                                                                                                                                                                                                                                                                                                                         |
+| `redirected`   | succeeded, and the answer is a redirect | a Claim held (fresh **and** collision); signed in, or sent to an unverified hold screen; a Profile saved; a resend `sent` (for any address); a password reset request `sent` (for any address); a password set; a Claim finalised (`claimed`, `already-claimed`); an auth 3xx                                                                                                              |
+| `rejected`     | the input was refused                   | a claim `invalid`/`taken`/`not-claimable`/`not-a-handle`; a sign-in `invalid`; a Profile `forbidden`/`invalid`; a resend `invalid`; a reset request `invalid`; a reset link that no longer works, or a new password refused as too short or too long; a link `link-unknown`/`-superseded`/`-expired`/`hold-expired`; a non-string availability segment; an auth 4xx other than 404 and 429 |
+| `rate-limited` | refused because of a limit              | a claim `rate-limited` (#157); a resend `too-soon`/`too-many`; a reset request `rate-limited` (#192); an auth 429                                                                                                                                                                                                                                                                          |
+| `not-found`    | `notFound()` or a 404                   | Next.js's `notFound()`; an auth 404 (including the refused `/sign-up/email`)                                                                                                                                                                                                                                                                                                               |
+| `failed`       | could not answer                        | anything thrown that is not Next.js control flow; a `failed` state; an availability read that degraded to `unknown`; an auth 5xx                                                                                                                                                                                                                                                           |
 
 Three rules hold it together:
 
 - **A redirect is not a failure.** `redirect()` and `notFound()` work by throwing. `atBoundary` identifies them with Next.js's own digest checks (`isRedirectError`, `isHTTPAccessFallbackError` — what `unstable_rethrow` uses), never by message, logs the outcome the boundary recorded before throwing (else `redirected` / `not-found`), and **always rethrows**. Anything else thrown is `failed` and rethrown untouched: the wrapper adds a line, never a catch, so `/claim/verify`'s deliberate 500 is unchanged. `boundary-log.test.ts` throws the real functions, so an upgrade that changes them fails the build.
-- **Non-enumeration holds in the log.** Every refusal of claim input is the one `rejected`, and a collision records the same `redirected` as a fresh Claim. `durationMs` is taken around the whole call, so the 500 ms response floor inside `submitClaim` and `resendVerification` is inside it. `claim-non-enumeration.test.tsx` runs the real `submitClaim` for a registered and an unregistered address and asserts the two lines are identical but for `durationMs`, and both durations are at least the floor.
+- **Non-enumeration holds in the log.** Every refusal of claim input is the one `rejected`, and a collision records the same `redirected` as a fresh Claim. `durationMs` is taken around the whole call, so the 500 ms response floor inside `submitClaim`, `resendVerification` and `requestPasswordReset` is inside it. `claim-non-enumeration.test.tsx` runs the real `submitClaim` for a registered and an unregistered address and asserts the two lines are identical but for `durationMs`, and both durations are at least the floor.
 - **One line per HTTP call.** `claimFormAction` and `signInFormAction` share an unexported implementation with their siblings instead of calling them, so a form submission cannot write two lines.
 
 **The auth route never logs its path.** `endpoint` is matched against Better Auth's own endpoint list (`AUTH_ENDPOINTS`); `/reset-password/<token>` logs `reset-password/:token` and `/callback/<id>` logs `callback/:id`, and anything unlisted logs `other`. The query string and body are never read.

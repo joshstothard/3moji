@@ -154,5 +154,26 @@
     "profileImageAlt": "{spoken}, {name}",
     "handleImageAlt": "{spoken}",
     "imageTagline": "A web address you can say out loud."
+  },
+  "PasswordReset": {
+    "forgotPasswordLink": "Forgot your password?",
+    "resetDone": "Your password has been changed, and every device that was signed in has been signed out. Sign in with your new password.",
+    "requestHeading": "Reset your password",
+    "requestIntro": "Enter the email address you use for 3moji. If it belongs to an account, we will email a link to set a new password.",
+    "emailLabel": "Email address",
+    "requestSubmit": "Email me a reset link",
+    "requestSent": "If that address belongs to an account, a reset link is on its way. The link works once, for an hour.",
+    "requestInvalid": "Enter a valid email address.",
+    "requestRateLimited": "Too many reset requests from this connection. Wait a while, then try again.",
+    "requestFailed": "We could not send a reset link just now. Try again in a moment.",
+    "linkInvalid": "That reset link does not work any more. Links work once, for an hour. Ask for a new one below.",
+    "backToSignIn": "Back to sign in",
+    "setHeading": "Choose a new password",
+    "newPasswordLabel": "New password",
+    "newPasswordHint": "At least {min} characters.",
+    "setSubmit": "Set new password",
+    "setTooShort": "That password is too short. Use at least {min} characters.",
+    "setTooLong": "That password is too long. Use at most {max} characters.",
+    "setFailed": "We could not set your password just now. Try again in a moment."
   }
 }

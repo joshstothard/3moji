@@ -6,6 +6,7 @@ import {
   authRateLimitOptions,
 } from "./auth-rate-limit";
 import { createAuth } from "./create-auth";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-length";
 
 const SECRET = "a".repeat(32);
 const BASE_URL = "http://localhost:3000";
@@ -83,12 +84,42 @@ describe("createAuth", () => {
 
       await auth.options.emailAndPassword.sendResetPassword({
         user: { id: "u1", email: "reset@example.com" },
-        url: `${BASE_URL}/api/auth/reset-password?token=xyz`,
+        url: `${BASE_URL}/api/auth/reset-password/xyz?callbackURL=`,
         token: "xyz",
       } as never);
 
       expect(emailSender.lastSent()?.to).toBe("reset@example.com");
-      expect(emailSender.lastSent()?.text).toContain("token=xyz");
+      await close();
+    });
+
+    it("links a reset to our own page, with the token as a path segment rather than Better Auth's callback (#192)", async () => {
+      const { auth, emailSender, close } = build();
+
+      await auth.options.emailAndPassword.sendResetPassword({
+        user: { id: "u1", email: "reset@example.com" },
+        url: `${BASE_URL}/api/auth/reset-password/tok_en-1?callbackURL=`,
+        token: "tok_en-1",
+      } as never);
+
+      const text = emailSender.lastSent()?.text ?? "";
+      const links = text.match(/https?:\/\/\S+/g);
+      expect(links).toEqual([`${BASE_URL}/reset-password/tok_en-1`]);
+      expect(text).not.toContain("/api/auth/");
+      expect(text).not.toContain("token=");
+      expect(emailSender.lastSent()?.subject).not.toContain("tok_en-1");
+      await close();
+    });
+
+    it("states the password lengths the set-new-password form tells the browser (#192)", async () => {
+      const { auth, close } = build();
+
+      expect(auth.options.emailAndPassword.minPasswordLength).toBe(
+        PASSWORD_MIN_LENGTH,
+      );
+      expect(auth.options.emailAndPassword.maxPasswordLength).toBe(
+        PASSWORD_MAX_LENGTH,
+      );
+      expect([PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH]).toEqual([8, 128]);
       await close();
     });
 
