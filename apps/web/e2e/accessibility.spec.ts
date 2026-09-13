@@ -486,7 +486,7 @@ test("the alias listing never seeds a Handle handle-url.spec.ts needs unclaimed"
 test("the find page's not-found answer has no WCAG A or AA violations (#200)", async ({
   page,
 }) => {
-  await page.goto(`/find?q=${encodeURIComponent("three ice cubes")}`);
+  await page.goto(`/find?q=${encodeURIComponent("three wibbles")}`);
   await expect(
     page.getByRole("heading", { level: 1, name: en.FindPage.notFoundHeading }),
   ).toBeVisible();
@@ -503,7 +503,7 @@ test("the Handle lookup's field border meets non-text contrast (#200)", async ({
   await openHome(page);
   await expectBorderIdentifiesControl(field, "lookup field on /");
 
-  await page.goto(`/find?q=${encodeURIComponent("three ice cubes")}`);
+  await page.goto(`/find?q=${encodeURIComponent("three wibbles")}`);
   await expectBorderIdentifiesControl(field, "lookup field on /find");
 });
 

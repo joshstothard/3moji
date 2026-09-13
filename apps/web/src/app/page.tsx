@@ -1,8 +1,31 @@
+import type { Metadata } from "next";
 import { HandleBuilder } from "../components/handle-builder";
 import { HandleLookup } from "../components/handle-lookup";
 import { checkAvailability } from "../components/availability-action";
 import { claimFormAction } from "../components/claim-action";
+import { genericMetadataOf } from "../lib/og/metadata";
+import { siteOrigin } from "../lib/share-link";
 import en from "../../../../packages/shared/messages/en.json";
+
+/**
+ * The home page's link preview
+ * ([#204](https://github.com/joshstothard/3moji/issues/204)): the site's name,
+ * its tagline and the one generic image at `/og-image`, the same card every
+ * page that is not a claimed Profile gets.
+ *
+ * `metadataBase` is set here, not in the root layout, because layout metadata
+ * is inherited by every page, Profiles included. With no configured origin it
+ * is omitted, like every absolute URL in the card (`lib/og/metadata.ts`), so
+ * Next.js never resolves one against a guessed host. Read when the page renders,
+ * not at module scope; the home page is static, so that is at build time.
+ */
+export function generateMetadata(): Metadata {
+  const origin = siteOrigin();
+  return {
+    ...(origin === undefined ? {} : { metadataBase: new URL(origin) }),
+    ...genericMetadataOf(origin),
+  };
+}
 
 /**
  * The home page: the surface the product is judged on.

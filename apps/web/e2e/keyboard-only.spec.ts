@@ -275,7 +275,7 @@ test("a visitor looks up a Handle by keyboard alone (#200)", async ({
   await page.goto("/");
   const field = page.getByRole("searchbox", { name: lookupCopy.label });
   await moveFocusTo(page, field, "Tab");
-  await page.keyboard.type("three ice cubes");
+  await page.keyboard.type("three wibbles");
   await moveFocusTo(
     page,
     page.getByRole("button", { name: lookupCopy.submit }),
