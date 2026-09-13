@@ -371,5 +371,18 @@
     "yourProfile": "Your Profile",
     "editProfile": "Edit your Profile",
     "noHandle": "There is no Profile to show for this account just now."
+  },
+  "NotFoundPage": {
+    "metaTitle": "Page not found · 3moji",
+    "heading": "There is nothing at this address",
+    "body": "Check the web address for a typo, or start again from the home page.",
+    "home": "Go to the home page"
+  },
+  "ErrorPage": {
+    "metaTitle": "Something went wrong · 3moji",
+    "heading": "Something went wrong",
+    "body": "We could not show this page just now. Try again, or start again from the home page.",
+    "retry": "Try again",
+    "home": "Go to the home page"
   }
 }

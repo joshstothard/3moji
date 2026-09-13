@@ -1,3 +1,4 @@
+import { isSafeCorrelationId } from "./correlation-id";
 import { currentCorrelationId } from "./request-context";
 
 /**
@@ -187,12 +188,24 @@ export function describeError(error: unknown): ErrorDescriptor {
  * `proxy.ts` set; outside one — a build step, a test, a path the proxy skips —
  * it is the literal `"none"`. It is read synchronously, so the line is still
  * written before this returns, and reading it never throws.
+ *
+ * A caller that holds the request itself — `onRequestError`, which Next.js
+ * calls from outside the render (#203) — passes the id it read from the
+ * request's headers. It gets the same allow-list as the store: an id that
+ * fails it is ignored, and the store is read instead.
  */
-export function logFailure(event: string, error: unknown): void {
+export function logFailure(
+  event: string,
+  error: unknown,
+  correlationId?: string,
+): void {
   console.error(
     JSON.stringify({
       event,
-      correlationId: currentCorrelationId(),
+      correlationId:
+        correlationId !== undefined && isSafeCorrelationId(correlationId)
+          ? correlationId
+          : currentCorrelationId(),
       error: describeError(error),
     }),
   );

@@ -162,6 +162,60 @@ describe("logFailure", () => {
       expect(JSON.stringify(line)).not.toContain("forged");
     });
 
+    it("carries an id it is given, for a caller that holds the request but may not be inside its store (#203)", () => {
+      const output: unknown[] = [];
+      const spy = jest
+        .spyOn(console, "error")
+        .mockImplementation((...args: unknown[]) => {
+          output.push(args[0]);
+        });
+      try {
+        logFailure("request_failed", new Error("boom"), ID);
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(output.map((line): unknown => JSON.parse(String(line)))).toEqual([
+        expect.objectContaining({ event: "request_failed", correlationId: ID }),
+      ]);
+    });
+
+    it("never writes a forged id it is given, and reads the store instead", () => {
+      const output: unknown[] = [];
+      const spy = jest
+        .spyOn(console, "error")
+        .mockImplementation((...args: unknown[]) => {
+          output.push(args[0]);
+        });
+      try {
+        Reflect.apply(
+          workUnitAsyncStorage.run.bind(workUnitAsyncStorage),
+          undefined,
+          [
+            {
+              type: "request",
+              headers: new Headers({ "x-correlation-id": ID }),
+            },
+            () => {
+              logFailure(
+                "request_failed",
+                new Error("boom"),
+                `"},{"event":"forged`,
+              );
+            },
+          ],
+        );
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(output).toHaveLength(1);
+      expect(JSON.parse(String(output[0]))).toMatchObject({
+        correlationId: ID,
+      });
+      expect(String(output[0])).not.toContain("forged");
+    });
+
     it("does not throw when the request store cannot be read", () => {
       const hostile = {
         type: "request",

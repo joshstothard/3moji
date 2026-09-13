@@ -119,6 +119,15 @@ Three rules hold it together:
 
 **The auth route never logs its path.** `endpoint` is matched against Better Auth's own endpoint list (`AUTH_ENDPOINTS`); `/reset-password/<token>` logs `reset-password/:token` and `/callback/<id>` logs `callback/:id`, and anything unlisted logs `other`. The query string and body are never read.
 
+### Not-found and error pages
+
+[#203](https://github.com/joshstothard/3moji/issues/203) replaces Next.js's default 404 and error screens with branded ones.
+
+- **`app/not-found.tsx`** renders inside the root layout, with the navbar, the footer and a link home, for an unmatched path and for every `notFound()`. **It changes no route's answer.** `[handle]` still decides what is a Handle, a word alias or neither, so a reserved Handle such as `/🍕🍕🍕` still resolves with 200, and only a path that already answered 404 gets this page. It reads no request data: a dynamic, streamed response sends its status before the page could set one, and the 404 would arrive as a 200. `error-pages.spec.ts` asserts the 404 for an unknown path, a segment that is not a Handle and a word that names none, and the 200 for `/🍕🍕🍕`.
+- **`app/error.tsx`** is a client component, as Next.js requires. It renders inside the layout when a page or a nested layout throws. **`app/global-error.tsx`** covers a failure in the root layout itself, and replaces that layout, so it carries its own `<html lang>`, title and stylesheet and nothing else. Both render `components/error-notice.tsx`: a heading, a retry button that calls Next.js's `retry()`, and a link home. **Neither page passes the error on**, so no message, digest or stack trace can reach the screen.
+- **The error is logged on the server, by `onRequestError` in `src/instrumentation.ts`**, not by the page, which runs in the browser. Next.js 16.3.5 calls it once for each error it captures, in a render, a route handler, a server action or the proxy. It runs inside the request, and not for `notFound()` or a redirect; `lib/request-error.ts` refuses those too, with `atBoundary`'s digest checks. It writes one `logFailure` line, `event: "request_failed"`. The correlation id comes from the request's `x-correlation-id` header, which `logFailure` checks against the allow-list, with the request store as the fallback. Nothing in `src` logs a failure through `logFailure` and then rethrows it, so no failure gets two lines. **There is no endpoint for error reports from the browser**; it would be a new public surface, and the server already has the error.
+- **`/test-only-error` throws only in a test run.** `app/test-only-error/page.tsx` calls `notFound()` unless `TEST_ERROR_ROUTE=enabled`, and `lib/test-error-route.ts` refuses the switch on any deployment: `NODE_ENV=production` or any `VERCEL_ENV`, the `lib/deployment.ts` rule `TEST_EMAIL_SENDER` also follows. CI's E2E job sets it, so `accessibility.spec.ts` can check the error page with axe, contrast included, in both Playwright projects. jsdom cannot do that, since it paints no colour.
+
 ### The home page
 
 `apps/web/src/app/page.tsx` is a server component that holds no state and fetches nothing. Its whole job is composition: it hands `HandleBuilder` the availability read and lets the builder own the interaction.
@@ -326,7 +335,7 @@ Both grammars share the one root route, dispatching on the received segment: `ca
 
 ### Error tracking
 
-**Error tracking uses Vercel's own runtime logs, not a third-party service** (workstream Decision log, 2026-09-13). What reaches them is the structured lines above: one `api_boundary` line per call, and a `logFailure` line on `console.error` for each failure, sharing a `correlationId` that the response also returns as `x-correlation-id`. There is no alerting on them yet.
+**Error tracking uses Vercel's own runtime logs, not a third-party service** (workstream Decision log, 2026-09-13). What reaches them is the structured lines above: one `api_boundary` line per call, and a `logFailure` line on `console.error` for each failure, sharing a `correlationId` that the response also returns as `x-correlation-id`. An error nothing caught, the one the branded error page is shown for, gets its `request_failed` line from `onRequestError` (§ Not-found and error pages). There is no alerting on them yet.
 
 - **On Hobby, runtime logs are kept for one hour** ([hosting and email report](../reports/2026-09-11-hosting-and-email.md) § 4). An incident has to be investigated, or its lines copied out, within the hour. The [runbooks](../runbooks/README.md) start with that step.
 - **Log drains and longer retention wait on the Vercel Pro upgrade**, an owner decision ([owner actions](../owner-actions.md), "When to move to Vercel Pro"). That Pro provides both is **expected, not verified: confirm it against Vercel's current docs** before relying on it.
