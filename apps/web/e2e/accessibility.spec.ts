@@ -585,6 +585,37 @@ test("an alias listing has no WCAG A or AA violations", async ({ page }) => {
   expectLandmarksContained(await checkLandmarks(page));
 });
 
+test("the branded 404 has no WCAG A or AA violations (#203)", async ({
+  page,
+}) => {
+  // Contrast is axe's `color-contrast`, in PAGE_RULES, measured from the real
+  // CSS: the heading, the body text and the white-on-indigo home link.
+  const response = await page.goto("/no/such/page");
+  expect(response?.status()).toBe(404);
+  await expect(
+    page.getByRole("heading", { level: 1, name: en.NotFoundPage.heading }),
+  ).toBeVisible();
+
+  expectAccessible(await checkPage(page), []);
+  expectLandmarksContained(await checkLandmarks(page));
+});
+
+test("the branded error page has no WCAG A or AA violations (#203)", async ({
+  page,
+}) => {
+  // `/test-only-error` throws only because CI sets TEST_ERROR_ROUTE
+  // (lib/test-error-route.ts). Contrast is axe's `color-contrast`, covering the
+  // white-on-indigo retry button and the indigo home link.
+  const response = await page.goto("/test-only-error");
+  expect(response?.status()).toBe(500);
+  await expect(
+    page.getByRole("heading", { level: 1, name: en.ErrorPage.heading }),
+  ).toBeVisible();
+
+  expectAccessible(await checkPage(page), ["button-name"]);
+  expectLandmarksContained(await checkLandmarks(page));
+});
+
 function randomOf<T>(items: readonly T[]): T {
   const item = items[Math.floor(Math.random() * items.length)];
   if (item === undefined) {

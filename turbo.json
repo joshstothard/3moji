@@ -17,6 +17,7 @@
         "RESEND_API_KEY",
         "RESEND_FROM",
         "TEST_EMAIL_SENDER",
+        "TEST_ERROR_ROUTE",
         "REPORT_CONTACT_EMAIL"
       ]
     },
