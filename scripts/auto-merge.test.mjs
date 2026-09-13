@@ -496,10 +496,15 @@ function fakeGitHub({
   mainMovesDuringWaits = 0,
   budgetMinutes = 20,
   extraRunsAtUpdatedHead = () => [],
+  closingIssues = [],
+  closeFails = false,
+  mergeSucceeds = true,
 } = {}) {
   let clock = Date.parse("2026-09-13T07:33:32Z");
   const actions = [];
   const lines = [];
+  const warnings = [];
+  const lookups = [];
   const runs = new Map([
     [
       "stale-sha",
@@ -551,10 +556,26 @@ function fakeGitHub({
         !run || clock >= run.completesAt,
         `merged ${current.headSha} before the CI dispatched on it completed`,
       );
+      if (!mergeSucceeds) {
+        actions.push(`merge ${current.headSha} failed`);
+        return false;
+      }
       actions.push(`merge ${current.headSha} (${method})`);
       pr = { ...pr, state: "closed" };
       return true;
     },
+    repo: "o/r",
+    closingIssues: (prNumber) => {
+      lookups.push(prNumber);
+      return closingIssues;
+    },
+    closeIssue: (issueNumber, prNumber) => {
+      if (closeFails) {
+        throw new Error("HTTP 403: Resource not accessible by integration");
+      }
+      actions.push(`close #${issueNumber} (PR #${prNumber})`);
+    },
+    warn: (line) => warnings.push(line),
     sleep: (ms) => {
       clock += ms;
     },
@@ -563,7 +584,7 @@ function fakeGitHub({
     pollMs: POLL_MS,
     log: (line) => lines.push(line),
   };
-  return { deps, actions, lines, clock: () => clock };
+  return { deps, actions, lines, warnings, lookups, clock: () => clock };
 }
 
 describe("gatePullRequest: after updating a branch (#58)", () => {
@@ -654,5 +675,111 @@ describe("gatePullRequest: after updating a branch (#58)", () => {
     const decision = gatePullRequest(12, { ...github.deps, dryRun: true });
     assert.deepEqual(github.actions, []);
     assert.deepEqual(decision, { action: "update", reason: "behind-main" });
+  });
+});
+
+// #42: a merge made with GITHUB_TOKEN does not fire GitHub's closing-keyword
+// automation. Measured on 2026-09-13: PRs #130 and #127, merged by the gate,
+// left #36 and #125 open until they were closed by hand; PRs #131 and #133,
+// merged by a person, closed #43 and #115 within two seconds. So after a
+// successful merge the gate closes the PR's closing issues itself — the ones
+// GitHub links through `closingIssuesReferences`, never a regex over the body.
+const linkedIssue = (number, state = "OPEN", repository = "o/r") => ({
+  number,
+  state,
+  repository: { nameWithOwner: repository },
+});
+
+describe("gatePullRequest: closing the merged PR's issues (#42)", () => {
+  it("closes the one open issue the merged PR links as closing", () => {
+    const github = fakeGitHub({
+      behindBy: 0,
+      closingIssues: [linkedIssue(42)],
+    });
+    const decision = gatePullRequest(12, github.deps);
+    assert.deepEqual(github.actions, [
+      "merge stale-sha (squash)",
+      "close #42 (PR #12)",
+    ]);
+    assert.deepEqual(decision, MERGE);
+  });
+
+  it("leaves an already-closed issue alone: no second close and no comment", () => {
+    const github = fakeGitHub({
+      behindBy: 0,
+      closingIssues: [linkedIssue(41, "CLOSED"), linkedIssue(42)],
+    });
+    gatePullRequest(12, github.deps);
+    assert.deepEqual(github.actions, [
+      "merge stale-sha (squash)",
+      "close #42 (PR #12)",
+    ]);
+  });
+
+  it("never touches an issue in another repository, even one linked as closing", () => {
+    const github = fakeGitHub({
+      behindBy: 0,
+      closingIssues: [linkedIssue(42, "OPEN", "someone/else"), linkedIssue(7)],
+    });
+    gatePullRequest(12, github.deps);
+    assert.deepEqual(github.actions, [
+      "merge stale-sha (squash)",
+      "close #7 (PR #12)",
+    ]);
+  });
+
+  // `Part of #42` and `Refs #42` are not closing keywords, so GitHub does not
+  // list them. The gate asks GitHub which issues close, and closes only those.
+  it("asks GitHub for the closing issues, and closes nothing when there are none", () => {
+    const github = fakeGitHub({ behindBy: 0, closingIssues: [] });
+    const decision = gatePullRequest(12, github.deps);
+    assert.deepEqual(github.lookups, [12]);
+    assert.deepEqual(github.actions, ["merge stale-sha (squash)"]);
+    assert.deepEqual(decision, MERGE);
+  });
+
+  it("reports a close failure after a successful merge without reporting the merge as failed", () => {
+    const github = fakeGitHub({
+      behindBy: 0,
+      closingIssues: [linkedIssue(42)],
+      closeFails: true,
+    });
+    const decision = gatePullRequest(12, github.deps);
+    assert.deepEqual(decision, MERGE);
+    assert.deepEqual(github.actions, ["merge stale-sha (squash)"]);
+    assert.equal(
+      github.warnings.length,
+      1,
+      `expected one warning for the failed close: ${JSON.stringify(github.warnings)}`,
+    );
+    assert.match(github.warnings[0], /#12: merged, but could not close #42/);
+    assert.ok(
+      ![...github.lines, ...github.warnings].some((line) =>
+        line.includes("could not merge"),
+      ),
+      "a failed close was reported as a failed merge",
+    );
+  });
+
+  it("closes nothing when the merge itself failed", () => {
+    const github = fakeGitHub({
+      behindBy: 0,
+      closingIssues: [linkedIssue(42)],
+      mergeSucceeds: false,
+    });
+    gatePullRequest(12, github.deps);
+    assert.deepEqual(github.actions, ["merge stale-sha failed"]);
+    assert.deepEqual(github.lookups, []);
+  });
+
+  it("closes nothing in a dry run", () => {
+    const github = fakeGitHub({
+      behindBy: 0,
+      closingIssues: [linkedIssue(42)],
+    });
+    const decision = gatePullRequest(12, { ...github.deps, dryRun: true });
+    assert.deepEqual(decision, MERGE);
+    assert.deepEqual(github.actions, []);
+    assert.deepEqual(github.lookups, []);
   });
 });
