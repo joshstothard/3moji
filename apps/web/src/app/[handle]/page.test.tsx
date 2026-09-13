@@ -73,6 +73,17 @@ const resolveAlias = jest.fn((_segment: string): StubAlias => ({
 const spokenHandle = jest.fn(
   (_codepoints: readonly string[]): string | undefined => SPOKEN,
 );
+/**
+ * The canonical word alias, faked for the reason `spokenHandle` is: its real
+ * answers come from the curated names and are asserted in
+ * `packages/core/src/handle/alias.test.ts`. What belongs here is that the share
+ * control on a Profile is built from it
+ * ([#160](https://github.com/joshstothard/3moji/issues/160)).
+ */
+const ALIAS = "ice-cube.ice-cube.ice-cube";
+const canonicalAliasOf = jest.fn(
+  (_codepoints: readonly string[]): string | undefined => ALIAS,
+);
 
 // packages/core pulls in ESM-only dependencies that cannot be `require`d under
 // this suite, which is why `lib/services.test.ts` mocks it too. It is also the
@@ -83,7 +94,26 @@ jest.mock("@template/core", () => ({
   canonicalise: (segment: string) => canonicalise(segment),
   resolveAlias: (segment: string) => resolveAlias(segment),
   spokenHandle: (codepoints: readonly string[]) => spokenHandle(codepoints),
+  canonicalAliasOf: (codepoints: readonly string[]) =>
+    canonicalAliasOf(codepoints),
 }));
+
+/**
+ * The share link's origin is `BETTER_AUTH_URL`, read on the server by
+ * `lib/share-link.ts`. Set here with a trailing slash, so a link built by
+ * string concatenation would come out with a doubled `//`.
+ */
+const ORIGIN = "http://localhost:3000";
+const SHARE_HREF = `${ORIGIN}/${ALIAS}`;
+const savedOrigin = process.env.BETTER_AUTH_URL;
+process.env.BETTER_AUTH_URL = `${ORIGIN}/`;
+afterAll(() => {
+  if (savedOrigin === undefined) {
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_URL");
+  } else {
+    process.env.BETTER_AUTH_URL = savedOrigin;
+  }
+});
 
 /**
  * `jest.setup.ts` mocks these as bare `jest.fn()`, which return `undefined`.
@@ -1312,7 +1342,11 @@ describe("a claimed Handle with a Profile", () => {
   it("offers no builder, because the Handle is somebody else's", async () => {
     render(await renderProfile());
 
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    // The share control (#160) is the one button a Profile carries; anything
+    // else would be the builder, or a control nobody asked for.
+    expect(
+      screen.queryAllByRole("button").map((button) => button.textContent),
+    ).toEqual([copy.shareCopy]);
     expect(
       screen.queryByRole("heading", { name: builderCopy.builderHeading }),
     ).not.toBeInTheDocument();
@@ -1470,5 +1504,158 @@ describe("the sealed states", () => {
     expect(
       screen.queryByRole("link", { name: "Who is holding this" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The share control ([#160](https://github.com/joshstothard/3moji/issues/160)):
+ * ADR-0008 decision 3's canonical word alias, offered where a claimed Profile
+ * is shown and nowhere else. How it copies, announces and falls back is
+ * `components/share-link.test.tsx`'s; what belongs here is where it appears and
+ * what it is built from.
+ */
+describe("the share control on a Handle page", () => {
+  function shareButton(): HTMLElement | null {
+    return screen.queryByRole("button", { name: copy.shareCopy });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.BETTER_AUTH_URL = `${ORIGIN}/`;
+    canonicalise.mockReturnValue(resolved);
+    resolveAlias.mockReturnValue({ ok: false, reason: "not-an-alias" });
+    spokenHandle.mockReturnValue(SPOKEN);
+    canonicalAliasOf.mockReturnValue(ALIAS);
+    readAvailability.mockResolvedValue("claimed");
+    checkAvailability.mockResolvedValue("available");
+    readProfile.mockResolvedValue({ state: "profile", profile: PROFILE });
+    readDisplayNames.mockResolvedValue(new Map());
+  });
+
+  it("is offered on a claimed Profile, showing the canonical alias link", async () => {
+    render(await visit(ENCODED));
+
+    expect(shareButton()).toBeInTheDocument();
+    expect(screen.getByText(SHARE_HREF)).toBeInTheDocument();
+  });
+
+  it("builds the link from the Handle's own code points", async () => {
+    render(await visit(ENCODED));
+
+    expect(canonicalAliasOf).toHaveBeenCalledWith([ICE, ICE, ICE]);
+  });
+
+  it("copies exactly the origin, a slash and the canonical alias", async () => {
+    const user = userEvent.setup();
+    const writeText = jest.fn((_text: string) => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+      writable: true,
+    });
+    render(await visit(ENCODED));
+
+    await user.click(screen.getByRole("button", { name: copy.shareCopy }));
+
+    expect(writeText).toHaveBeenCalledWith(SHARE_HREF);
+  });
+
+  it("never offers the percent-encoded emoji URL", async () => {
+    render(await visit(ENCODED));
+
+    expect(shareButton()).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(ENCODED);
+    expect(document.body.textContent).not.toMatch(/%F0/i);
+  });
+
+  it("is offered on the same Profile reached at its word alias", async () => {
+    canonicalise.mockReturnValue({ ok: false, reason: "unknown-codepoint" });
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [
+        {
+          key: `${ICE}${ICE}${ICE}`,
+          encoded: ENCODED,
+          emoji: [{ emoji: ICE }, { emoji: ICE }, { emoji: ICE }],
+        },
+      ],
+    });
+
+    render(await visit(ALIAS));
+
+    expect(shareButton()).toBeInTheDocument();
+    expect(screen.getByText(SHARE_HREF)).toBeInTheDocument();
+  });
+
+  it("is omitted, not guessed, when no origin is configured", async () => {
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_URL");
+
+    render(await visit(ENCODED));
+
+    expect(screen.getByText("Zoe Frost")).toBeInTheDocument();
+    expect(shareButton()).not.toBeInTheDocument();
+  });
+
+  it("is omitted when the Handle has no canonical alias", async () => {
+    canonicalAliasOf.mockReturnValue(undefined);
+
+    render(await visit(ENCODED));
+
+    expect(screen.getByText("Zoe Frost")).toBeInTheDocument();
+    expect(shareButton()).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/undefined/);
+  });
+
+  it.each([
+    ["held", "held", { state: "none" }],
+    ["reserved", "not-claimable", { state: "none" }],
+    ["unknown", "unknown", { state: "none" }],
+    [
+      "claimed Handle whose Profile could not be read",
+      "claimed",
+      { state: "none" },
+    ],
+    ["claimed Handle never edited", "claimed", { state: "unedited" }],
+  ] as const)(
+    "is not offered for a %s",
+    async (_name, state: AvailabilityState, profile: ProfileState) => {
+      readAvailability.mockResolvedValue(state);
+      readProfile.mockResolvedValue(profile);
+
+      render(await visit(ENCODED));
+
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+      expect(shareButton()).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toContain(ALIAS);
+    },
+  );
+
+  it("is not offered for an unclaimed Handle", async () => {
+    readAvailability.mockResolvedValue("available");
+
+    await renderSettled(await visit(ENCODED));
+
+    expect(shareButton()).not.toBeInTheDocument();
+  });
+
+  it("is not offered on a listing of an alias's claimed Handles", async () => {
+    const RED = "\u{1F34E}";
+    const GREEN = "\u{1F34F}";
+    canonicalise.mockReturnValue({ ok: false, reason: "unknown-codepoint" });
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [RED, GREEN].map((emoji) => ({
+        key: `${emoji}${emoji}${emoji}`,
+        encoded: encodeURIComponent(`${emoji}${emoji}${emoji}`),
+        emoji: [{ emoji }, { emoji }, { emoji }],
+      })),
+    });
+
+    render(await visit("apple.apple.apple"));
+
+    expect(
+      screen.getByRole("list", { name: copy.aliasListingLabel }),
+    ).toBeInTheDocument();
+    expect(shareButton()).not.toBeInTheDocument();
   });
 });

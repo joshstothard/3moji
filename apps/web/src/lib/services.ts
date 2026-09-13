@@ -13,8 +13,11 @@ import { nextCookies } from "better-auth/next-js";
  * The application's composition point.
  *
  * ADR-0006 decision 4: dependencies are wired by a manual composition root, not
- * a container. This module reads the environment — the one place that does —
- * and hands the values to `packages/core`, which never reads it itself.
+ * a container. This module reads the service environment — the five required
+ * variables, and the one place that reads them to build services — and hands
+ * the values to `packages/core`, which never reads it itself. The one other
+ * reader is `lib/share-link.ts`, which takes the site origin from
+ * `BETTER_AUTH_URL` for a link string that needs no services (#160).
  *
  * **Built lazily, on first use.** `next build` imports route handlers, and the
  * factories throw on a missing secret or connection string. Constructing at

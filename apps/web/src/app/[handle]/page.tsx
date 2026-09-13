@@ -11,9 +11,11 @@ import {
 import { readAvailability } from "../../lib/availability";
 import { readDisplayNames, readProfile } from "../../lib/profile";
 import { safeLinkHref } from "../../lib/safe-link";
+import { shareLinkOf } from "../../lib/share-link";
 import { HandleBuilder } from "../../components/handle-builder";
 import { checkAvailability } from "../../components/availability-action";
 import { claimFormAction } from "../../components/claim-action";
+import { ShareLinkControl } from "../../components/share-link";
 import type { AvailabilityState } from "../../components/availability-state";
 import en from "../../../../../packages/shared/messages/en.json";
 
@@ -584,6 +586,14 @@ function UneditedHandle({
  * set" (`src/db/profile.ts`), and an owner may well have saved Links and
  * nothing else. Each is omitted rather than rendered empty, for the reason
  * {@link SpokenLine} is.
+ *
+ * **It offers its canonical word alias link for sharing**
+ * ([#160](https://github.com/joshstothard/3moji/issues/160), ADR-0008
+ * decision 3), to every visitor, whichever grammar they arrived by. The link is
+ * built here on the server and only the finished string crosses to the client
+ * control. It is omitted when there is no configured origin or no alias, and it
+ * is offered on this view alone: never on an unedited, held, reserved, unknown
+ * or unclaimed Handle, and never on a listing.
  */
 function ProfilePage({
   handle,
@@ -594,6 +604,8 @@ function ProfilePage({
   readonly spoken: string | undefined;
   readonly profile: Profile;
 }) {
+  const share = shareLinkOf(handle.emoji.map((entry) => entry.emoji));
+
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div className="text-center">
@@ -619,6 +631,11 @@ function ProfilePage({
           ))}
         </ul>
       )}
+      {/*
+       * After the owner's Links, so the first tab stop on a Profile is still the
+       * owner's own content rather than a control of ours.
+       */}
+      {share !== undefined && <ShareLinkControl href={share.href} />}
     </main>
   );
 }
