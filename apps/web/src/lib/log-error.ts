@@ -4,10 +4,12 @@
  * **Never the message.** The message of a thrown error is free text written by
  * whatever threw it — Better Auth, the `pg` driver through Drizzle, the Resend
  * API — and it can quote the values involved: a Postgres unique violation reads
- * `Key (email)=(someone@example.com) already exists`, and a Resend rejection
- * carries a slice of Resend's own response body. So a log line built from it
- * can write somebody's email address into production logs, on exactly the
- * unexpected failures nobody reads carefully before they are retained.
+ * `Key (email)=(someone@example.com) already exists`, and Drizzle's
+ * `Failed query` message repeats the statement's parameters. So a log line
+ * built from it can write somebody's email address into production logs, on
+ * exactly the unexpected failures nobody reads carefully before they are
+ * retained. (The Resend adapter's own error stopped quoting Resend's response
+ * body in #140, but a message from anything else still can.)
  *
  * What is logged instead is a descriptor made only of values that **cannot**
  * carry free text: an identifier-shaped `name` and `code` that passed an
@@ -99,8 +101,10 @@ function statusOf(error: object): string | undefined {
   if (typeof status === "string" && SAFE_STATUS_NAME.test(status)) {
     return status;
   }
-  // The Resend adapter states the status only in its message. The capture is
-  // three digits, so nothing else from that message can come with it.
+  // A fallback for an error that states its status only in its message. The
+  // Resend adapter's `ResendRequestRejected` carries `status` as a property
+  // and is read above; the capture here is three digits, so nothing else from
+  // a message can come with it.
   return STATUS_IN_MESSAGE.exec(messageOf(error) ?? "")?.[1];
 }
 
