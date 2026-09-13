@@ -13,9 +13,8 @@ const copy = en.ErrorPage;
  * **It is never given the error.** Next.js hands an error boundary the thrown
  * value — in development still carrying its message, in production a digest —
  * and the only way to be sure none of it reaches the screen is for the
- * component that renders the screen not to have it. The failure is logged on
- * the server by `onRequestError` (`instrumentation.ts`), with its correlation
- * id, so there is nothing for the browser to add.
+ * component that renders the screen not to have it. Nor does the browser log
+ * it: a failure belongs in the server's logs (`lib/request-error.ts`).
  */
 export function ErrorNotice({ retry }: { readonly retry: () => void }) {
   return (

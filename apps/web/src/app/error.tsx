@@ -8,8 +8,8 @@ import { ErrorNotice } from "../components/error-notice";
  *
  * Next.js requires this to be a client component. It receives the thrown
  * `error` as well as `retry`, and deliberately reads only `retry` — see
- * `ErrorNotice` for why the error goes no further, and `instrumentation.ts`
- * for where it is logged instead.
+ * `ErrorNotice` for why the error goes no further, and `lib/request-error.ts`
+ * for how it is to be logged on the server.
  */
 export default function ErrorPage({
   retry,

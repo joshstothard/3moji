@@ -12,8 +12,9 @@ import en from "../../../../packages/shared/messages/en.json";
  * Next.js renders it, in the browser, when a segment below the root layout
  * throws. In development the `error` it receives still carries the original
  * message, and in production it carries a digest; the page shows neither, nor
- * the stack. The failure is logged once on the server, by `onRequestError` in
- * `instrumentation.ts`, so the page logs nothing of its own.
+ * the stack. It logs nothing in the browser either: a failure belongs in the
+ * server's logs, and `lib/request-error.ts` holds what the server will do with
+ * it once #148 unblocks the hook.
  */
 const copy = en.ErrorPage;
 

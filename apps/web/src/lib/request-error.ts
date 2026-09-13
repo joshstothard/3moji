@@ -6,28 +6,32 @@ import { CORRELATION_ID_HEADER } from "./correlation-id";
 import { logFailure } from "./log-error";
 
 /**
- * What happens to an error nothing caught (#203).
+ * What should happen to an error nothing caught (#203). **Not wired yet.**
  *
- * `instrumentation.ts` hands it here from Next.js's `onRequestError`, which
- * runs **on the server**, once for each error Next.js captures while rendering
- * a page, in a route handler, in a server action or in the proxy. That is the
- * error the branded `error.tsx` is shown for, and that page runs in the
- * browser, so this is where it is logged: one `logFailure` line under
- * {@link REQUEST_FAILED_EVENT}, with the request's correlation id and never
- * the message.
+ * The branded `error.tsx` runs in the browser, so it cannot log on the server.
+ * Next.js's own server-side report of the same error is `onRequestError`,
+ * exported from `apps/web/src/instrumentation.ts`. A spike against 16.3.5
+ * measured it: one call per failed request, made inside the request (the
+ * request store answered the correlation id the proxy set), and no call for a
+ * 404, a 308 or a word-alias miss. This function is the body that hook would
+ * have.
  *
- * **Once.** Next.js reports a render error from its React Server Components
- * handler and skips the HTML handler for a digest it has already reported, so a
- * failed request produces one call. Nothing in `src` logs a failure through
- * `logFailure` and then rethrows it, so a boundary's own line is never
- * repeated here: `atBoundary` rethrows without one, and the catches that do
- * log answer instead of throwing.
+ * **Why it is not wired.** `scripts/tracing-guard.test.mjs` fails the build if
+ * `apps/web` has an `instrumentation` file, because that file is where Next.js
+ * registers tracing, and the tracing decision in `AGENTS.md` § Observability
+ * (#148) is still the owner's to make. A file exporting only `onRequestError`
+ * registers nothing, but whether the guard should narrow to allow one is that
+ * decision, not this change's. Until it is made, an uncaught error while
+ * rendering a page gets no `logFailure` line; route handlers and server actions
+ * still get their `failed` line from `atBoundary`.
  *
- * **Not an answer.** `notFound()` and the redirects work by throwing. Next.js
- * does not report them — a spike against 16.3.5 saw no call for a 404, a 308 or
- * a word-alias miss — and they are refused here too, with the same digest
- * checks `atBoundary` uses, so a framework change cannot turn every 404 into a
- * failure line.
+ * What it does: one `logFailure` line under {@link REQUEST_FAILED_EVENT},
+ * carrying the correlation id from the request's `x-correlation-id` header —
+ * which `logFailure` checks against the allow-list, reading the request store
+ * when there is none and writing `"none"` for one that fails — and never the
+ * message. `notFound()` and the redirects work by throwing, and are refused
+ * with the digest checks `atBoundary` uses, so a framework change cannot turn
+ * every 404 into a failure line.
  */
 
 /** The `event` of the line, for log-based alerting to key on. */
@@ -37,8 +41,7 @@ type ErroredRequest = Parameters<Instrumentation.onRequestError>[1];
 
 /**
  * The id the proxy put on the request, as Next.js hands it to
- * `onRequestError`. `logFailure` applies the allow-list; a repeated header is
- * not an id at all.
+ * `onRequestError`. A repeated header is not an id at all.
  */
 function correlationIdOf(request: ErroredRequest): string | undefined {
   const value = request.headers[CORRELATION_ID_HEADER];

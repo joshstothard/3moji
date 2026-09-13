@@ -3,13 +3,14 @@
  */
 
 /**
- * How an error nothing caught reaches the logs (#203).
+ * What should happen to an error nothing caught (#203).
  *
- * Next.js calls `onRequestError` in `instrumentation.ts` on the server, once,
- * for an error thrown while rendering a page, in a route handler, in a server
- * action or in the proxy — and that is what shows the branded error page. This
- * is what it does with the error: one `logFailure` line, carrying the request's
- * correlation id and never the message.
+ * `reportRequestError` is the body Next.js's server-side `onRequestError` hook
+ * would have. The hook is not wired: its `instrumentation` file is blocked by
+ * `scripts/tracing-guard.test.mjs` pending the tracing decision in `AGENTS.md`
+ * § Observability (#148). So this proves the behaviour, not a live path: one
+ * `logFailure` line, carrying the request's correlation id and never the
+ * message, and nothing for `notFound()` or a redirect.
  */
 import "../test-support/next-async-local-storage";
 
