@@ -61,6 +61,7 @@ describe("the claim form, checked by axe", () => {
     ["not a Handle", { state: "not-a-handle" }, copy.claimNotAHandle],
     ["missing a field", { state: "invalid" }, copy.claimInvalid],
     ["a failure", { state: "failed" }, copy.claimFailed],
+    ["too many attempts", { state: "rate-limited" }, copy.claimRateLimited],
   ] as const)(
     "reports no violations after a rejection for %s",
     async (_name, state: ClaimFormState, message) => {
