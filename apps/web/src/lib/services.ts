@@ -1,9 +1,11 @@
 import {
   createCoreServices,
   createDatabase,
+  createRecordingEmailSender,
   createResendEmailSender,
   createSystemClock,
   type CoreServices,
+  type EmailSender,
 } from "@template/core";
 import { nextCookies } from "better-auth/next-js";
 
@@ -33,7 +35,78 @@ function required(name: string): string {
   return value;
 }
 
+/**
+ * The one value of `TEST_EMAIL_SENDER` that means anything.
+ *
+ * Spelled out rather than read as a boolean, so `TEST_EMAIL_SENDER=false` or a
+ * typo cannot be mistaken for either answer: an unrecognised value refuses to
+ * start instead.
+ */
+const RECORDING_SENDER = "recording";
+
+/**
+ * Whether this process is a deployment that real people use.
+ *
+ * `NODE_ENV` is `production` under `next start` and on every Vercel
+ * deployment; `VERCEL_ENV` is set on every Vercel deployment, previews
+ * included. Either is enough to refuse: refusing a preview costs a failed
+ * deploy, and not refusing costs verification email that silently never goes.
+ */
+function isDeployed(): boolean {
+  const vercelEnv = process.env.VERCEL_ENV;
+  return (
+    process.env.NODE_ENV === "production" ||
+    (vercelEnv !== undefined && vercelEnv !== "")
+  );
+}
+
+/**
+ * The transactional email sender: Resend, unless a test run asks otherwise.
+ *
+ * **`TEST_EMAIL_SENDER=recording` is a test-only switch, and production
+ * refuses it** ([#151](https://github.com/joshstothard/3moji/issues/151)). It
+ * lets CI's E2E job run the real app without sending mail through Resend. A
+ * switch that turns email off is also a switch that turns verification into a
+ * no-op, so it must not be reachable in production by misconfiguration: a
+ * deployed process with it set throws here, at construction, rather than
+ * starting quietly without email.
+ *
+ * **It is selected explicitly, never inferred.** A missing `RESEND_API_KEY`
+ * still throws exactly as before, and every variable is still required with
+ * the switch on, so the environment contract does not fork.
+ *
+ * `NODE_ENV` only ever *refuses* here; it never selects a code path. That is
+ * the distinction from the driver ADR-0010 removed, which chose one by
+ * `NODE_ENV` and so let CI exercise something production never ran.
+ */
+function emailSender(): EmailSender {
+  const apiKey = required("RESEND_API_KEY");
+  const from = required("RESEND_FROM");
+  const selected = process.env.TEST_EMAIL_SENDER;
+
+  if (selected === undefined || selected === "") {
+    return createResendEmailSender({ apiKey, from });
+  }
+
+  if (selected !== RECORDING_SENDER) {
+    throw new Error(
+      `TEST_EMAIL_SENDER has an unrecognised value. The only accepted value is "${RECORDING_SENDER}"; unset it to send through Resend.`,
+    );
+  }
+
+  if (isDeployed()) {
+    throw new Error(
+      "TEST_EMAIL_SENDER is set in a production environment. It selects a test-only sender that delivers no email, so the app refuses to start; unset it.",
+    );
+  }
+
+  return createRecordingEmailSender();
+}
+
 function build(): CoreServices {
+  // First, so a refused sender opens no connection pool.
+  const sender = emailSender();
+
   const { db } = createDatabase({
     url: required("DATABASE_URL"),
     nodeEnv: process.env.NODE_ENV,
@@ -43,10 +116,7 @@ function build(): CoreServices {
     clock: createSystemClock(),
     db,
     auth: {
-      emailSender: createResendEmailSender({
-        apiKey: required("RESEND_API_KEY"),
-        from: required("RESEND_FROM"),
-      }),
+      emailSender: sender,
       baseUrl: required("BETTER_AUTH_URL"),
       secret: required("BETTER_AUTH_SECRET"),
       from: required("RESEND_FROM"),

@@ -1,3 +1,5 @@
+import { currentCorrelationId } from "./request-context";
+
 /**
  * How a failure on a path that handles personal data reaches the logs (#134).
  *
@@ -178,8 +180,20 @@ export function describeError(error: unknown): ErrorDescriptor {
 
 /**
  * Log a failure as one structured JSON line: the `event` that log-based
- * alerting keys on, and the {@link describeError} descriptor under `error`.
+ * alerting keys on, the `correlationId` of the request it happened in, and the
+ * {@link describeError} descriptor under `error`.
+ *
+ * `correlationId` is always present (#155). Inside a request it is the id
+ * `proxy.ts` set; outside one — a build step, a test, a path the proxy skips —
+ * it is the literal `"none"`. It is read synchronously, so the line is still
+ * written before this returns, and reading it never throws.
  */
 export function logFailure(event: string, error: unknown): void {
-  console.error(JSON.stringify({ event, error: describeError(error) }));
+  console.error(
+    JSON.stringify({
+      event,
+      correlationId: currentCorrelationId(),
+      error: describeError(error),
+    }),
+  );
 }

@@ -166,8 +166,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: build-output
+          # packages/core/dist is what the E2E seed helper imports: Playwright
+          # resolves @template/core without the `development` condition Next.js
+          # uses, so it needs the compiled package (#151).
           path: |
             apps/web/.next/
+            packages/core/dist/
             packages/shared/dist/
           retention-days: 1
 
@@ -193,6 +197,19 @@ jobs:
     name: E2E tests
     needs: build
     runs-on: ubuntu-latest
+    # Test values only (#151). Every one is fake, defined here in the open, and
+    # never a repository secret: this repository and its Actions logs are
+    # public, so nothing below may be reused anywhere real. The app and the
+    # seed helper both read these; no step echoes them.
+    env:
+      DATABASE_URL: postgresql://app:app@localhost:5432/app_test
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: e2e-only-fake-secret-not-used-anywhere-real
+      RESEND_API_KEY: e2e-only-fake-resend-key
+      RESEND_FROM: 3moji E2E <e2e@example.com>
+      # Email goes to the recording sender, never Resend. lib/services.ts
+      # refuses this switch in any production environment.
+      TEST_EMAIL_SENDER: recording
     services:
       postgres:
         image: postgres:16
@@ -207,15 +224,6 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -223,21 +231,15 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: build-output
-      - name: Run migrations and seed
-        run: |
-          schema=$(find apps -name "schema.prisma" 2>/dev/null | head -1)
-          if [ -n "$schema" ]; then
-            npx prisma migrate deploy --schema "$schema"
-            npm run prisma:seed --if-present
-          fi
-        env:
-          DATABASE_URL: postgresql://app:app@localhost:5432/app_test
+      # The committed Drizzle migrations, applied by drizzle-kit through
+      # packages/core/drizzle.config.ts — the documented apply path.
+      - name: Apply database migrations
+        working-directory: packages/core
+        run: npx drizzle-kit migrate
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run E2E tests
         run: npm run test:e2e
-        env:
-          DATABASE_URL: postgresql://app:app@localhost:5432/app_test
       - name: Upload Playwright report
         uses: actions/upload-artifact@v7
         if: always()
