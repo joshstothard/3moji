@@ -38,6 +38,25 @@ Three settings are load-bearing for the product, not defaults to be changed casu
 
 Sign-up is not reached on its own: it happens inside the Claim's transaction, because an Account and its Handle are one atomic act (ADR-0004 decision 4). The only form that reaches it is the claim form the builder offers for an available Handle ([system-overview.md](system-overview.md) § The claim form). The Claim constructs an auth instance bound to that transaction and wraps the email sender so the verification email is held until the commit — see [the Claim](data-model.md#the-claim) for the shape and for the constraint that the production driver has no interactive transactions.
 
+### Sign-up is refused over HTTP
+
+**The Claim is the only way an Account is created, and that is enforced, not just true of the UI** ([#150](https://github.com/joshstothard/3moji/issues/150)). Better Auth serves `POST /api/auth/sign-up/email` through the catch-all route, and before #150 a direct request to it — measured against Postgres in `direct-sign-up.integration.test.ts` — created an Account with **no Handle** and sent a verification email, from an endpoint nothing limits. That is the handle-less state ADR-0004 decision 4 forbids.
+
+`createAuth` now sets Better Auth's `disabledPaths` to `/sign-up/email` and `/sign-in/social`, and both answer a plain `404 Not Found` over HTTP.
+
+**Why `disabledPaths` and not `emailAndPassword.disableSignUp`, measured rather than assumed:**
+
+| Option                           | Where better-auth 1.7.4 checks it                            | Refuses HTTP sign-up | Refuses the Claim's server-side `auth.api.signUpEmail` |
+| -------------------------------- | ------------------------------------------------------------ | -------------------- | ------------------------------------------------------ |
+| `emailAndPassword.disableSignUp` | Inside the endpoint's own body                               | Yes                  | **Yes** — throws `EMAIL_PASSWORD_SIGN_UP_DISABLED`     |
+| `disabledPaths`                  | The router's `onRequest`, which only an HTTP request reaches | Yes                  | No                                                     |
+
+So `disableSignUp` would take the Claim down with the bypass, and blocking the path in the Next.js route handler would put a security rule in a transport adapter that no integration test can reach. `disabledPaths` lives in `packages/core`, beside the rest of the auth settings.
+
+**The refusal cannot enumerate addresses.** It is decided on the path alone, before the body is parsed or the database is read, so a registered address, an unregistered one and a request with no address at all get the same status, the same body and — because no address-dependent work runs — the same timing. That is stronger than padding to `RESPONSE_FLOOR_MS`, which exists for answers that _do_ depend on an address.
+
+**Which endpoints can create an Account.** In better-auth 1.7.4 `internalAdapter.createUser` has exactly two callers: email sign-up, and `handleOAuthUserInfo`, reached from `/sign-in/social` and `/callback/:id`. No social provider is configured, so the OAuth paths cannot create an Account today; `/sign-in/social` is disabled anyway, so the first provider added does not quietly reopen the bypass. `/callback/:id` cannot be listed — `disabledPaths` matches the exact path — and needs OAuth state issued by `/sign-in/social` or by `/link-social`, which requires a signed-in Account. **Recheck the list on every Better Auth upgrade and every plugin added**: a plugin such as magic link, email OTP or anonymous sign-in brings its own Account-creating endpoints.
+
 Two consequences for anyone touching the settings above. Because the verification email is sent from inside sign-up, **anything that sends mail during a transaction has to be buffered** the same way, or a rolled-back write sends a message about something that did not happen. And because Better Auth returns a synthetic success for an already-registered address, **its response cannot be used to decide whether the address exists** — the Claim reads the `user` row inside its transaction instead.
 
 ## The gate on claiming
