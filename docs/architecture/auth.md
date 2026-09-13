@@ -36,7 +36,7 @@ Three settings are load-bearing for the product, not defaults to be changed casu
 
 ## Sign-up on the claim path
 
-Sign-up is not reached on its own: it happens inside the Claim's transaction, because an Account and its Handle are one atomic act (ADR-0004 decision 4). The Claim constructs an auth instance bound to that transaction and wraps the email sender so the verification email is held until the commit — see [the Claim](data-model.md#the-claim) for the shape and for the constraint that the production driver has no interactive transactions.
+Sign-up is not reached on its own: it happens inside the Claim's transaction, because an Account and its Handle are one atomic act (ADR-0004 decision 4). The only form that reaches it is the claim form the builder offers for an available Handle ([system-overview.md](system-overview.md) § The claim form). The Claim constructs an auth instance bound to that transaction and wraps the email sender so the verification email is held until the commit — see [the Claim](data-model.md#the-claim) for the shape and for the constraint that the production driver has no interactive transactions.
 
 Two consequences for anyone touching the settings above. Because the verification email is sent from inside sign-up, **anything that sends mail during a transaction has to be buffered** the same way, or a rolled-back write sends a message about something that did not happen. And because Better Auth returns a synthetic success for an already-registered address, **its response cannot be used to decide whether the address exists** — the Claim reads the `user` row inside its transaction instead.
 

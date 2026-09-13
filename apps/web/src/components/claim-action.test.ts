@@ -64,7 +64,7 @@ jest.mock("next/navigation", () => ({
   },
 }));
 
-import { submitClaimAction } from "./claim-action";
+import { claimFormAction, submitClaimAction } from "./claim-action";
 
 const form = (fields: Readonly<Record<string, string>>): FormData => {
   const data = new FormData();
@@ -176,5 +176,33 @@ describe("submitClaimAction", () => {
       expect.stringContaining("claim_submit_failed"),
     );
     logged.mockRestore();
+  });
+});
+
+describe("claimFormAction", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    submitClaim.mockResolvedValue({
+      state: "pending",
+      handle: { encoded: ENCODED },
+    });
+  });
+
+  it("answers a rejection exactly as submitClaimAction does, whatever came before", async () => {
+    // The shape a form's action state needs: the previous answer is ignored,
+    // because every submission is a fresh Claim.
+    submitClaim.mockResolvedValue({ state: "not-claimable" });
+
+    expect(await claimFormAction({ state: "invalid" }, form(FIELDS))).toEqual({
+      state: "not-claimable",
+    });
+  });
+
+  it("sends an accepted Claim to the same hold screen", async () => {
+    await claimFormAction({ state: "idle" }, form(FIELDS));
+
+    expect(redirect).toHaveBeenCalledWith(
+      `/claim/held/${ENCODED}?reason=pending`,
+    );
   });
 });

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { UserEvent } from "@testing-library/user-event";
 import type { Profile, ProfileState } from "@template/core";
 import type { AvailabilityState } from "../../components/availability-state";
+import type { ClaimFormState } from "../../components/claim-action";
 import en from "../../../../../packages/shared/messages/en.json";
 
 const copy = en.HandlePage;
@@ -209,6 +210,21 @@ const checkAvailability = jest.fn(
 );
 jest.mock("../../components/availability-action", () => ({
   checkAvailability: (segment: string) => checkAvailability(segment),
+}));
+
+/**
+ * The claim is a server action too, faked for the same reason as the
+ * availability read. It never settles, as an accepted Claim never does in a
+ * browser: it redirects away. What the form does with each answer is
+ * `claim-form.test.tsx`'s; what belongs here is that the route offers it.
+ */
+const claimFormAction = jest.fn(
+  (_previous: ClaimFormState, _formData: FormData) =>
+    new Promise<ClaimFormState>(() => undefined),
+);
+jest.mock("../../components/claim-action", () => ({
+  claimFormAction: (previous: ClaimFormState, formData: FormData) =>
+    claimFormAction(previous, formData),
 }));
 
 import HandlePage from "./page";
@@ -417,6 +433,7 @@ describe("the Handle route", () => {
 
       expect(screen.queryAllByRole("button")).toHaveLength(0);
       expect(screen.queryAllByRole("link")).toHaveLength(0);
+      expect(document.querySelectorAll("form")).toHaveLength(0);
       expect(
         screen.queryByRole("heading", { name: builderCopy.builderHeading }),
       ).not.toBeInTheDocument();
@@ -503,6 +520,44 @@ describe("an unclaimed Handle", () => {
     await renderUnclaimed();
 
     expect(screen.getByText(copy.unclaimed)).toBeInTheDocument();
+  });
+
+  it("makes the call to action a real control that reaches the claim form", async () => {
+    // #105 left it as copy because there was nowhere to link to (#115).
+    await renderUnclaimed();
+
+    const action = screen.getByRole("link", { name: copy.unclaimedAction });
+    const target = action.getAttribute("href") ?? "";
+    expect(target).toMatch(/^#./);
+
+    const destination = document.getElementById(target.slice(1));
+    expect(destination).not.toBeNull();
+    expect(destination).toContainElement(
+      screen.getByRole("form", { name: en.Claim.claimHeading }),
+    );
+  });
+
+  it("offers the claim form for this Handle, with nothing else filled in", async () => {
+    await renderUnclaimed();
+
+    const form = screen.getByRole("form", { name: en.Claim.claimHeading });
+    expect(
+      form.querySelector<HTMLInputElement>('input[name="handle"]')?.value,
+    ).toBe(ENCODED);
+    expect(screen.getByLabelText(en.Claim.claimEmailLabel)).toHaveValue("");
+    expect(screen.getByLabelText(en.Claim.claimPasswordLabel)).toHaveValue("");
+  });
+
+  it("has the claim form in place before the builder's own read has answered", async () => {
+    // The route has just read "available"; the link must not point at nothing
+    // while the builder asks the same question again.
+    checkAvailability.mockReturnValue(new Promise(() => undefined));
+
+    render(await visit(ENCODED));
+
+    expect(
+      screen.getByRole("form", { name: en.Claim.claimHeading }),
+    ).toBeInTheDocument();
   });
 
   it("asks the builder's own read about the same segment the route asked about", async () => {
@@ -800,6 +855,16 @@ describe("a word alias", () => {
     expect(
       screen.getByRole("heading", { name: builderCopy.builderHeading }),
     ).toBeInTheDocument();
+    // The same real control as on the emoji path (#115), and the form it
+    // reaches claims the candidate's emoji segment — never the ASCII alias,
+    // which is not a Handle and which the Claim would refuse.
+    expect(
+      screen.getByRole("link", { name: copy.unclaimedAction }),
+    ).toBeInTheDocument();
+    const form = screen.getByRole("form", { name: en.Claim.claimHeading });
+    expect(
+      form.querySelector<HTMLInputElement>('input[name="handle"]')?.value,
+    ).toBe(iceCandidate.encoded);
   });
 
   it("says so and shows no listing when several match and none is claimed", async () => {

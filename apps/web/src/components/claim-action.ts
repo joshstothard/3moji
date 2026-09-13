@@ -37,11 +37,10 @@ export type ClaimFormState =
  * Every field is read as `unknown`: a server action is a public HTTP endpoint,
  * and whatever a client posts arrives here.
  *
- * **The builder does not call this yet** — the picker and its submit button are
- * [#79](https://github.com/joshstothard/3moji/issues/79) and
- * [#80](https://github.com/joshstothard/3moji/issues/80), being built in
- * parallel. It is the endpoint the flow #82 owns needs in order to exist end to
- * end, and wiring a form to it is a one-line change.
+ * **The claim form calls it**, through {@link claimFormAction}: the builder
+ * renders `claim-form.tsx` once its Handle reads as available, on `/` and on an
+ * unclaimed `/[handle]` alike
+ * ([#115](https://github.com/joshstothard/3moji/issues/115)).
  */
 export async function submitClaimAction(
   formData: FormData,
@@ -105,4 +104,21 @@ export async function submitClaimAction(
   // Outside the try: `redirect` works by throwing, and catching it here would
   // report a successful Claim as a failure.
   redirect(destination);
+}
+
+/**
+ * {@link submitClaimAction}, in the `(previous, formData)` shape
+ * `useActionState` calls an action with — which is what the claim form uses
+ * ([#115](https://github.com/joshstothard/3moji/issues/115)).
+ *
+ * The previous answer is ignored: every submission is a fresh Claim, and there
+ * is nothing about the last rejection the next one should depend on. It adds no
+ * branch, so the one-success-URL property above is unchanged.
+ */
+export async function claimFormAction(
+  _previous: ClaimFormState,
+  formData: FormData,
+): Promise<ClaimFormState> {
+  const result = await submitClaimAction(formData);
+  return result;
 }

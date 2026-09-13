@@ -11,6 +11,7 @@ import {
 } from "@template/core/browser";
 import { EmojiPicker } from "./emoji-picker";
 import type { AvailabilityState } from "./availability-state";
+import { ClaimForm, type SubmitClaim } from "./claim-form";
 import en from "../../../../packages/shared/messages/en.json";
 
 /**
@@ -56,6 +57,24 @@ interface HandleBuilderProps {
    * builder, which would have drifted from this one within a week.
    */
   readonly initialEmoji?: readonly string[];
+  /**
+   * The claim endpoint, injected for the reason `checkAvailability` is
+   * ([#115](https://github.com/joshstothard/3moji/issues/115)). When it is
+   * given, the claim form is offered **only while the Handle in the slots reads
+   * as available** — never for taken, held, reserved or `unknown`, the last of
+   * which means the read failed and cannot know the Handle is free (#68).
+   * Absent, the builder offers nothing irreversible at all.
+   */
+  readonly claim?: SubmitClaim;
+  /**
+   * What the page has already read about `initialEmoji`, so the first paint
+   * need not wait for the same read again. `/[handle]` renders the builder only
+   * because its read answered `available`, and its call to action links to the
+   * claim form; without this the link would point at nothing until the
+   * builder's own read came back. The builder still asks on mount, and its
+   * answer replaces this one.
+   */
+  readonly initialAvailability?: AvailabilityState | undefined;
 }
 
 /** What is being shown on the availability line. */
@@ -164,9 +183,25 @@ function initialSlots(
   );
 }
 
+/** The answer a render starts on: the page's own read, about the page's Handle. */
+function initialAnswer(
+  initialEmoji: readonly string[] | undefined,
+  initialAvailability: AvailabilityState | undefined,
+): { readonly segment: string; readonly state: AvailabilityState } | undefined {
+  if (initialAvailability === undefined) {
+    return undefined;
+  }
+  const segment = segmentOf(initialSlots(initialEmoji).filter(isFilled));
+  return segment === undefined
+    ? undefined
+    : { segment, state: initialAvailability };
+}
+
 export function HandleBuilder({
   checkAvailability,
   initialEmoji,
+  claim,
+  initialAvailability,
 }: HandleBuilderProps) {
   // A lazy initialiser, and deliberately: the slots are this component's state
   // from the first render on, so a later render with the same prop must not
@@ -195,7 +230,7 @@ export function HandleBuilder({
    */
   const [answer, setAnswer] = useState<
     { readonly segment: string; readonly state: AvailabilityState } | undefined
-  >(undefined);
+  >(() => initialAnswer(initialEmoji, initialAvailability));
 
   const filled = slots.filter(isFilled);
   const path = filled.join("");
@@ -389,6 +424,15 @@ export function HandleBuilder({
           </div>
         )}
       </section>
+
+      {claim !== undefined &&
+      segment !== undefined &&
+      availability === "available" ? (
+        // Keyed on the Handle, so a rejection said about one Handle is never
+        // left on screen under another. `segment` is the one in the slots now,
+        // not the one the page opened on.
+        <ClaimForm key={segment} claim={claim} handle={segment} />
+      ) : null}
 
       <EmojiPicker onPick={fill} full={full} />
     </>
