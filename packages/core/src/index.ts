@@ -172,6 +172,33 @@ export type {
 } from "./profile/edit-profile";
 export { moveLink } from "./profile/reorder-links";
 export { submitClaim } from "./handle/submit-claim";
+export {
+  CLAIM_RATE_LIMITS,
+  claimAdmission,
+  claimRateLimitBuckets,
+  clientAddressBucket,
+  createClaimRateLimiter,
+  windowStartOf,
+} from "./handle/claim-rate-limit";
+export type {
+  ClaimAdmission,
+  ClaimAdmissionInput,
+  ClaimRateLimit,
+  ClaimRateLimiter,
+  ClaimRateLimiterInput,
+  ClaimRateLimits,
+  ClaimRateLimitBucketsInput,
+  ClaimSubmissionToAdmit,
+} from "./handle/claim-rate-limit";
+export { claimRateLimit } from "./db/claim-rate-limit";
+export type {
+  ClaimRateLimitHit,
+  ClaimRateLimitStore,
+} from "./ports/claim-rate-limit-store";
+export { createDrizzleClaimRateLimitStore } from "./adapters/drizzle-claim-rate-limit-store";
+export type { DrizzleClaimRateLimitStoreInput } from "./adapters/drizzle-claim-rate-limit-store";
+export { createInMemoryClaimRateLimitStore } from "./adapters/in-memory-claim-rate-limit-store";
+export type { InMemoryClaimRateLimitStore } from "./adapters/in-memory-claim-rate-limit-store";
 export type { ClaimSubmission, SubmitClaimInput } from "./handle/submit-claim";
 
 export { verificationDispatch } from "./db/verification-dispatch";

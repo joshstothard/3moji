@@ -8,6 +8,7 @@ import type {
   ExpiredHoldFreed,
 } from "../ports/claim-store";
 import type { Clock } from "../ports/clock";
+import type { ClaimAdmission, ClaimRateLimiter } from "./claim-rate-limit";
 import { submitClaim } from "./submit-claim";
 
 const ICE = "\u{1F9CA}\u{1F9CA}\u{1F9CA}";
@@ -22,6 +23,12 @@ const RESET_URL = "https://3moji.me/reset-password";
 const FROM = "3moji <no-reply@mail.3moji.me>";
 
 const NOW = new Date("2026-09-12T12:00:00.000Z");
+const CLIENT_ADDRESS = "203.0.113.7";
+
+/** A limiter that admits everything, for the suites not about the limit. */
+const admitsEverything: ClaimRateLimiter = {
+  admit: () => Promise.resolve("admitted"),
+};
 
 /** A clock a test moves by hand, so nothing waits on real time. */
 const movableClock = (): { clock: Clock; advance: (ms: number) => void } => {
@@ -40,6 +47,8 @@ interface Scenario {
   readonly costMs?: number;
   readonly ownership?: "available" | "held" | "claimed";
   readonly freed?: ExpiredHoldFreed;
+  /** What the rate limiter answers, or a rejection when it cannot count. */
+  readonly admission?: ClaimAdmission | Error;
 }
 
 const build = (scenario: Scenario = {}) => {
@@ -47,6 +56,18 @@ const build = (scenario: Scenario = {}) => {
   const slept: number[] = [];
   const emailSender = createRecordingEmailSender();
   const calls: string[] = [];
+  const admitted: { clientAddress: string | undefined; email: string }[] = [];
+
+  const rateLimiter: ClaimRateLimiter = {
+    admit: (submission) => {
+      admitted.push({ ...submission });
+      calls.push("admit");
+      const admission = scenario.admission ?? "admitted";
+      return admission instanceof Error
+        ? Promise.reject(admission)
+        : Promise.resolve(admission);
+    },
+  };
 
   const store: ClaimStore = {
     async runInTransaction(work) {
@@ -89,10 +110,10 @@ const build = (scenario: Scenario = {}) => {
       }),
   };
 
-  const submit = (segment: string = ICE) =>
+  const submit = (segment: string = ICE, email: string = EMAIL) =>
     submitClaim({
       segment,
-      email: EMAIL,
+      email,
       password: PASSWORD,
       store,
       clock,
@@ -100,13 +121,15 @@ const build = (scenario: Scenario = {}) => {
       emailSender,
       resetRequestUrl: RESET_URL,
       from: FROM,
+      rateLimiter,
+      clientAddress: CLIENT_ADDRESS,
       sleep: (ms) => {
         slept.push(ms);
         return Promise.resolve();
       },
     });
 
-  return { submit, emailSender, slept, calls };
+  return { submit, emailSender, slept, calls, admitted };
 };
 
 describe("submitClaim", () => {
@@ -178,6 +201,8 @@ describe("submitClaim", () => {
       // **no `holdHandle` appears**, so the Handle was never taken from the
       // person submitting.
       expect(calls).toEqual([
+        // The rate limit, which runs before anything opens (#157).
+        "admit",
         "begin",
         // #83's lazy expiry still runs: it frees a dead hold on this key
         // whatever the address turns out to be, and it is a no-op here.
@@ -225,6 +250,83 @@ describe("submitClaim", () => {
       // `wrong-length` rather than `unknown-codepoint`: "not-emoji" is nine
       // code points, and length is checked before membership.
       expect(result.failure.reason).toBe("wrong-length");
+    });
+  });
+
+  /**
+   * [#157](https://github.com/joshstothard/3moji/issues/157): the rate limit
+   * sits in front of the Claim, inside the same timing floor.
+   */
+  describe("the rate limit", () => {
+    it("asks the limiter first, with the address as typed and the client address", async () => {
+      const { submit, calls, admitted } = build();
+
+      await submit(ICE, "  Claimant@Example.COM ");
+
+      expect(calls[0]).toBe("admit");
+      expect(calls[1]).toBe("begin");
+      // The limiter normalises for itself, as `claimHandle` does; the
+      // transport hands both of them the address as typed.
+      expect(admitted).toEqual([
+        { clientAddress: CLIENT_ADDRESS, email: "  Claimant@Example.COM " },
+      ]);
+    });
+
+    it("answers rate-limited without opening the Claim or sending any email", async () => {
+      const { submit, calls, emailSender } = build({
+        admission: "rate-limited",
+        account: { ok: false, reason: "email-taken" },
+      });
+
+      const result = await submit();
+
+      expect(result).toEqual({ state: "rate-limited" });
+      expect(calls).toEqual(["admit"]);
+      expect(emailSender.sent).toEqual([]);
+    });
+
+    it("holds a rate-limited answer to the same floor as the answers about an address", async () => {
+      const limited = build({ admission: "rate-limited" });
+      await limited.submit();
+      const collision = build({
+        account: { ok: false, reason: "email-taken" },
+      });
+      await collision.submit();
+
+      expect(limited.slept).toEqual([RESPONSE_FLOOR_MS]);
+      expect(collision.slept).toEqual([RESPONSE_FLOOR_MS]);
+    });
+
+    it("carries nothing about which limit was hit, or when to try again", async () => {
+      const result = await build({ admission: "rate-limited" }).submit();
+
+      expect(Object.keys(result)).toEqual(["state"]);
+    });
+
+    it("rate-limits a registered address exactly as it rate-limits a new one", async () => {
+      const fresh = build({ admission: "rate-limited" });
+      const collision = build({
+        admission: "rate-limited",
+        account: { ok: false, reason: "email-taken" },
+      });
+
+      const answers = [await fresh.submit(), await collision.submit()];
+
+      expect(answers[1]).toEqual(answers[0]);
+      expect(collision.slept).toEqual(fresh.slept);
+      expect(collision.calls).toEqual(fresh.calls);
+    });
+
+    it("fails closed: a limiter that cannot count refuses the Claim, padded, with nothing opened", async () => {
+      const failure = new Error("the limiter's store is gone");
+      const { submit, calls, slept, emailSender } = build({
+        admission: failure,
+      });
+
+      await expect(submit()).rejects.toBe(failure);
+      expect(calls).toEqual(["admit"]);
+      expect(slept).toEqual([RESPONSE_FLOOR_MS]);
+      expect(emailSender.sent).toEqual([]);
     });
   });
 
@@ -290,6 +392,8 @@ describe("submitClaim", () => {
           emailSender,
           resetRequestUrl: RESET_URL,
           from: FROM,
+          rateLimiter: admitsEverything,
+          clientAddress: CLIENT_ADDRESS,
           sleep: (ms) => {
             slept.push(ms);
             return Promise.resolve();
