@@ -6,7 +6,11 @@ export default defineConfig({
   forbidOnly: !!process.env["CI"],
   retries: process.env["CI"] ? 2 : 0,
   workers: process.env["CI"] ? 1 : undefined,
-  reporter: "html",
+  // In CI the list reporter names every spec in the job log, which is where a
+  // run is proved; the html report is still uploaded as an artifact (#153).
+  reporter: process.env["CI"]
+    ? [["list"], ["html", { open: "never" }]]
+    : "html",
   use: {
     baseURL: process.env["BASE_URL"] ?? "http://localhost:3000",
     trace: "on-first-retry",
