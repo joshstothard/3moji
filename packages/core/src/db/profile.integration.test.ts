@@ -6,6 +6,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
 import { createDrizzleProfileRepository } from "../adapters/drizzle-profile-repository";
+import { createDrizzleProfileStore } from "../adapters/drizzle-profile-store";
 import { releasedEmojiSet } from "../emoji/emoji-set";
 import { LINK_LIMIT } from "../profile/validate-profile";
 
@@ -67,6 +68,7 @@ const KEYS = {
   unedited: handleKeyFromSet(HANDLE_KEY_LENGTH * 24),
   bare: handleKeyFromSet(HANDLE_KEY_LENGTH * 25),
   limited: handleKeyFromSet(HANDLE_KEY_LENGTH * 26),
+  edited: handleKeyFromSet(HANDLE_KEY_LENGTH * 28),
 } as const;
 
 /**
@@ -326,6 +328,113 @@ describeWithDatabase(
       );
 
       expect(code).toBe(FOREIGN_KEY_VIOLATION);
+    });
+
+    /**
+     * **The edit round trip, which is the half no unit test can reach.**
+     *
+     * `createDrizzleProfileStore` writes and `createDrizzleProfileRepository`
+     * reads, so what is asserted is the table between them rather than either
+     * adapter's belief about it. Three things only Postgres can settle:
+     *
+     * - The **upsert** — the first save inserts a row that did not exist, and
+     *   the second updates it rather than raising a primary-key violation.
+     * - The **whole-list replacement**. The second save submits a shorter list
+     *   in a different order; a write that updated in place would collide with
+     *   `UNIQUE (user_id, position)`, and one that inserted without deleting
+     *   would leave the removed Link behind.
+     * - That `updated_at` is the value the caller supplied, not `now()`.
+     */
+    it("saves a Profile, then replaces its Link list entire", async () => {
+      const userId = await createClaimedHandle("edited", KEYS.edited);
+      let next = 0;
+      const store = createDrizzleProfileStore({
+        db,
+        newId: () => `${userId}-link-${String(next++)}`,
+      });
+      const later = new Date(NOW.getTime() + 60_000);
+
+      await store.runInTransaction(async (tx) => {
+        await tx.saveProfile({
+          userId,
+          displayName: "First Name",
+          bio: "First bio",
+          links: [
+            { title: "One", url: "https://one.example" },
+            { title: "Two", url: "https://two.example" },
+            { title: "Three", url: "https://three.example" },
+          ],
+          updatedAt: NOW,
+        });
+        return { commit: true, value: undefined };
+      });
+
+      const first = await createDrizzleProfileRepository(db).profileOf(
+        KEYS.edited,
+      );
+      expect(first?.displayName).toBe("First Name");
+      expect(first?.links.map((one) => one.title)).toEqual([
+        "One",
+        "Two",
+        "Three",
+      ]);
+      expect(first?.links.map((one) => one.position)).toEqual([0, 1, 2]);
+
+      await store.runInTransaction(async (tx) => {
+        await tx.saveProfile({
+          userId,
+          // `null`, not `""`: the column's "never set", which is what the page
+          // renders nothing for.
+          displayName: null,
+          bio: "Second bio",
+          links: [
+            { title: "Three", url: "https://three.example" },
+            { title: "One", url: "https://one.example" },
+          ],
+          updatedAt: later,
+        });
+        return { commit: true, value: undefined };
+      });
+
+      const second = await createDrizzleProfileRepository(db).profileOf(
+        KEYS.edited,
+      );
+      expect(second?.displayName).toBeNull();
+      expect(second?.bio).toBe("Second bio");
+      expect(second?.links.map((one) => one.title)).toEqual(["Three", "One"]);
+      expect(second?.links.map((one) => one.position)).toEqual([0, 1]);
+      expect(second?.updatedAt.toISOString()).toBe(later.toISOString());
+      expect(await countWhere("link", userId)).toBe("2");
+    });
+
+    /**
+     * A rolled-back edit leaves the table exactly as it was. The verdict is
+     * carried out of the transaction while the rollback is signalled by a
+     * throw — the shape `TransactionOutcome` exists for — so the one thing
+     * worth proving against a real database is that `commit: false` genuinely
+     * discards the writes.
+     */
+    it("writes nothing when the unit of work refuses to commit", async () => {
+      const userId = await createClaimedHandle(
+        "rolled-back",
+        handleKeyFromSet(HANDLE_KEY_LENGTH * 29),
+      );
+      const store = createDrizzleProfileStore({ db });
+
+      const verdict = await store.runInTransaction(async (tx) => {
+        await tx.saveProfile({
+          userId,
+          displayName: "Never Saved",
+          bio: null,
+          links: [{ title: "One", url: "https://one.example" }],
+          updatedAt: NOW,
+        });
+        return { commit: false, value: "rolled-back" };
+      });
+
+      expect(verdict).toBe("rolled-back");
+      expect(await countWhere("profile", userId)).toBe("0");
+      expect(await countWhere("link", userId)).toBe("0");
     });
   },
 );
