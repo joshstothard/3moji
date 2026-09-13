@@ -1,3 +1,4 @@
+import { normaliseEmailAddress } from "../auth/email-address";
 import type { Clock } from "../ports/clock";
 import type { ClaimStore } from "../ports/claim-store";
 import { handleKeyOf } from "../db/handle-key";
@@ -64,11 +65,25 @@ export type ClaimResult =
       readonly state: "not-a-handle";
       readonly failure: CanonicalisationFailure;
     }
-  | { readonly state: "already-registered"; readonly handle: CanonicalHandle };
+  | {
+      readonly state: "already-registered";
+      readonly handle: CanonicalHandle;
+      /**
+       * The address the Claim actually used — normalised, not as typed — so
+       * the collision notice looks up exactly the Account this Claim collided
+       * with, without normalising a second time (#163).
+       */
+      readonly email: string;
+    };
 
 export interface ClaimHandleInput {
   /** The received segment — percent-encoded, or raw emoji from a claim form. */
   readonly segment: string;
+  /**
+   * The address **as typed**. The Claim normalises it — trimmed and lowercased,
+   * the form Better Auth stores — before anything reads or writes with it, so
+   * a caller cannot forget to (#163).
+   */
   readonly email: string;
   readonly password: string;
   readonly store: ClaimStore;
@@ -132,6 +147,10 @@ export function claimHandle(input: ClaimHandleInput): Promise<ClaimResult> {
 
   const { handle } = claimability;
   const key = handleKeyOf(handle);
+  // The one place the Claim's address is normalised (#163). Better Auth stores
+  // and finds addresses lowercased while the claim adapter compares bytes, so
+  // an address that reached the store as typed would never match its own row.
+  const email = normaliseEmailAddress(input.email);
   const now = input.clock.now();
   const heldUntil = new Date(now.getTime() + HOLD_DURATION_MS);
 
@@ -174,12 +193,15 @@ export function claimHandle(input: ClaimHandleInput): Promise<ClaimResult> {
     await tx.freeExpiredHold(key, now);
 
     const account = await tx.createAccount({
-      email: input.email,
+      email,
       password: input.password,
       name: handle.key,
     });
     if (!account.ok) {
-      return { commit: false, value: { state: "already-registered", handle } };
+      return {
+        commit: false,
+        value: { state: "already-registered", handle, email },
+      };
     }
 
     const hold = await tx.holdHandle({
