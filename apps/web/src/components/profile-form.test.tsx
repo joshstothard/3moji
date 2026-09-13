@@ -324,6 +324,25 @@ describe("the Profile form, from the keyboard", () => {
     expect(screen.getByLabelText(copy.displayNameLabel)).toHaveFocus();
     await user.tab();
     expect(screen.getByLabelText(copy.bioLabel)).toHaveFocus();
+    /*
+     * The reorder buttons come before the row's fields, and **both of them are
+     * in the tab order even on a one-Link list**, where neither has anywhere to
+     * go. They are `aria-disabled`, not `disabled`: a control that disables
+     * itself when pressed takes the focus with it, which is what would make
+     * moving a Link two places require tabbing back from the top of the page.
+     */
+    await user.tab();
+    expect(
+      screen.getByRole("button", {
+        name: copy.moveLinkUp.replace("{position}", "1"),
+      }),
+    ).toHaveFocus();
+    await user.tab();
+    expect(
+      screen.getByRole("button", {
+        name: copy.moveLinkDown.replace("{position}", "1"),
+      }),
+    ).toHaveFocus();
     await user.tab();
     expect(
       screen.getByLabelText(copy.linkTitleLabel.replace("{position}", "1")),
@@ -352,6 +371,12 @@ describe("the Profile form, from the keyboard", () => {
       screen.getByLabelText(copy.displayNameLabel),
       screen.getByLabelText(copy.bioLabel),
       screen.getByLabelText(copy.linkTitleLabel.replace("{position}", "1")),
+      screen.getByRole("button", {
+        name: copy.moveLinkUp.replace("{position}", "1"),
+      }),
+      screen.getByRole("button", {
+        name: copy.moveLinkDown.replace("{position}", "1"),
+      }),
       screen.getByRole("button", { name: copy.addLink }),
       screen.getByRole("button", { name: copy.save }),
     ];
