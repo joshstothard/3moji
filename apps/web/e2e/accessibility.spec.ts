@@ -13,6 +13,7 @@ import {
   PAGE_RULES,
   type PageReport,
 } from "./support/axe";
+import { UNCLAIMED_SEVERAL_ALIAS } from "./support/aliases";
 import { describeContrast, measureContrast } from "./support/contrast";
 import { seedClaimedHandle } from "./support/seed";
 
@@ -209,6 +210,9 @@ function aliasNamingSeveralHandles(): {
 } {
   const eligible = aliasTermSlugs().flatMap((term) => {
     const alias = [term, term, term].join(".");
+    // Another spec needs this alias to stay unclaimed; seeding it made that
+    // spec fail on every attempt when the random pick landed here (#177).
+    if (alias === UNCLAIMED_SEVERAL_ALIAS) return [];
     const resolution = resolveAlias(alias);
     return resolution.ok && resolution.candidates.length > 1
       ? [{ alias, candidates: resolution.candidates }]
