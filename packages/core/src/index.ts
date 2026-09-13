@@ -170,6 +170,7 @@ export type {
   EditProfileInput,
   ProfileEditResult,
 } from "./profile/edit-profile";
+export { moveLink } from "./profile/reorder-links";
 export { submitClaim } from "./handle/submit-claim";
 export type { ClaimSubmission, SubmitClaimInput } from "./handle/submit-claim";
 

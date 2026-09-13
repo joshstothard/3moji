@@ -56,3 +56,14 @@ export type {
   CanonicalisationFailureReason,
   CanonicalisationResult,
 } from "./handle/canonicalise";
+
+/**
+ * The reordering rule, on the client because that is where reordering happens:
+ * the owner presses a button or drops a row and the list has to rearrange
+ * before the form is submitted, so a round trip per move is the only
+ * alternative to a second copy of the rule living in the component.
+ *
+ * It qualifies for this allowlist on its own terms — a pure function over an
+ * array, importing nothing.
+ */
+export { moveLink } from "./profile/reorder-links";
