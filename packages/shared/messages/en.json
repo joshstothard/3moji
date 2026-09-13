@@ -1,6 +1,15 @@
 {
   "Footer": {
-    "ui": "UI: v{version}"
+    "ui": "UI: v{version}",
+    "legalNavLabel": "Legal",
+    "privacy": "Privacy notice",
+    "terms": "Terms of use",
+    "report": "Report a page",
+    "reportSubject": "Report a 3moji page",
+    "reportBody": "The web address of the page, and what is wrong with it:",
+    "emojiCredit": "Emoji graphics in link previews are {twemoji} 16.0.1, © Twitter, Inc. and other contributors and jdecked and other contributors, licensed under {licence}.",
+    "emojiCreditTwemoji": "Twemoji",
+    "emojiCreditLicence": "CC-BY 4.0"
   },
   "Home": {
     "heading": "3moji",
@@ -106,6 +115,9 @@
     "claimHeading": "Make it yours",
     "claimBody": "Enter your email address and choose a password. We will hold this Handle for you for 24 hours while you confirm the address.",
     "claimEmailLabel": "Email address",
+    "claimLegalNote": "How we use your email address is in the {privacy}. Claiming a Handle means following the {terms}.",
+    "claimPrivacyLink": "privacy notice (opens in a new tab)",
+    "claimTermsLink": "terms of use (opens in a new tab)",
     "claimPasswordLabel": "Password",
     "claimSubmit": "Claim this Handle",
     "claimTaken": "Somebody else has this Handle now. Pick another one above.",
@@ -358,6 +370,22 @@
     "toggle": "Signed in",
     "yourProfile": "Your Profile",
     "editProfile": "Edit your Profile",
+    "account": "Your account",
     "noHandle": "There is no Profile to show for this account just now."
+  },
+  "AccountPage": {
+    "metaTitle": "Your account · 3moji",
+    "heading": "Your account",
+    "yourHandle": "Your Handle:",
+    "deleteHeading": "Delete your account",
+    "deleteIntro": "Deleting your account is the only way to give up your Handle. Before you go on, this is what it does:",
+    "consequenceHandle": "Your Handle is given up. Anyone can claim it straight away.",
+    "consequenceProfile": "Your Profile and all of its Links are deleted.",
+    "consequenceFinal": "This cannot be undone.",
+    "confirmLabel": "To confirm, type this word:",
+    "confirmWord": "delete",
+    "submit": "Delete my account and give up my Handle",
+    "errorConfirm": "Nothing was deleted. To delete your account, type the word shown exactly.",
+    "errorFailed": "Nothing was deleted. We could not delete your account just now. Try again in a moment."
   }
 }

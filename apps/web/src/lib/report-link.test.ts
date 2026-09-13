@@ -13,7 +13,11 @@
  * or rewrites the body. So everything that is not plainly one address means
  * **no link**, and these tests assert absence rather than a cleaned-up link.
  */
-import { reportContactAddress, reportLinkOf } from "./report-link";
+import {
+  reportContactAddress,
+  reportLinkOf,
+  siteReportLink,
+} from "./report-link";
 import en from "../../../../packages/shared/messages/en.json";
 
 const ADDRESS = "reports@example.com";
@@ -135,5 +139,40 @@ describe("the report link", () => {
 
     expect([...headersOf(href).keys()]).toEqual(["subject"]);
     expect(href).not.toMatch(/[\r\n]/);
+  });
+});
+
+/*
+ * The footer's report entry (#198): the same mailbox and the same address
+ * check, for a page the footer cannot name without reading the request.
+ */
+describe("the site-wide report link", () => {
+  it("is a mailto: to the configured address", () => {
+    expect(siteReportLink()?.startsWith(`mailto:${ADDRESS}?`)).toBe(true);
+  });
+
+  it("carries a subject and a body asking for the page's address, and nothing else", () => {
+    const href = siteReportLink() ?? "";
+
+    expect([...headersOf(href).keys()]).toEqual(["subject", "body"]);
+    expect(headersOf(href).get("subject")).toBe(en.Footer.reportSubject);
+    expect(headersOf(href).get("body")).toBe(en.Footer.reportBody);
+    expect(href).not.toMatch(/[\s<>"]/);
+  });
+
+  it("is absent when no address is configured", () => {
+    setAddress(undefined);
+
+    expect(siteReportLink()).toBeUndefined();
+  });
+
+  it.each([
+    ["a ? starting its own headers", `${ADDRESS}?bcc=attacker@example.net`],
+    ["a CR/LF header", `${ADDRESS}\r\nBcc: attacker@example.net`],
+    ["a percent-encoded CR/LF", `${ADDRESS}%0D%0ABcc:attacker@example.net`],
+  ])("is absent when the variable carries %s", (_name, value) => {
+    setAddress(value);
+
+    expect(siteReportLink()).toBeUndefined();
   });
 });
