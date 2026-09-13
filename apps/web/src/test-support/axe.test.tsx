@@ -14,7 +14,8 @@ describe("the component accessibility check", () => {
     // colour, link-in-text-block and target-size rules select.
     const { container } = render(
       <p style={{ color: "#777", background: "#888" }}>
-        Read <a href="/about">more</a> <button type="button">Go</button>
+        Read <a href="https://example.com/about">more</a>{" "}
+        <button type="button">Go</button>
       </p>,
     );
 
