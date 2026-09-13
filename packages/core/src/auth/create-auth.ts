@@ -66,7 +66,11 @@ function verificationLink(baseUrl: string, token: string): string {
  * does not quietly reopen the bypass. `/callback/:id` cannot be listed — the
  * match is on the exact path — and is reachable only with state issued by
  * `/sign-in/social` or `/link-social`, the latter needing a signed-in Account.
- * Recheck this list on every Better Auth upgrade and every plugin added.
+ *
+ * **The audited facts — versions, callers, plugins and this list — live in
+ * `scripts/better-auth-audit.mjs`** (#169), and `npm run test:scripts` fails
+ * when the installed tree or this literal stops matching them. The recheck is
+ * docs/architecture/auth.md § Rechecking the Account-creation audit.
  */
 const HTTP_DISABLED_AUTH_PATHS: readonly string[] = [
   "/sign-up/email",
