@@ -338,3 +338,6 @@ export type {
   ProfileViolationField,
   ProfileViolationRule,
 } from "./profile/validate-profile";
+
+export { viewerSummary } from "./auth/viewer-summary";
+export type { ViewerSummary, ViewerSummaryInput } from "./auth/viewer-summary";

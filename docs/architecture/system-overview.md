@@ -79,8 +79,11 @@ The boundaries, enumerated from the code — `src/lib/api-boundaries.test.ts` wa
 | `components/password-reset-action.ts` | `setNewPasswordFormAction`       | `password-reset.set`     |
 | `app/og-image/route.ts`               | `GET`                            | `og-image.generic`       |
 | `app/[handle]/og-image/route.ts`      | `GET`                            | `og-image.handle`        |
+| `app/api/viewer/route.ts`             | `GET`                            | `viewer.read`            |
 
 The two image routes ([#161](https://github.com/joshstothard/3moji/issues/161)) log `ok` whenever they answer with an image and `failed` when the render throws. **`og-image.handle` logs `ok` for a claimed Profile and for the generic image alike**, so the log is no more a record of which Handles are held than the image is.
+
+**`viewer.read` logs `ok` whenever it answers** ([#193](https://github.com/joshstothard/3moji/issues/193)) — signed out, signed in or owner alike — so the log is not a record of who was signed in. A failed Account read inside it is answered, not thrown, and gets its own `viewer_summary_read_failed` line.
 
 `outcome` is one of six values, chosen to describe what happened rather than who asked:
 
@@ -249,7 +252,29 @@ It refuses four ways — signed out, no Handle, a Claim that is not final, and t
 
 **The save revalidates before it redirects**, in that order: without busting the cache first, Next serves the cached Handle page and the edit appears not to have taken effect (`docs/development/engineering-standards.md` § Frontend). The path is the percent-encoded segment, never the raw key.
 
-**There is no link to it from the public Handle page yet**, and that is deliberate rather than forgotten: rendering an owner-only control there means reading the session on the most-read page in the product, which makes it per-visitor and uncacheable. An owner reaches the form by URL until that trade-off is decided.
+**An owner reaches it from the signed-in indicator in the navbar, never from the public Handle page itself** ([#193](https://github.com/joshstothard/3moji/issues/193)). Rendering an owner-only control in the page would mean reading the session on the most-read page in the product, which makes its response per-visitor. So the page is unchanged, and the navbar carries a client island instead — see [The signed-in indicator](#the-signed-in-indicator).
+
+### The signed-in indicator
+
+Every page's navbar shows who is signed in: a **Sign in** link for a visitor with no session, and for somebody signed in a **Signed in** disclosure button that opens onto their own **Your Profile** and **Edit your Profile** links ([#193](https://github.com/joshstothard/3moji/issues/193)). It is `components/account-menu.tsx`.
+
+**It is a client island, and no page reads the session to draw it.** The root layout, the navbar and the Handle route render the same markup for every visitor — the island renders nothing on the server — and after hydration the island asks `GET /api/viewer` who is looking. So the public Profile's HTML is the same bytes for a signed-out visitor, a signed-in stranger and its owner; `e2e/signed-in-state.spec.ts` compares all three, headers included. The one response that differs by visitor is `/api/viewer`'s, sent `private, no-store` with `Vary: Cookie`. Two guards keep it that way: `apps/web/eslint.config.mjs` fails lint if `app/layout.tsx`, `app/[handle]/page.tsx`, `components/navbar.tsx` or the island imports `next/headers`, `lib/session`, `lib/profile-edit` or `lib/viewer`, and `app/layout.test.tsx` renders the whole shell and asserts neither `headers()` nor `cookies()` is called.
+
+**"Cacheable" means unchanged, not cached.** `/[handle]` was already a dynamic (`ƒ`) route before this, because it reads the database per request. The indicator adds no per-visitor dependency and no header to it, so nothing new stands in the way of caching it later; it does not make the page cached today.
+
+What the route answers is `viewerSummary`'s decision in `packages/core` (`src/auth/viewer-summary.ts`), composed by `lib/viewer.ts` from the session and the Account directory:
+
+| State        | When                                                                                 | The indicator shows                                             |
+| ------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `signed-out` | No readable session                                                                  | **Sign in**                                                     |
+| `signed-in`  | A session, and no claimed Handle: none found, a hold not yet final, or a failed read | The disclosure, saying there is no Profile to show              |
+| `owner`      | A claimed Handle — `profileEditAuthority` answers `allowed` for the Handle it owns   | The disclosure, with **Your Profile** and **Edit your Profile** |
+
+It carries that Handle's key and percent-encoded path and nothing else — no user id, no email, no hold expiry. **It decides links, never permission**: the edit page and `saveProfileAction` enforce `profileEditAuthority` themselves, so a wrong answer can show a link that 404s and cannot open a write. The island checks the answer's shape in the browser too, and anything unexpected — a refused request, a server error, a body that is not JSON, a path that is not percent-encoded — shows the sign-in link, which is nobody's.
+
+**It asks again on every navigation**, because the root layout stays mounted across App Router navigations: asking once would still say **Sign in** after the sign-in form's redirect. A change that stays on one page dispatches `VIEWER_CHANGED_EVENT` on `window`, and the island asks again. Without JavaScript the island never runs, so the navbar's `<noscript>` offers the sign-in link, the same for everybody — including a signed-in owner, since nothing lets a page without JavaScript learn who is signed in without reading the session.
+
+**It is a disclosure, not a menu**: a `<button aria-expanded aria-controls>` over a plain list of links. Tab moves through them and Escape closes the list and returns focus to the button; `role="menu"` would promise arrow-key handling nothing here needs. **Sign-out ([#194](https://github.com/joshstothard/3moji/issues/194)) and account deletion ([#195](https://github.com/joshstothard/3moji/issues/195)) attach inside the open list, below the links**, where the component marks their place: sign-out in both signed-in states, dispatching `VIEWER_CHANGED_EVENT` once done, and deletion as a link to an owner page that reads the session server-side.
 
 ### The word alias
 
