@@ -69,6 +69,15 @@
 // and it catches a real regression: an `--ignore-scripts` or `HUSKY=0` creeping
 // into the setup action would silently stop installing hooks for everyone, and
 // this is what would notice.
+//
+// Note *which* CI jobs carry it. `scripts/verify.sh` is not itself a CI job --
+// CI runs the steps individually -- so the `verify:hooks` CLI never runs on a
+// runner. The assertion reaches CI through two jobs that do use the setup
+// action: `agent-workflow-parity` (which runs verify-agent-workflow.mjs, where
+// this is asserted) and `script-tests` (whose final case asserts the running
+// checkout has hooks). Failing both on a husky regression is intended, not
+// accidental duplication: one is the parity gate, the other is this module's
+// own test.
 
 import fs from "node:fs";
 import path from "node:path";
