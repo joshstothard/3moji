@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import en from "../../../packages/shared/messages/en.json";
+import { UNCLAIMED_SEVERAL_ALIAS } from "./support/aliases";
 
 /**
  * End-to-end proof of the Phase 2 outcome: a URL containing emoji resolves to
@@ -224,9 +225,9 @@ test("an alias page declares the emoji path as canonical", async ({
 test("an alias naming more than one Handle says so and lists nothing", async ({
   request,
 }) => {
-  // `apple` is a synonym of both 🍎 and 🍏, so this names eight Handles. The
-  // listing is #109; until it exists the page says so and shows none of them.
-  const response = await request.get("/apple.apple.apple", {
+  // An alias naming eight Handles, none of them claimed, so there is nothing to
+  // list and the page says so. No spec may seed it; see support/aliases.ts.
+  const response = await request.get(`/${UNCLAIMED_SEVERAL_ALIAS}`, {
     maxRedirects: 0,
   });
 

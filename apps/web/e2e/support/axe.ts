@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import type { Result } from "axe-core";
+import type { AxeResults, Result } from "axe-core";
 
 /**
  * The rendered-page accessibility check
@@ -17,9 +17,11 @@ import type { Result } from "axe-core";
  *
  * **What the WCAG tags do not include.** `landmark-one-main` and `region` are
  * tagged `best-practice` by axe, not WCAG, so they never load under the tags
- * below. `bypass` is the WCAG 2.4.1 rule for landmarks and skip links, and it
- * is the one asserted. Adding `best-practice` would pull in a large set of
- * rules the quality strategy does not ask for.
+ * below. `bypass` is the WCAG 2.4.1 rule for landmarks and skip links, and is
+ * asserted there. The two landmark rules run by name instead, in
+ * {@link checkLandmarks} ([#177](https://github.com/joshstothard/3moji/issues/177)):
+ * adding the whole `best-practice` tag would pull in a large set of rules the
+ * quality strategy does not ask for.
  */
 
 /**
@@ -83,12 +85,35 @@ function findingsOf(results: readonly Result[]): readonly PageFinding[] {
   }));
 }
 
+/**
+ * axe's best-practice landmark rules, run by name: exactly one `main`, and all
+ * content inside a landmark. `bypass` proves repeated content can be skipped;
+ * these prove nothing is left outside the page's structure.
+ */
+export const LANDMARK_RULES = ["landmark-one-main", "region"] as const;
+
 /** Run axe over the whole rendered page, as it is now. */
 export async function checkPage(page: Page): Promise<PageReport> {
   const results = await new AxeBuilder({ page })
     .withTags([...WCAG_AA_TAGS])
     .analyze();
 
+  return reportOf(results);
+}
+
+/**
+ * Run only {@link LANDMARK_RULES} over the whole page — a separate pass, so the
+ * WCAG check above keeps its tags, and with nothing excluded.
+ */
+export async function checkLandmarks(page: Page): Promise<PageReport> {
+  const results = await new AxeBuilder({ page })
+    .withRules([...LANDMARK_RULES])
+    .analyze();
+
+  return reportOf(results);
+}
+
+function reportOf(results: AxeResults): PageReport {
   return {
     violations: findingsOf(results.violations),
     incomplete: findingsOf(results.incomplete),

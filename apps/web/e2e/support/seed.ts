@@ -43,6 +43,15 @@ export interface SeededHandle {
   readonly emoji: readonly CuratedEmoji[];
   /** The Profile exactly as saved. */
   readonly profile: ProfileDraft;
+  /**
+   * The owner's sign-in, for a spec that needs a signed-in session — the edit
+   * page's contrast check ([#177](https://github.com/joshstothard/3moji/issues/177)).
+   * Both are random and single-use, and never logged.
+   */
+  readonly credentials: {
+    readonly email: string;
+    readonly password: string;
+  };
 }
 
 export interface SeedClaimedHandleOptions {
@@ -106,12 +115,13 @@ export async function seedClaimedHandle(
       const emoji = chooseEmoji();
       const segment = emoji.map((entry) => entry.emoji).join("");
       const email = `e2e-${randomUUID()}@example.com`;
+      const password = randomUUID();
 
       emailSender.clear();
       const claim = await claimHandle({
         segment,
         email,
-        password: randomUUID(),
+        password,
         store: services.claims,
         clock,
       });
@@ -155,6 +165,7 @@ export async function seedClaimedHandle(
         path: `/${canonicalPath(segment)}`,
         emoji,
         profile,
+        credentials: { email, password },
       };
     }
 
