@@ -19,7 +19,7 @@ push / PR
   │     build (artifact) · security (reusable workflow)
   │
   ├── Stage 3 (needs: build)
-  │     e2e (Playwright + postgres + redis services)
+  │     e2e (Playwright + postgres service; Drizzle migrations applied first)
   │
   ├── Stage 4 (independent)
   │     version (GitVersion → semver output)

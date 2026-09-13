@@ -8,7 +8,15 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_SECRET",
+        "RESEND_API_KEY",
+        "RESEND_FROM",
+        "TEST_EMAIL_SENDER"
+      ]
     },
     "start": {
       "cache": false,
