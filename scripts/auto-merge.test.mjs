@@ -9,6 +9,7 @@ import {
   dependabotUpdateTypes,
   evaluate,
   hasChangesRequested,
+  latestCiRun,
 } from "./auto-merge.mjs";
 
 // Verbatim head commit of Dependabot PR #1 in this repository.
@@ -328,5 +329,141 @@ describe("evaluate: Dependabot pull requests", () => {
       ),
       skip("not-opted-in"),
     );
+  });
+});
+
+// When auto-merge updates a branch from main it pushes with GITHUB_TOKEN, and
+// GitHub refuses to start a workflow for a GITHUB_TOKEN-authored commit: it
+// creates the `pull_request` run anyway, with zero jobs and
+// `conclusion: action_required`. `dispatchCi()` then starts a
+// `workflow_dispatch` run that really does run. Both land at the same
+// `created_at`, so which one the API lists first is not deterministic (#125).
+// Measured on PR #117 at head a54112a:
+//
+//   34742068666 | pull_request      | completed/action_required  <- ZERO jobs
+//   34742068590 | workflow_dispatch | completed/success          <- 15/15 green
+//
+// A run that was never allowed to start is not a run that failed. Never ran,
+// still running and actually failed are three distinct states.
+
+// GitHub lists workflow runs newest first and honours `per_page`. `runs` is
+// given in that listed order, so slicing it reproduces exactly what `per_page=1`
+// returned on #117: the blocked run, alone.
+function fakeRunsApi(runs, calls = []) {
+  return (path) => {
+    calls.push(path);
+    const perPage = Number(path.match(/[?&]per_page=(\d+)/)?.[1] ?? 30);
+    return { workflow_runs: runs.slice(0, perPage) };
+  };
+}
+
+const ciRun = (overrides) => ({
+  id: 1,
+  status: "completed",
+  conclusion: "success",
+  head_sha: "head-sha",
+  created_at: "2026-09-13T06:09:58Z",
+  event: "workflow_dispatch",
+  ...overrides,
+});
+
+// The jobless run GitHub creates for a GITHUB_TOKEN push and refuses to start.
+const blockedRun = (overrides) =>
+  ciRun({
+    id: 34742068666,
+    conclusion: "action_required",
+    event: "pull_request",
+    ...overrides,
+  });
+
+const dispatchedRun = (overrides) =>
+  ciRun({ id: 34742068590, event: "workflow_dispatch", ...overrides });
+
+describe("latestCiRun", () => {
+  it("reads the dispatched run that ran, not the jobless action_required run listed above it", () => {
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([blockedRun(), dispatchedRun()]),
+    );
+    assert.equal(ci.conclusion, "success");
+    assert.deepEqual(evaluate(ownerPr(), ci), MERGE);
+  });
+
+  it("asks for more than one run at the head commit", () => {
+    const calls = [];
+    latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([blockedRun(), dispatchedRun()], calls),
+    );
+    const perPage = Number(calls[0].match(/[?&]per_page=(\d+)/)?.[1] ?? 30);
+    assert.ok(
+      perPage > 1,
+      `latestCiRun asked for per_page=${perPage}: one run cannot tell a blocked run from the run that actually ran (#125)`,
+    );
+  });
+
+  it("still reports a genuine pull_request failure as ci-failed", () => {
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([
+        ciRun({ id: 3, event: "pull_request", conclusion: "failure" }),
+      ]),
+    );
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-failed"));
+  });
+
+  it("still reports a genuine failure listed beside a blocked run", () => {
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([blockedRun(), ciRun({ id: 3, conclusion: "failure" })]),
+    );
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-failed"));
+  });
+
+  it("reports ci-not-started, not ci-failed, when every run at the head was blocked", () => {
+    const ci = latestCiRun("o/r", "head-sha", fakeRunsApi([blockedRun()]));
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-not-started"));
+  });
+
+  it("reports ci-not-started for a run still waiting for approval, not ci-running", () => {
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([
+        blockedRun({ status: "action_required", conclusion: null }),
+      ]),
+    );
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-not-started"));
+  });
+
+  it("prefers the newest started run when two share a created_at", () => {
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([
+        ciRun({ id: 10, conclusion: "success" }),
+        ciRun({ id: 9, conclusion: "failure" }),
+      ]),
+    );
+    assert.deepEqual(evaluate(ownerPr(), ci), MERGE);
+  });
+
+  it("reports ci-missing when the head commit has no run at all", () => {
+    const ci = latestCiRun("o/r", "head-sha", fakeRunsApi([]));
+    assert.equal(ci, null);
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-missing"));
+  });
+
+  it("keeps a run for an older head commit stale", () => {
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([ciRun({ head_sha: "previous-sha" })]),
+    );
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-stale"));
   });
 });

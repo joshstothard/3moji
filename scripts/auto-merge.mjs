@@ -57,9 +57,14 @@ function optInProblem(pr) {
     : "dependabot-major";
 }
 
+// Never ran, still running and actually failed are three distinct states, and
+// only the third is a verdict against the code. Collapsing the first into the
+// third made auto-merge report `ci-failed` for a PR whose every check was green,
+// on every run, forever (#125).
 function ciProblem(pr, ci) {
   if (!ci) return "ci-missing";
   if (ci.headSha !== pr.headSha) return "ci-stale";
+  if (ci.neverStarted) return "ci-not-started";
   if (ci.status !== "completed") return "ci-running";
   return ci.conclusion === "success" ? null : "ci-failed";
 }
@@ -174,19 +179,61 @@ function loadPullRequest(repo, number) {
   };
 }
 
-// The newest CI run for a commit (GitHub lists runs newest first).
-function latestCiRun(repo, sha) {
-  const { workflow_runs: runs } = api(
-    `repos/${repo}/actions/workflows/${CI_WORKFLOW}/runs?head_sha=${sha}&per_page=1`,
+// GitHub creates a workflow run for a commit authored by GITHUB_TOKEN and then
+// refuses to start it: the run has zero jobs and `action_required` in `status`,
+// `conclusion`, or both. It is the state a human resolves by approving the run,
+// and it is evidence of nothing — not of failure. Only `action_required` is
+// listed here because it is the state measured on #117 and #123; `cancelled` and
+// `timed_out` are real verdicts from jobs that did run, and stay failures.
+const isBlockedRun = (run) =>
+  run.status === "action_required" || run.conclusion === "action_required";
+
+// The CI run to judge a commit by, out of every run GitHub holds for it.
+//
+// After auto-merge updates a branch from main, two runs exist at the new head:
+// the blocked `pull_request` run above, and the `workflow_dispatch` run
+// `dispatchCi()` started, which does run. They share a `created_at`, so listed
+// order does not separate them and `per_page=1` could return either (#125).
+// Prefer a run that was allowed to start, newest first — `id` breaks the
+// created_at tie, since run ids increase. When nothing started, say so rather
+// than reporting the blocked run's conclusion as a verdict.
+export function selectCiRun(runs) {
+  // An unparseable created_at gives NaN, which is falsy, so ordering falls back
+  // to the id rather than leaving the comparator undefined.
+  const newestFirst = [...runs].sort(
+    (a, b) =>
+      Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id,
   );
-  const [run] = runs;
-  return run
-    ? { status: run.status, conclusion: run.conclusion, headSha: run.head_sha }
+  const shape = (run, extra) => ({
+    status: run.status,
+    conclusion: run.conclusion,
+    headSha: run.head_sha,
+    ...extra,
+  });
+  const started = newestFirst.find((run) => !isBlockedRun(run));
+  if (started) return shape(started);
+  return newestFirst.length > 0
+    ? shape(newestFirst[0], { neverStarted: true })
     : null;
 }
 
-// A GITHUB_TOKEN merge or push triggers no push/pull_request workflows, but a
+// The CI verdict for a commit, in the shape evaluate() consumes.
+
+export function latestCiRun(repo, sha, fetchJson = api) {
+  const { workflow_runs: runs } = fetchJson(
+    `repos/${repo}/actions/workflows/${CI_WORKFLOW}/runs?head_sha=${sha}&per_page=100`,
+  );
+  return selectCiRun(runs);
+}
+
+// A GITHUB_TOKEN merge or push starts no push/pull_request workflow, but a
 // workflow_dispatch is exempt, so CI is started explicitly.
+//
+// Measured caveat (#125): GitHub still *creates* the `pull_request` run it
+// refuses to start, jobless and `action_required`, at the same `created_at` as
+// the dispatched one. selectCiRun() is what tells them apart. And the dispatched
+// run's completion does not trigger this workflow's `workflow_run` back, because
+// that event too was raised by GITHUB_TOKEN — #58 is the open issue for that.
 function dispatchCi(repo, ref) {
   gh([
     "api",
