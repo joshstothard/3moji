@@ -129,6 +129,50 @@ describe("reordering Links with the keyboard", () => {
     expect(posted?.get("link-2-title")).toBe("Shop");
   });
 
+  /**
+   * Typing a title re-renders the whole list, because the title is mirrored
+   * into state so the announcement can name the Link. **Nothing else the owner
+   * has typed may be disturbed by that**: the URL field has no such mirror, so
+   * its `defaultValue` stays at the value it was seeded with while the DOM node
+   * holds something else. A re-render that reset it would silently discard a
+   * web address the owner had just typed.
+   */
+  it("leaves what was typed elsewhere alone when a title is edited", async () => {
+    const user = userEvent.setup();
+    const action = renderForm();
+
+    const url = screen.getByLabelText(
+      copy.linkUrlLabel.replace("{position}", "2"),
+    );
+    await user.clear(url);
+    await user.type(url, "https://elsewhere.example");
+    await user.type(
+      screen.getByLabelText(copy.linkTitleLabel.replace("{position}", "2")),
+      "ping",
+    );
+    await submit(user);
+
+    expect(action.posted[0]?.get("link-1-url")).toBe(
+      "https://elsewhere.example",
+    );
+    expect(action.posted[0]?.get("link-1-title")).toBe("Shopping");
+  });
+
+  /** The mirrored title is the one announced, not the one it was loaded with. */
+  it("announces the Link by the title the owner has just given it", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    const title = screen.getByLabelText(
+      copy.linkTitleLabel.replace("{position}", "3"),
+    );
+    await user.clear(title);
+    await user.type(title, "Journal");
+    await user.click(moveUp(3));
+
+    expect(announcement()).toBe(named("Journal", 2, 3));
+  });
+
   it("announces the Link's new position to assistive technology", async () => {
     const user = userEvent.setup();
     renderForm();
