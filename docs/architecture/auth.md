@@ -12,6 +12,7 @@
 | The HTTP surface                    | `apps/web/src/app/api/auth/[...all]/route.ts`                              |
 | The verification landing            | `apps/web/src/app/claim/verify/route.ts`                                   |
 | The hold screen and resend          | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`           |
+| Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app   |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
 
@@ -80,6 +81,12 @@ Better Auth answers `403 EMAIL_NOT_VERIFIED`, and that is rendered as **the hold
 The refusal is recognised by **reading properties, not `instanceof APIError`**: `--experimental-vm-modules` runs ESM in its own realm, so an `instanceof` check silently fails in tests while appearing to work in production.
 
 A successful password reset does **not** mark the email verified, even though it proves control of the address. The two are kept separate so the Claim gate has exactly one meaning.
+
+### Reading the session, and what is allowed to depend on it
+
+`lib/session.ts` asks Better Auth for the session behind the incoming request's headers, and it is the **only** place an identity enters the application. Everything that authorises anything is decided about the value it returns, never about a user id or a Handle arriving in a request body — the first surface to rely on that is the Profile edit (see [system-overview.md](system-overview.md) § Editing the Profile).
+
+It answers `undefined` rather than throwing when it cannot tell: the services may not be configured and the session lookup is a database read that can be refused. **That direction is not a preference.** Failing open here would be an authorisation bypass; failing closed is a signed-in owner being asked to sign in again.
 
 ## Adjacent behaviour
 

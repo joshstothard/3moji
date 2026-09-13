@@ -34,6 +34,9 @@
   },
   "HandlePage": {
     "unclaimed": "Nobody has this Handle yet. Make it yours below.",
+    "spoken": "Say it: {spoken}",
+    "unedited": "Nobody has added anything here yet.",
+    "linksLabel": "Links",
     "stateHeld": "This Handle is on hold.",
     "stateClaimed": "This Handle is taken.",
     "stateNotClaimable": "This Handle is reserved.",
@@ -76,5 +79,27 @@
     "signInSubmit": "Sign in",
     "signInInvalid": "That email address and password do not match an account.",
     "signInFailed": "We could not sign you in just now. Try again in a moment."
+  },
+  "ProfileEdit": {
+    "heading": "Edit your Profile",
+    "displayNameLabel": "Display name",
+    "bioLabel": "Bio",
+    "linksHeading": "Links",
+    "linkTitleLabel": "Link {position}: title",
+    "linkUrlLabel": "Link {position}: web address",
+    "addLink": "Add a link",
+    "removeLink": "Remove link {position}",
+    "save": "Save",
+    "saving": "Saving…",
+    "invalidSummary": "Your Profile was not saved. There is something to fix below.",
+    "forbidden": "This Profile is not yours to edit. Sign in as its owner and try again.",
+    "failed": "We could not save your Profile just now. Try again.",
+    "unreadable": "We could not load your Profile just now, so there is nothing safe to edit. Try again in a moment.",
+    "errorDisplayNameTooLong": "Use {limit} characters or fewer. This is {length}.",
+    "errorBioTooLong": "Use {limit} characters or fewer. This is {length}.",
+    "errorLinksTooMany": "Keep {limit} links or fewer. This is {count}.",
+    "errorLinkTitleTooLong": "Use {limit} characters or fewer. This is {length}.",
+    "errorLinkUrlScheme": "A link must start with http:// or https://.",
+    "errorLinkUrlMalformed": "That is not a web address."
   }
 }

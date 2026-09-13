@@ -4,8 +4,13 @@ import {
   resolveAlias,
   spokenHandle,
   type CanonicalHandle,
+  type Profile,
+  type ProfileLink,
+  type ProfileState,
 } from "@template/core";
 import { readAvailability } from "../../lib/availability";
+import { readProfile } from "../../lib/profile";
+import { safeLinkHref } from "../../lib/safe-link";
 import { HandleBuilder } from "../../components/handle-builder";
 import { checkAvailability } from "../../components/availability-action";
 import type { AvailabilityState } from "../../components/availability-state";
@@ -73,8 +78,9 @@ export default async function HandlePage({ params }: HandlePageProps) {
   // them — and the read below has a `try/catch` inside it — would swallow the
   // 404 and the 308 and answer 200 with an availability line for junk.
   const state = await readAvailability(result.encoded);
+  const profile = await readProfile(result.encoded, state);
 
-  return <ResolvedHandle handle={result} state={state} />;
+  return <ResolvedHandle handle={result} state={state} profile={profile} />;
 }
 
 const copy = en.HandlePage;
@@ -152,6 +158,17 @@ async function AliasedHandle({ segment }: { readonly segment: string }) {
     return <AmbiguousAlias />;
   }
 
+  /*
+   * The Profile read, and **one of them, after the decision rather than with
+   * the availability reads**. It is the same second read the emoji path makes
+   * (§ The claimed Handle), handed the same percent-encoded segment the
+   * availability read was asked about, so the two answers cannot be about
+   * different Handles. Folding it into the `Promise.all` above would fetch a
+   * Profile for every candidate — doubling a cost ADR-0008 measured at 64
+   * reads in the worst case — to show exactly one.
+   */
+  const profile = await readProfile(shown.candidate.encoded, shown.state);
+
   return (
     <>
       {/*
@@ -162,7 +179,11 @@ async function AliasedHandle({ segment }: { readonly segment: string }) {
        * produce one string.
        */}
       <link rel="canonical" href={`/${shown.candidate.encoded}`} />
-      <ResolvedHandle handle={shown.candidate} state={shown.state} />
+      <ResolvedHandle
+        handle={shown.candidate}
+        state={shown.state}
+        profile={profile}
+      />
     </>
   );
 }
@@ -255,12 +276,15 @@ const AVAILABILITY_COPY: Readonly<Record<StatedState, string>> = {
 function ResolvedHandle({
   handle,
   state,
+  profile,
 }: {
   readonly handle: RenderedHandle;
   readonly state: AvailabilityState;
+  readonly profile: ProfileState;
 }) {
   const emoji = handle.emoji.map((entry) => entry.emoji);
   const spoken = spokenHandle(emoji);
+
   // The route canonicalised this segment, so the domain cannot honestly answer
   // `not-a-handle` about it. If it somehow does, say so honestly rather than
   // guessing "available" — which is the defect #68 reported.
@@ -283,6 +307,35 @@ function ResolvedHandle({
         />
       </main>
     );
+  }
+
+  /*
+   * **A Profile is shown for a claimed Handle and for nothing else, and the
+   * guard is this `if` rather than a property of the value.**
+   *
+   * `readProfile` already refuses to fetch one for any other answer, and
+   * `profileStateOf` already refuses to compose one. This is the third layer,
+   * and it is here because it is the last one: a Profile is the first thing
+   * this page renders that is not a state name, so it is the first thing that
+   * could put a holder's name or a hold's expiry on a held Handle's page. #80
+   * made that impossible in the type by keeping the `Reservation` and the
+   * expiry inside `packages/core`; a debug view that handed this component a
+   * Profile regardless of state is exactly how that seal would break, and the
+   * `sealed states` suite forces the case.
+   */
+  if (resolved === "claimed") {
+    if (profile.state === "profile") {
+      return (
+        <ProfilePage
+          handle={handle}
+          spoken={spoken}
+          profile={profile.profile}
+        />
+      );
+    }
+    if (profile.state === "unedited") {
+      return <UneditedHandle handle={handle} spoken={spoken} />;
+    }
   }
 
   return (
@@ -315,5 +368,137 @@ function HandleHeading({
         {handle.key}
       </span>
     </h1>
+  );
+}
+/**
+ * How to say the Handle out loud, when there is a way to say it.
+ *
+ * `spokenHandle` answers `undefined` for anything outside the curated set, and
+ * the line is **omitted** rather than rendered around a gap: "Say it:
+ * undefined" is worse than silence, and a page that prints the word `undefined`
+ * is the tell that a nullable value was interpolated without being checked.
+ */
+function SpokenLine({ spoken }: { readonly spoken: string | undefined }) {
+  if (spoken === undefined) return null;
+
+  return (
+    <p className="text-lg text-slate-500">
+      {copy.spoken.replace("{spoken}", spoken)}
+    </p>
+  );
+}
+
+/**
+ * Claimed, and the owner has never edited anything.
+ *
+ * **A named state, not a Profile of blanks** (`data-model.md` § Profile). The
+ * Handle is the whole of what there is to show, so it is shown the way the
+ * product means it to be read — large, and with how to say it — rather than as
+ * an empty name, an empty bio and an empty list of Links waiting to be filled.
+ * The distinction is `profileStateOf`'s, and this component is why it exists.
+ */
+function UneditedHandle({
+  handle,
+  spoken,
+}: {
+  readonly handle: RenderedHandle;
+  readonly spoken: string | undefined;
+}) {
+  return (
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+      <div className="text-center">
+        <HandleHeading handle={handle} spoken={spoken} />
+        <SpokenLine spoken={spoken} />
+        <p className="mt-4 text-lg text-slate-500">{copy.unedited}</p>
+      </div>
+    </main>
+  );
+}
+
+/**
+ * The page the product exists to show.
+ *
+ * **The emoji stay the `<h1>`.** The display name belongs to the owner, but the
+ * Handle is what the page is *about* and what a screen reader should announce
+ * first — as "three ice cubes", not as three code points — so the display name
+ * is an `<h2>` under it. Promoting it would change what the page announces and
+ * would leave the Handle unheaded.
+ *
+ * **Every field is optional.** `displayName` and `bio` are `null` for "never
+ * set" (`src/db/profile.ts`), and an owner may well have saved Links and
+ * nothing else. Each is omitted rather than rendered empty, for the reason
+ * {@link SpokenLine} is.
+ */
+function ProfilePage({
+  handle,
+  spoken,
+  profile,
+}: {
+  readonly handle: RenderedHandle;
+  readonly spoken: string | undefined;
+  readonly profile: Profile;
+}) {
+  return (
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="text-center">
+        <HandleHeading handle={handle} spoken={spoken} />
+        <SpokenLine spoken={spoken} />
+        {profile.displayName !== null && (
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900 break-words">
+            {profile.displayName}
+          </h2>
+        )}
+        {profile.bio !== null && (
+          <p className="mt-3 text-lg text-slate-600 whitespace-pre-line break-words">
+            {profile.bio}
+          </p>
+        )}
+      </div>
+      {profile.links.length > 0 && (
+        <ul aria-label={copy.linksLabel} className="mt-10 space-y-3">
+          {profile.links.map((link) => (
+            <li key={link.id}>
+              <ProfileLinkRow link={link} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </main>
+  );
+}
+
+/** The shared look of a Link row, whether or not it is a link. */
+const LINK_ROW =
+  "block rounded-xl bg-white px-5 py-4 text-center shadow-sm break-words";
+
+/**
+ * One owner-supplied Link, rendered to a stranger.
+ *
+ * Two things are load-bearing here, and both are about the fact that the URL
+ * and the title were typed by somebody else:
+ *
+ * - **`rel="noopener noreferrer"`** on every one, without exception.
+ * - **The scheme is checked again at the render.** `validateProfile` refuses
+ *   anything but `http:` and `https:` at the write, and this is the second,
+ *   independent layer (`docs/development/engineering-standards.md` § Security,
+ *   defence in depth). A Link whose scheme is refused keeps its title — that is
+ *   the owner's content and React escapes it — but is rendered as **text with
+ *   no `href` at all**, rather than as a link to nowhere.
+ */
+function ProfileLinkRow({ link }: { readonly link: ProfileLink }) {
+  const href = safeLinkHref(link.url);
+
+  if (href === undefined) {
+    return <span className={`${LINK_ROW} text-slate-500`}>{link.title}</span>;
+  }
+
+  return (
+    <a
+      href={href}
+      rel="noopener noreferrer"
+      className={`${LINK_ROW} text-indigo-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600`}
+    >
+      {link.title}
+    </a>
   );
 }

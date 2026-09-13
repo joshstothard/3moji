@@ -8,6 +8,7 @@ import { createDrizzleClaimFinaliser } from "./adapters/drizzle-claim-finaliser"
 import { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
 import { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
 import { createDrizzleProfileRepository } from "./adapters/drizzle-profile-repository";
+import { createDrizzleProfileStore } from "./adapters/drizzle-profile-store";
 import { createDrizzleReleaseStore } from "./adapters/drizzle-release-store";
 import { createDrizzleVerificationDispatchStore } from "./adapters/drizzle-verification-dispatch-store";
 import type { Database } from "./db/client";
@@ -18,6 +19,7 @@ import type { ClaimStore } from "./ports/claim-store";
 import type { ReleaseStore } from "./ports/release-store";
 import type { HandleRepository } from "./ports/handle-repository";
 import type { ProfileRepository } from "./ports/profile-repository";
+import type { ProfileStore } from "./ports/profile-store";
 import type { VerificationDispatchStore } from "./ports/verification-dispatch-store";
 
 /**
@@ -65,6 +67,13 @@ export interface CoreServices {
    * and not on the port a page read holds.
    */
   readonly profiles: ProfileRepository;
+  /**
+   * The Profile's unit of work: the row and its whole Link list, rewritten as
+   * one act (#106). Separate from {@link profiles}, which is read-only by
+   * design — the writes exist only on the object the transaction hands out, so
+   * a page read cannot rewrite somebody's Links.
+   */
+  readonly profileEdits: ProfileStore;
   /**
    * The Claim's unit of work. Separate from {@link handles}, which is read-only
    * by design: the writes exist only on the object the transaction hands out,
@@ -162,6 +171,10 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     verificationMailer: createBetterAuthVerificationMailer(auth),
     handles: createDrizzleHandleRepository(deps.db),
     profiles: createDrizzleProfileRepository(deps.db),
+    // A plain transaction, like the Release's: an edit writes no Better Auth
+    // row and sends no email, so there is nothing to rebind and nothing to
+    // defer until the commit.
+    profileEdits: createDrizzleProfileStore({ db: deps.db }),
     claims: createDrizzleClaimStore(transactional),
     claimFinaliser: createDrizzleClaimFinaliser(transactional),
     // No auth rebinding and no deferred sender: a Release writes no Better Auth
