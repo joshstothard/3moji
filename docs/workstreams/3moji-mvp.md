@@ -56,6 +56,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | 4     | A claimed Handle shows a real page its owner controls                        | #101       | Done        |
 | 5     | It survives real people                                                      | #149       | Done        |
 | 6     | A Profile can be shared as a link that survives bios and chat apps           | #159       | Done        |
+| 7     | Owners can come back, and it is lawful to launch                             | —          | Not planned |
 
 ### Phase 1 — Foundation and providers
 
@@ -262,16 +263,91 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - #160 Add a control that copies the canonical word alias link — done
 - #161 Add Open Graph metadata and an image for each Profile — done
 
+### Phase 7 — Owners can come back, and it is lawful to launch
+
+**Outcome:** A returning owner can sign in, find and edit their Profile, sign out, reset a forgotten password and delete their Account, and the site carries what a UK-run service publishing user content needs before it is announced.
+
+**Deliverables:**
+
+1. **Password reset pages.** There is no `/reset-password` route, and the header comment in `apps/web/src/app/sign-in/page.tsx` says reset "has no page of its own". The [MVP map](https://github.com/joshstothard/3moji/issues/8) put reset in scope. **This is a live bug, not only a gap:** the claim-collision email (`packages/core/src/auth/claim-collision.ts`, its URL built in `packages/core/src/composition-root.ts` as `${baseUrl}/reset-password`) already sends existing owners a link that 404s. Better Auth's `sendResetPassword` (`packages/core/src/auth/create-auth.ts`) emails its own URL, which must land on a working page too.
+2. **An account area.** The navbar (`apps/web/src/components/navbar.tsx`) is only the logo, sign-in lands on `/` with no signed-in state, the Profile deliberately does not link to its `/edit` page, and there is no sign-out anywhere. `releaseHandle` exists in `packages/core/src/handle/release-handle.ts` with no UI.
+3. **A privacy notice, terms, and abuse reporting.** None exist: `packages/shared/messages/en.json` has no keys for them, and the footer (`apps/web/src/components/footer.tsx`) shows only a UI version. The owner is UK-based, and the service stores email addresses and each session's IP address and user agent. Whether the Online Safety Act's user-to-user duties apply is to be checked against Ofcom's guidance: a Profile is user-generated content that other people encounter, and the Act's limited-functionality exemption (Schedule 1, paragraph 4) covers only comments and reviews on the provider's own content, so the service is **likely in scope (inference, to be confirmed with Ofcom's Regulation Checker)**. The non-goal "moderation beyond the URL scheme check" stands: reporting is not moderation.
+4. **Finding a Handle you heard.** Profiles already show the canonical word alias with a copy button ([#160](https://github.com/joshstothard/3moji/issues/160)), but a listener has no lookup, and the spoken form (`3moji.me/three-ice-cubes`) 404s.
+5. **A rare three-of-a-kind celebration.** Three-of-a-kind Handles stay claimable rather than reserved (Decision log, 2026-09-13). When a visitor builds an all-same triple that is **available**, the builder plays a short animation marking it as rare.
+6. **Site hygiene.** `apps/web/public/` holds only `.gitkeep`; there is no `not-found.tsx` or `error.tsx`; `apps/web/next.config.ts` sets only `output: "standalone"`; and the layout metadata in `apps/web/src/app/layout.tsx` has no `metadataBase` or `openGraph`. The glyphs in the Open Graph images come from Twemoji 16.0.1 via `apps/web/src/lib/og/`, which is CC-BY 4.0 and is not yet attributed on the site.
+7. **An operations minimum.** Vercel Hobby keeps runtime logs for one hour and Neon Free restores only to within six hours ([hosting and email report](../reports/2026-09-11-hosting-and-email.md)), and `docs/runbooks/` does not exist although `AGENTS.md` requires runbooks. **Error tracking** uses Vercel's own logs (Decision log, 2026-09-13). Log drains and longer log retention are understood to be Vercel Pro features — **to be confirmed against Vercel's current docs, not verified here** — so error tracking waits on the owner's expected move to Pro.
+
+**Acceptance criteria:**
+
+_Password reset:_
+
+- [ ] Requesting a reset and setting a new password both work with JavaScript disabled.
+- [ ] The link in the claim-collision email resolves to the reset page rather than 404, and so does the URL Better Auth's `sendResetPassword` emails.
+- [ ] Requesting a reset gives the same response whether or not the address is registered, and the existing rate limits still apply to it.
+- [ ] A successful reset still revokes existing sessions (`revokeSessionsOnPasswordReset`), proven by a test.
+- [ ] The sign-in page links to "forgot your password".
+
+_Account area:_
+
+- [ ] A signed-in owner sees a signed-in state, with links to their Profile and to its edit page.
+- [ ] Signing out ends the session: a request carrying the old session cookie is treated as signed out.
+- [ ] An owner can delete their Account (Release) behind plain, explicit copy that says the Handle is given up and the Account deleted ([ADR-0004](../adr/0004-the-handle-model.md) decision 5, [ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)); afterwards the Handle is claimable.
+- [ ] The public Profile stays cacheable and identical for every visitor: owner affordances do not vary the public page's cached response, proven by a test.
+
+_Privacy, terms and reporting:_
+
+- [ ] `/privacy` and `/terms` exist in plain English, drafted by the agent and clearly marked as needing owner or legal review before announcement.
+- [ ] Both are linked from the footer and from the claim form, where an email address is collected.
+- [ ] Every Profile offers a way to report it; a `mailto:` to a contact address read from an environment variable is enough.
+- [ ] A written takedown procedure exists in `docs/runbooks/`.
+- [ ] Whether the Online Safety Act's user-to-user duties apply is written down, citing Ofcom's guidance.
+
+_Finding a Handle:_
+
+- [ ] A "find a Handle" entry on the home page resolves typed words through `resolveAlias`.
+- [ ] The spoken form, with a number word and a plural (`/three-ice-cubes`), resolves to the Handle or to a listing rather than returning 404.
+
+_Rare three-of-a-kind:_
+
+- [ ] The animation plays only for an available three-of-a-kind Handle, never for a taken, held or reserved one, so it reveals no state the builder does not already show.
+- [ ] Under `prefers-reduced-motion` there is no motion, and a static rare indicator is shown instead.
+- [ ] It is announced once to assistive technology, without moving focus.
+- [ ] The existing axe and keyboard E2E checks still pass.
+
+_Site hygiene:_
+
+- [ ] Branded 404 and error pages.
+- [ ] A favicon.
+- [ ] `robots.txt`, and a sitemap of the static pages (not every Profile).
+- [ ] Home-page Open Graph metadata using the existing generic image.
+- [ ] Responses carry a Content Security Policy, HSTS, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy` and `X-Content-Type-Options`, verified by a test.
+- [ ] The footer links privacy, terms and reporting, and carries the Twemoji CC-BY 4.0 attribution.
+
+_Operations:_
+
+- [ ] A scheduled GitHub Actions job takes a nightly logical backup of the production database to a private, non-public destination, echoes no secret, and commits no dump to this public repository. Planning picks the destination (Open questions).
+- [ ] An uptime check watches `/` and one Profile.
+- [ ] Runbooks exist in `docs/runbooks/` for "site down", "email not arriving" and "restore from backup".
+- [ ] Error tracking is recorded as waiting on the Vercel Pro upgrade.
+
+**Dependencies:** Phases 3 to 6. The backup and uptime work in deliverable 7, and verifying any item on the live site, need [#32](https://github.com/joshstothard/3moji/issues/32), which is blocked on [#19](https://github.com/joshstothard/3moji/issues/19).
+
+**Issues:**
+
+_Not planned yet._
+
 ## Risks & mitigations
 
-| Risk                                                             | Likelihood | Impact | Mitigation                                                                                     |
-| ---------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------- |
-| The Neon Free plan is not selectable in the Vercel Marketplace   | M          | M      | Verify during issue #19; fall back to Supabase used as Postgres only                           |
-| Emoji diverge across platforms more than the evidence suggests   | M          | L      | The evidence is a 2016 study, so issue #23 does a side-by-side render before the set is frozen |
-| Better Auth hits an undocumented problem on this Next.js version | L          | H      | A hand-rolled Lucia-style sessions module is named as the fallback in ADR-0006                 |
-| Squatting on launch day exhausts the memorable Handles           | M          | M      | The 24-hour hold, verification before a Claim is final, and rate limits on claims              |
-| Vercel Hobby forbids commercial use                              | L          | H      | No monetisation is in scope; any premium tier requires moving to Pro first                     |
-| Free-tier limits change under us                                 | M          | M      | The hosting report cites each figure with its date; re-check before launch                     |
+| Risk                                                                                                                          | Likelihood | Impact | Mitigation                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| The Neon Free plan is not selectable in the Vercel Marketplace                                                                | M          | M      | Verify during issue #19; fall back to Supabase used as Postgres only                                                     |
+| Emoji diverge across platforms more than the evidence suggests                                                                | M          | L      | The evidence is a 2016 study, so issue #23 does a side-by-side render before the set is frozen                           |
+| Better Auth hits an undocumented problem on this Next.js version                                                              | L          | H      | A hand-rolled Lucia-style sessions module is named as the fallback in ADR-0006                                           |
+| Squatting on launch day exhausts the memorable Handles                                                                        | M          | M      | The 24-hour hold, verification before a Claim is final, and rate limits on claims                                        |
+| Vercel Hobby forbids commercial use                                                                                           | L          | H      | No monetisation is in scope; any premium tier requires moving to Pro first                                               |
+| Free-tier limits change under us                                                                                              | M          | M      | The hosting report cites each figure with its date; re-check before launch                                               |
+| Resend's free plan caps email at 100 a day, so on launch day later claimants get no verification email and their holds expire | M          | H      | Launch quietly on Free, log the daily send count, and move to Resend Pro before any public announcement (Open questions) |
+| Phishing pages linked from Profiles on a fresh domain get `3moji.me` onto blocklists                                          | M          | H      | Reporting from every Profile and a takedown runbook (Phase 7); consider an outbound link check after launch              |
 
 ## Open questions
 
@@ -282,6 +358,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - Which order do later category drops go in, and what triggers one? ADR-0007 defers Objects and schedules nothing else.
 - Should the **canonical** word alias prefer a shorter unambiguous synonym where one exists? [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3 joins the `displayName` slugs, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` is accepted on input but names eight Handles.
 - Are 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 the right platform-owned Reserved Handles? They were chosen while implementing [#52](https://github.com/joshstothard/3moji/issues/52) and have never been confirmed as a product decision. 🧊🧊🧊 is deliberately not among them, because ADR-0004 decision 2 names it freely claimable.
+- How is launch-day email volume handled? Resend's free plan caps email at 100 a day — one verification email per claim, plus resends and collision notices — so on launch day claimant 101 gets no email and their hold expires. The owner is undecided. **Recommendation:** launch quietly on Free, log the daily send count, and upgrade to Resend Pro ($20/month, 50,000 emails) together with Vercel Pro before any public announcement.
+- Where do nightly database backups live? Phase 7 needs a private, non-public destination, and planning must pick it.
 
 ## Decision log
 
@@ -298,6 +376,9 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 - 2026-09-12 — One Postgres driver in every environment: `node-postgres`, replacing the serverless HTTP driver in production. The driver was chosen by `NODE_ENV`, so CI exercised something production never ran and four merged PRs passed over a Claim path that could not open a transaction. Partially supersedes ADR-0006 decision 6's driver clause; unblocks #84 ([ADR-0010](../adr/0010-use-one-postgres-driver-in-every-environment.md))
 - 2026-09-13 — Phase 5 is split: sharing on the word alias and the per-Profile Open Graph image become **Phase 6 — Sharing**, so Phase 5 holds only the launch-critical safety and accessibility work. Decided by the repo owner when Phase 5 was planned.
+- 2026-09-13 — Three-of-a-kind Handles stay claimable, not reserved; an available one is celebrated as rare in the builder. Decided by the repo owner.
+- 2026-09-13 — Error tracking uses Vercel's own logs, not a third-party vendor; the owner expects to move to Vercel Pro, which also lifts Hobby's non-commercial restriction. Decided by the repo owner.
+- 2026-09-13 — The agent drafts the privacy notice and terms; the owner reviews them before launch. Decided by the repo owner.
 
 ## Changelog
 
@@ -386,3 +467,4 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - 2026-09-13 — Phase 5 planned: epic #149, issues #150–#158. Sharing and the Open Graph image moved to a new Phase 6 — Sharing, planned as epic #159 with issues #160–#161. Error tracking is not planned as an issue pending the vendor decision and #148. Planning found an unrestricted `POST /api/auth/sign-up/email`, filed as #150.
 - 2026-09-13 — #163 added to Phase 5 (epic #149): the Claim's case-sensitive email lookups disagree with Better Auth's lowercasing, which by the code path breaks non-enumeration and blocks mixed-case sign-ups. Found while landing #148 (PR #162); measured first.
 - 2026-09-13 — Synced from GitHub after #188: **Phase 5 Done** (epic #149 closed, all 16 issues closed — #150–#158 and #163 as planned, plus #169, #177, #180, #182, #185 and #187 added after planning) and **Phase 6 Done** (epic #159 closed, #160 and #161 closed). All four Phase 5 and both Phase 6 acceptance criteria ticked against their closed issues. Not yet met despite the Done status: `3moji.me` is not live, so Phase 5's outcome and Phase 6's unfurl on a real share wait on #32 (blocked on #19); and Phase 5's error tracking was never planned as an issue. Phase 1 (#32) and Phase 2 (#55) remain In progress, so the workstream stays Active.
+- 2026-09-13 — Phase 7 added after an MVP gap review: owner return path (password reset, account area, sign-out, deletion), privacy/terms/reporting, finding a Handle by its spoken form, a rare three-of-a-kind celebration, site hygiene and an operations minimum. The claim-collision email's dead `/reset-password` link recorded as a live bug.
