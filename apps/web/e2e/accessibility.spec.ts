@@ -6,7 +6,14 @@ import {
   type CuratedEmoji,
 } from "@template/core";
 import en from "../../../packages/shared/messages/en.json";
-import { checkPage, PAGE_RULES, type PageReport } from "./support/axe";
+import {
+  checkLandmarks,
+  checkPage,
+  LANDMARK_RULES,
+  PAGE_RULES,
+  type PageReport,
+} from "./support/axe";
+import { describeContrast, measureContrast } from "./support/contrast";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -19,10 +26,21 @@ import { seedClaimedHandle } from "./support/seed";
  * **actually passed** on that page. The third is what stops a check going
  * green by evaluating nothing, for instance against a page that failed to
  * render its styles or its content.
+ *
+ * Each page also runs axe's best-practice `landmark-one-main` and `region`
+ * rules by name, under the same three assertions
+ * ([#177](https://github.com/joshstothard/3moji/issues/177)). And the two
+ * things axe cannot see - placeholder text and a glyph hidden from assistive
+ * technology - have their contrast measured directly.
  */
 
 const builderCopy = en.HandleBuilder;
 const handleCopy = en.HandlePage;
+const claimCopy = en.Claim;
+const editCopy = en.ProfileEdit;
+
+/** WCAG 1.4.3 Contrast (Minimum), for text at normal size. */
+const TEXT_CONTRAST = 4.5;
 
 function expectAccessible(
   report: PageReport,
@@ -32,6 +50,14 @@ function expectAccessible(
   expect(report.incomplete, "axe incomplete results").toEqual([]);
   expect(report.passed, "rules that ran and passed").toEqual(
     expect.arrayContaining([...PAGE_RULES, ...pageRules]),
+  );
+}
+
+function expectLandmarksContained(report: PageReport): void {
+  expect(report.violations, "axe landmark violations").toEqual([]);
+  expect(report.incomplete, "axe landmark incomplete results").toEqual([]);
+  expect(report.passed, "landmark rules that ran and passed").toEqual(
+    expect.arrayContaining([...LANDMARK_RULES]),
   );
 }
 
@@ -48,6 +74,61 @@ test("the home page and its picker have no WCAG A or AA violations", async ({
   await openHome(page);
 
   expectAccessible(await checkPage(page), ["label", "button-name", "list"]);
+  expectLandmarksContained(await checkLandmarks(page));
+});
+
+test("the picker's search placeholder meets text contrast", async ({
+  page,
+}) => {
+  // Placeholder text is text, so WCAG 1.4.3's 4.5:1 applies - and axe does not
+  // reliably evaluate `::placeholder`, so the check above is no evidence.
+  await openHome(page);
+  const field = page.getByRole("searchbox", {
+    name: builderCopy.pickerSearchLabel,
+  });
+  await expect(field).toHaveValue("");
+  await expect(field).toHaveAttribute(
+    "placeholder",
+    builderCopy.pickerSearchPlaceholder,
+  );
+
+  const measured = await measureContrast(field, "::placeholder");
+  const account = describeContrast("search placeholder", measured);
+  console.log(account);
+
+  expect(measured.ratio, account).toBeGreaterThanOrEqual(TEXT_CONTRAST);
+});
+
+test("the Profile edit form's drag handle meets text contrast", async ({
+  page,
+}) => {
+  // The handle is a pointer-only duplicate of the move buttons, hidden from
+  // assistive technology (#107), which argues for WCAG 1.4.11's 3:1. It is
+  // also a rendered character, which argues for 1.4.3's 4.5:1. The stricter
+  // threshold is asserted, so the fix does not rest on the contested reading.
+  const seeded = await seedClaimedHandle();
+
+  await page.goto("/sign-in");
+  await page
+    .getByLabel(claimCopy.signInEmailLabel)
+    .fill(seeded.credentials.email);
+  await page
+    .getByLabel(claimCopy.signInPasswordLabel)
+    .fill(seeded.credentials.password);
+  await page.getByRole("button", { name: claimCopy.signInSubmit }).click();
+  await expect(page).not.toHaveURL(/\/sign-in/);
+
+  await page.goto(`${seeded.path}/edit`);
+  const handle = page.getByTitle(
+    editCopy.dragLinkHandle.replace("{position}", "1"),
+  );
+  await expect(handle).toBeVisible();
+
+  const measured = await measureContrast(handle);
+  const account = describeContrast("drag handle", measured);
+  console.log(account);
+
+  expect(measured.ratio, account).toBeGreaterThanOrEqual(TEXT_CONTRAST);
 });
 
 test("the page check fails when the page has a violation", async ({ page }) => {
@@ -88,6 +169,7 @@ test("a claimed Profile has no WCAG A or AA violations", async ({ page }) => {
   ).toBeVisible();
 
   expectAccessible(await checkPage(page), ["list", "listitem", "role-img-alt"]);
+  expectLandmarksContained(await checkLandmarks(page));
 });
 
 test("an alias listing has no WCAG A or AA violations", async ({ page }) => {
@@ -110,6 +192,7 @@ test("an alias listing has no WCAG A or AA violations", async ({ page }) => {
   }
 
   expectAccessible(await checkPage(page), ["list", "listitem", "role-img-alt"]);
+  expectLandmarksContained(await checkLandmarks(page));
 });
 
 /**
