@@ -125,8 +125,31 @@ jest.mock("./profile-edit", () => ({
     Promise.resolve({ state: "allowed", userId: "user-1" }),
 }));
 
+/**
+ * `next/og` renders a PNG with WebAssembly, which is the image routes' edge
+ * (#161). Faked as a Response that can be made to throw, the way a render
+ * that fails would.
+ */
+const ogImage = { fails: false };
+jest.mock("next/og", () => ({
+  ImageResponse: class extends Response {
+    constructor(
+      _element: unknown,
+      options: { headers?: Readonly<Record<string, string>> },
+    ) {
+      if (ogImage.fails) throw leakyError();
+      super(new Uint8Array([0x89]), {
+        status: 200,
+        headers: { "content-type": "image/png", ...options.headers },
+      });
+    }
+  },
+}));
+
 import * as authRoute from "../app/api/auth/[...all]/route";
 import * as verifyRoute from "../app/claim/verify/route";
+import * as genericImageRoute from "../app/og-image/route";
+import * as handleImageRoute from "../app/[handle]/og-image/route";
 import * as availabilityAction from "../components/availability-action";
 import * as claimAction from "../components/claim-action";
 import * as profileEditAction from "../components/profile-edit-action";
@@ -142,6 +165,7 @@ import {
 
 /** Every collaborator answering the way a healthy deployment answers. */
 function healthy(): void {
+  ogImage.fails = false;
   getServices.mockImplementation(() => ({
     auth: { api: { signInEmail } },
     accounts: { byEmail, handleOf },
@@ -267,6 +291,38 @@ const CASES: readonly BoundaryCase[] = [
     fail: () => {
       finaliseClaim.mockRejectedValue(leakyError());
       return verifyRoute.GET(verifyRequest());
+    },
+    logsFailure: false,
+  },
+  {
+    file: "app/og-image/route.ts",
+    exportName: "GET",
+    boundary: "og-image.generic",
+    answer: () => genericImageRoute.GET(),
+    answered: "ok",
+    fail: () => {
+      ogImage.fails = true;
+      return genericImageRoute.GET();
+    },
+    logsFailure: false,
+  },
+  {
+    // Answered for an unclaimed Handle, so the generic image is drawn. The
+    // line is `ok` whatever the state — the route answered with an image — so
+    // the log cannot become a record of which Handles are held either.
+    file: "app/[handle]/og-image/route.ts",
+    exportName: "GET",
+    boundary: "og-image.handle",
+    answer: () =>
+      handleImageRoute.GET(verifyRequest(), {
+        params: Promise.resolve({ handle: ENCODED }),
+      }),
+    answered: "ok",
+    fail: () => {
+      ogImage.fails = true;
+      return handleImageRoute.GET(verifyRequest(), {
+        params: Promise.resolve({ handle: ENCODED }),
+      });
     },
     logsFailure: false,
   },

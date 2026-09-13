@@ -51,6 +51,10 @@ The boundaries, enumerated from the code — `src/lib/api-boundaries.test.ts` wa
 | `components/sign-in-action.ts`      | `signInFormAction`           | `sign-in.form`           |
 | `components/profile-edit-action.ts` | `saveProfileAction`          | `profile.save`           |
 | `components/resend-action.ts`       | `requestNewVerificationLink` | `verification.resend`    |
+| `app/og-image/route.ts`             | `GET`                        | `og-image.generic`       |
+| `app/[handle]/og-image/route.ts`    | `GET`                        | `og-image.handle`        |
+
+The two image routes ([#161](https://github.com/joshstothard/3moji/issues/161)) log `ok` whenever they answer with an image and `failed` when the render throws. **`og-image.handle` logs `ok` for a claimed Profile and for the generic image alike**, so the log is no more a record of which Handles are held than the image is.
 
 `outcome` is one of six values, chosen to describe what happened rather than who asked:
 
@@ -158,6 +162,33 @@ The availability read is the same `checkAvailability` server action the home pag
 - **It appears on the Profile view only, to every visitor, whichever grammar they arrived by** — the emoji path or the word alias. It is not offered for an unedited, held, reserved, unknown or unclaimed Handle, nor on a listing, and the unit suite asserts each absence. It sits after the owner's Links, so the first tab stop on a Profile is still the owner's content. It is not on `/[handle]/edit`: sharing is for every visitor, the owner reaches the public Profile like anybody else, and the edit form is a write surface.
 - **Accessibility:** a real `<button>`, never disabled, so focus stays on it after a successful copy; the outcome is announced in a `role="status"` region present and empty from the first render. When the Clipboard API is missing or refuses, the control says so rather than claiming a copy, and shows the link in a labelled read-only field with the whole link selected and **focus moved into it** — a selection in an unfocused field cannot be copied.
 - Dotted alias paths are still unverified on Vercel's CDN ([#32](https://github.com/joshstothard/3moji/issues/32)); the control copies the right link regardless.
+
+### A Profile's Open Graph card
+
+A shared link unfurls as a card ([#161](https://github.com/joshstothard/3moji/issues/161)). `/[handle]`'s `generateMetadata` emits `og:title`, `og:description`, `og:url`, `og:image` (with width, height and alt), `rel="canonical"` and a `summary_large_image` Twitter card. The rules are pure functions in `apps/web/src/lib/og/`; the page composes them from the same reads it renders from.
+
+**Two kinds of card, and the second is one value.**
+
+| Page                                                                                                                       | Card                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| a claimed Handle with a Profile                                                                                            | title `{display name} · 🧊🧊🧊`, description from the Spoken Name, image `/{encoded}/og-image` drawing the emoji and the name |
+| a claimed Handle whose owner has edited nothing                                                                            | title `🧊🧊🧊 on 3moji`, the same image with the emoji alone                                                                  |
+| available, held, reserved, unknown; a claimed Handle whose Profile read failed; a listing; an alias naming several Handles | the site's name and tagline, and the one generic image `/og-image`                                                            |
+
+The generic card is **identical** for every row of the third kind: it says nothing about why the page is not a Profile, and never who holds a Handle or until when (ADR-0004). `metadata.test.ts` and `image-input.test.ts` hand a fully-populated Profile to every non-claimed state and assert the generic value, with no display name, date, hold wording or glyph in it. The bio and Links are never used by either.
+
+**The canonical URL and `og:url` are the percent-encoded emoji path, for both grammars** (ADR-0008 decision 5), and so is the image: the alias and the emoji address of one Profile unfurl as one card. A page showing no single Handle — a listing, an ambiguous alias — emits no canonical and no `og:url`. The canonical is emitted by the metadata **only**; the page no longer renders its own `<link rel="canonical">`, which would make two. `generateMetadata` and the page share their reads through React `cache`, so metadata costs no second availability or Profile query.
+
+**Absolute URLs use `siteOrigin()`** — `BETTER_AUTH_URL`, as the share link does. With no usable origin, `og:url` and the images are omitted and the canonical stays relative, rather than letting Next.js resolve them against a guessed `localhost`.
+
+**The image routes.** `app/[handle]/og-image/route.ts` canonicalises its segment and, only for a canonical, claimed Handle, reads the Profile; everything else — including a non-canonical spelling and a segment that is not a Handle, which get no redirect and no 404 — draws the generic image. `app/og-image/route.ts` draws the generic image directly. Both answer through `lib/og/image.tsx`, with **the same options and headers**, so a held Handle's image cannot be told from a reserved one's by its bytes or its headers; the E2E spec compares them.
+
+- **`Cache-Control: public, max-age=300, s-maxage=300`**, on every image. `next/og` defaults to `public, immutable, max-age=31536000`, which would keep a renamed or deleted owner's name in unfurl caches and CDNs for a year. Five minutes bounds that, and rendering is cheap enough to repeat.
+- **No network at render.** `next/og` draws text with satori, which cannot render a colour emoji font and fetches missing glyphs from a CDN, and missing fonts from Google Fonts **with the text in the query string**. So the emoji are drawn as `<img>` from bundled SVGs, and a display name containing any character outside the bundled font's coverage (`IMAGE_FONT_RANGES`, checked against the font's own `cmap` by `display-name.test.ts`) is left out of the image — the emoji are still drawn, and the name stays in the text metadata.
+- **The display name is bounded at this edge**: control and format characters (including bidirectional overrides) removed, whitespace collapsed, cut to `DISPLAY_NAME_MAX_LENGTH` code points. It is written into `<meta>` by React, which escapes it, and drawn by satori as a text node, which is never parsed as markup. Templates are filled with a function replacer, so `$&` or `{handle}` in a name is literal.
+- **The proxy runs on both routes** (its matcher excludes neither) and only adds `x-correlation-id`, which is the one header that differs between two otherwise identical image responses.
+
+**The emoji glyphs are Twemoji 16.0.1** ([jdecked/twemoji](https://github.com/jdecked/twemoji), commit `50c7abfe6813680455781862f7b34305cd1eb9f5`), graphics **licensed CC-BY 4.0** (<https://creativecommons.org/licenses/by/4.0/>), copyright Twitter, Inc. and other contributors and jdecked and other contributors; the licence text is `apps/web/src/lib/og/TWEMOJI-LICENSE-GRAPHICS.txt`. `apps/web/src/lib/og/emoji-glyphs.generated.ts` holds the unmodified SVG of every released emoji — 307 of them, about 587 KB of source (577 KB of SVG) — as a TypeScript module, so the bundler includes it in the `standalone` output with no file tracing to get wrong; three are used per image. Noto's Apache-2.0 SVGs were three times the size, and a colour-emoji font would be ~10 MB and unrenderable by satori. `scripts/generate-og-glyphs.mjs` regenerates it from the pinned commit and refuses any SVG that references something outside itself; **a category drop must re-run it**, and `glyphs.test.ts` fails until it has.
 
 ### Editing the Profile
 

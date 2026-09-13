@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
+import { cache } from "react";
 import {
   canonicalise,
   resolveAlias,
   spokenHandle,
+  type AliasCandidate,
   type CanonicalHandle,
   type Profile,
   type ProfileLink,
@@ -11,7 +14,8 @@ import {
 import { readAvailability } from "../../lib/availability";
 import { readDisplayNames, readProfile } from "../../lib/profile";
 import { safeLinkHref } from "../../lib/safe-link";
-import { shareLinkOf } from "../../lib/share-link";
+import { shareLinkOf, siteOrigin } from "../../lib/share-link";
+import { genericMetadataOf, handleMetadataOf } from "../../lib/og/metadata";
 import { HandleBuilder } from "../../components/handle-builder";
 import { checkAvailability } from "../../components/availability-action";
 import { claimFormAction } from "../../components/claim-action";
@@ -56,6 +60,59 @@ interface HandlePageProps {
   readonly params: Promise<{ readonly handle: string }>;
 }
 
+/**
+ * The reads, shared between {@link generateMetadata} and the page.
+ *
+ * Next.js calls both for one request, and each needs the same availability and
+ * Profile answers. React `cache` memoises them for the duration of that
+ * request, so the metadata costs no second query — and the card and the page
+ * cannot disagree about a Handle whose state changed between two reads.
+ */
+const availabilityOf = cache(readAvailability);
+const profileOf = cache(readProfile);
+
+/**
+ * The page's Open Graph card, canonical URL and Twitter card
+ * ([#161](https://github.com/joshstothard/3moji/issues/161)).
+ *
+ * **It is the only place a canonical URL is emitted.** Every page showing one
+ * Handle — reached by the emoji path or by the word alias — declares that
+ * Handle's percent-encoded emoji path (ADR-0008 decision 5). A redirect, a 404,
+ * a listing and an alias naming several Handles get the generic card and no
+ * canonical. What each state's card may say is `lib/og/metadata.ts`'s.
+ *
+ * It never throws for control flow: the page below decides the 404 and the
+ * 308, and metadata for a request that becomes one is never sent.
+ */
+export async function generateMetadata({
+  params,
+}: HandlePageProps): Promise<Metadata> {
+  const { handle } = await params;
+  const origin = siteOrigin();
+  const result = canonicalise(handle);
+
+  if (result.ok) {
+    // Not gated on `isCanonical`. The page 308s another spelling before any
+    // metadata is sent, so this only ever describes the canonical page — and
+    // against a production build the segment reached here spelled differently
+    // from the page's, which dropped the canonical URL from a page that had one.
+    const state = await availabilityOf(result.encoded);
+    const profile = await profileOf(result.encoded, state);
+    return handleMetadataOf({ origin, handle: result, state, profile });
+  }
+
+  const choice = await aliasChoiceOf(handle);
+  if (choice.kind !== "one") return genericMetadataOf(origin);
+
+  const profile = await profileOf(choice.candidate.encoded, choice.state);
+  return handleMetadataOf({
+    origin,
+    handle: choice.candidate,
+    state: choice.state,
+    profile,
+  });
+}
+
 export default async function HandlePage({ params }: HandlePageProps) {
   const { handle } = await params;
   const result = canonicalise(handle);
@@ -80,8 +137,8 @@ export default async function HandlePage({ params }: HandlePageProps) {
   // `permanentRedirect` signal by throwing, so anything that catches around
   // them — and the read below has a `try/catch` inside it — would swallow the
   // 404 and the 308 and answer 200 with an availability line for junk.
-  const state = await readAvailability(result.encoded);
-  const profile = await readProfile(result.encoded, state);
+  const state = await availabilityOf(result.encoded);
+  const profile = await profileOf(result.encoded, state);
 
   return <ResolvedHandle handle={result} state={state} profile={profile} />;
 }
@@ -119,7 +176,8 @@ type RenderedHandle = Pick<CanonicalHandle, "key" | "emoji">;
  * replace it in the address bar with 45 characters of `%F0%9F…`, which is the
  * defect the ADR was written to avoid. So the Profile is rendered under the
  * alias URL, and `rel="canonical"` — which is for machines, not for the address
- * bar — points at the emoji path instead (decision 5).
+ * bar — points at the emoji path instead (decision 5). That link is emitted by
+ * {@link generateMetadata}, not here, so there is exactly one.
  *
  * **More than one claimed match is a listing** (decision 4,
  * [#109](https://github.com/joshstothard/3moji/issues/109)): roughly one alias
@@ -136,52 +194,31 @@ type RenderedHandle = Pick<CanonicalHandle, "key" | "emoji">;
  * its own — an accepted ADR cannot be edited, so it is not resolved here.
  */
 async function AliasedHandle({ segment }: { readonly segment: string }) {
-  const alias = resolveAlias(segment);
-  if (!alias.ok) {
+  const choice = await aliasChoiceOf(segment);
+
+  if (choice.kind === "unresolved") {
     // Not three dot-separated terms, or a word we do not know. Both are the
     // same answer over HTTP as the four canonicalisation rejections above:
     // there is no Handle at this URL.
     notFound();
   }
 
-  // Independent reads, so they go together rather than one after another. The
-  // worst alias measured by ADR-0008 (`celebration`, four emoji) is 64 of
-  // them; the listing issue owns whatever bound that eventually needs.
-  const matches = await Promise.all(
-    alias.candidates.map(async (candidate) => ({
-      candidate,
-      state: await readAvailability(candidate.encoded),
-    })),
-  );
-
-  const claimed = matches.filter((match) => match.state === "claimed");
-
-  if (claimed.length > 1) {
+  if (choice.kind === "listing") {
     /*
      * The listing, and **one read for all of its names**. The rows are the
      * claimed matches in the resolver's order — not sorted by name and not by
      * recency, because ADR-0008 leaves ranking open and an order invented here
      * would answer it by accident.
      */
-    const listed = claimed.map((match) => match.candidate);
     const displayNames = await readDisplayNames(
-      listed.map((candidate) => candidate.encoded),
+      choice.listed.map((candidate) => candidate.encoded),
     );
-    return <AliasListing candidates={listed} displayNames={displayNames} />;
+    return (
+      <AliasListing candidates={choice.listed} displayNames={displayNames} />
+    );
   }
 
-  // Exactly one claimed match is the Profile to show. Failing that, an alias
-  // that names exactly one Handle still has a page — unclaimed, held, reserved
-  // or unknown, whatever the read says — and it is the same page the emoji
-  // path renders. `at` rather than `[0]`, so nothing here asserts non-null.
-  const shown =
-    claimed.length === 1
-      ? claimed.at(0)
-      : matches.length === 1
-        ? matches.at(0)
-        : undefined;
-
-  if (shown === undefined) {
+  if (choice.kind === "ambiguous") {
     return <AmbiguousAlias />;
   }
 
@@ -190,30 +227,72 @@ async function AliasedHandle({ segment }: { readonly segment: string }) {
    * the availability reads**. It is the same second read the emoji path makes
    * (§ The claimed Handle), handed the same percent-encoded segment the
    * availability read was asked about, so the two answers cannot be about
-   * different Handles. Folding it into the `Promise.all` above would fetch a
+   * different Handles. Folding it into the availability reads would fetch a
    * Profile for every candidate — doubling a cost ADR-0008 measured at 64
    * reads in the worst case — to show exactly one.
    */
-  const profile = await readProfile(shown.candidate.encoded, shown.state);
+  const profile = await profileOf(choice.candidate.encoded, choice.state);
 
   return (
-    <>
-      {/*
-       * An alias is ambiguous by construction and so can never be canonical:
-       * one indexable URL per Profile, and it is the emoji one. React hoists
-       * this into the document head; `generateMetadata` would be the other
-       * place to put it, and would re-run the resolver and every read above to
-       * produce one string.
-       */}
-      <link rel="canonical" href={`/${shown.candidate.encoded}`} />
-      <ResolvedHandle
-        handle={shown.candidate}
-        state={shown.state}
-        profile={profile}
-      />
-    </>
+    <ResolvedHandle
+      handle={choice.candidate}
+      state={choice.state}
+      profile={profile}
+    />
   );
 }
+
+/** What an alias resolves to, once the availability reads have answered. */
+type AliasChoice =
+  | { readonly kind: "unresolved" }
+  | { readonly kind: "listing"; readonly listed: readonly AliasCandidate[] }
+  | { readonly kind: "ambiguous" }
+  | {
+      readonly kind: "one";
+      readonly candidate: AliasCandidate;
+      readonly state: AvailabilityState;
+    };
+
+/**
+ * The decision ADR-0008 decision 4 makes about an alias, taken once per
+ * request and shared by the page and {@link generateMetadata}.
+ *
+ * The resolver in `packages/core` answers with a candidate set; this adds which
+ * of them anybody has. Independent reads, so they go together rather than one
+ * after another. The worst alias measured by ADR-0008 (`celebration`, four
+ * emoji) is 64 of them; the listing issue owns whatever bound that needs.
+ *
+ * Exactly one claimed match is the Handle to show. Failing that, an alias that
+ * names exactly one Handle still has a page — unclaimed, held, reserved or
+ * unknown, whatever the read says — and it is the same page the emoji path
+ * renders. `at` rather than `[0]`, so nothing here asserts non-null.
+ */
+const aliasChoiceOf = cache(async (segment: string): Promise<AliasChoice> => {
+  const alias = resolveAlias(segment);
+  if (!alias.ok) return { kind: "unresolved" };
+
+  const matches = await Promise.all(
+    alias.candidates.map(async (candidate) => ({
+      candidate,
+      state: await availabilityOf(candidate.encoded),
+    })),
+  );
+
+  const claimed = matches.filter((match) => match.state === "claimed");
+  if (claimed.length > 1) {
+    return { kind: "listing", listed: claimed.map((match) => match.candidate) };
+  }
+
+  const shown =
+    claimed.length === 1
+      ? claimed.at(0)
+      : matches.length === 1
+        ? matches.at(0)
+        : undefined;
+
+  if (shown === undefined) return { kind: "ambiguous" };
+  return { kind: "one", candidate: shown.candidate, state: shown.state };
+});
 
 /**
  * One Handle as a listing shows it: what to render, and where it lives.
