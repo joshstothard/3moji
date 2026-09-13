@@ -58,6 +58,13 @@ describe("createCoreServices", () => {
     await close();
   });
 
+  it("wires the resend action's per-client-address limiter the same way (#158)", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(Object.keys(services.resendClientRateLimiter)).toEqual(["admit"]);
+    await close();
+  });
+
   it("wires the Claim's unit of work", async () => {
     const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
 

@@ -26,7 +26,21 @@ import type { AuthFactory } from "./auth-factory";
 import { createAuth } from "./create-auth";
 import { createBetterAuthVerificationMailer } from "./adapters/better-auth-verification-mailer";
 import { finaliseClaim } from "./finalise-claim";
+import type { ResendClientRateLimiter } from "./resend-rate-limit";
 import { resendVerification } from "./resend-verification";
+
+/**
+ * The per-client-address limit, out of the way: these tests are about the
+ * per-Account limit and invalidation. The per-client limit is proved against
+ * Postgres in `auth-rate-limit.integration.test.ts`.
+ */
+const admitEveryClient: {
+  readonly clientAddress: string;
+  readonly clientLimiter: ResendClientRateLimiter;
+} = {
+  clientAddress: "203.0.113.7",
+  clientLimiter: { admit: () => Promise.resolve({ state: "admitted" }) },
+};
 
 const url = process.env.DATABASE_URL;
 
@@ -341,6 +355,7 @@ describeWithDatabase("verification against a real Postgres", () => {
     await letARealSecondPass();
     const outcome = await resendVerification({
       email,
+      ...admitEveryClient,
       directory,
       dispatches,
       mailer,
@@ -390,7 +405,14 @@ describeWithDatabase("verification against a real Postgres", () => {
 
     // Sign-up issued the first link, so two more reach the ceiling.
     const attempt = async () =>
-      resendVerification({ email, directory, dispatches, mailer, clock });
+      resendVerification({
+        email,
+        ...admitEveryClient,
+        directory,
+        dispatches,
+        mailer,
+        clock,
+      });
 
     now = new Date(now.getTime() + 61 * 1000);
     expect((await attempt()).state).toBe("sent");
@@ -515,6 +537,7 @@ describeWithDatabase("verification against a real Postgres", () => {
   it("says nothing about an address that has no Account", async () => {
     const outcome = await resendVerification({
       email: addressFor("nobody-here"),
+      ...admitEveryClient,
       directory,
       dispatches,
       mailer,
