@@ -50,7 +50,9 @@
     "shareCopy": "Copy link",
     "shareCopied": "Link copied.",
     "shareManual": "Copying did not work, so the link is selected below. Copy it from there.",
-    "shareManualLabel": "Link to this Handle"
+    "shareManualLabel": "Link to this Handle",
+    "report": "Report this page",
+    "reportSubject": "Report a 3moji page: {path}"
   },
   "Claim": {
     "spoken": "Say it: {spoken}",
