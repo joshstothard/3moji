@@ -38,6 +38,10 @@ const ENCODED = "%F0%9F%A7%8A%F0%9F%A7%8A%F0%9F%A7%8A";
 const EMAIL = "claimant@example.com";
 const PASSWORD = "correct horse battery staple";
 const NOW = new Date("2026-09-13T12:00:00.000Z");
+/** `RESPONSE_FLOOR_MS` in `packages/core/src/auth/response-floor.ts`. */
+const RESPONSE_FLOOR_MS = jest.requireActual<{
+  readonly RESPONSE_FLOOR_MS: number;
+}>("../../../../packages/core/src/auth/response-floor").RESPONSE_FLOOR_MS;
 
 type Who = "a new address" | "an already-registered address";
 
@@ -120,14 +124,20 @@ jest.mock("next/headers", () => ({
  */
 const REDIRECT = "NEXT_REDIRECT";
 const redirected: string[] = [];
+/**
+ * The **real** throw, so the boundary line (#156) classifies a redirect the way
+ * production does — by Next.js's own digest, not by a message.
+ */
+const navigation = jest.requireActual<{
+  readonly redirect: (url: string) => never;
+  readonly notFound: () => never;
+}>("next/navigation");
 jest.mock("next/navigation", () => ({
   redirect: (url: string): never => {
     redirected.push(url);
-    throw new Error(REDIRECT);
+    return navigation.redirect(url);
   },
-  notFound: (): never => {
-    throw new Error("NEXT_HTTP_ERROR_FALLBACK;404");
-  },
+  notFound: (): never => navigation.notFound(),
 }));
 
 /** The hold screen's resend is a server action; it is not under test here. */
@@ -201,6 +211,52 @@ describe("an already-registered address, from the form to the hold screen", () =
       thrown: REDIRECT,
       redirected: [`/claim/held/${ENCODED}?reason=pending`],
     });
+  });
+
+  it("writes the same boundary line for both, measured after the response floor (#156)", async () => {
+    const lines: Record<string, unknown>[] = [];
+    const logged = jest
+      .spyOn(console, "log")
+      .mockImplementation((...args: unknown[]) => {
+        const [first] = args;
+        if (typeof first !== "string") return;
+        const value: unknown = JSON.parse(first);
+        if (
+          typeof value === "object" &&
+          value !== null &&
+          "event" in value &&
+          value.event === "api_boundary"
+        ) {
+          lines.push(Object.fromEntries(Object.entries(value)));
+        }
+      });
+
+    const fresh = await actionOutcome("a new address");
+    const collision = await actionOutcome("an already-registered address");
+    logged.mockRestore();
+
+    // The two really did take different paths through the domain.
+    expect(fresh.sent).toBe(0);
+    expect(collision.sent).toBe(1);
+
+    expect(lines).toHaveLength(2);
+    const [freshLine, collisionLine] = lines;
+    const { durationMs: freshMs, ...freshRest } = freshLine ?? {};
+    const { durationMs: collisionMs, ...collisionRest } = collisionLine ?? {};
+
+    // Every field but the duration is identical, and names the success.
+    expect(collisionRest).toEqual(freshRest);
+    expect(freshRest).toEqual({
+      event: "api_boundary",
+      boundary: "claim.submit",
+      outcome: "redirected",
+      correlationId: "none",
+    });
+
+    // The duration is taken around the whole call, so the floor that pads the
+    // fast branch is inside it: neither line can be told apart by a fast time.
+    expect(freshMs).toBeGreaterThanOrEqual(RESPONSE_FLOOR_MS);
+    expect(collisionMs).toBeGreaterThanOrEqual(RESPONSE_FLOOR_MS);
   });
 
   it("lands on a hold screen that is byte-for-byte the same page", async () => {

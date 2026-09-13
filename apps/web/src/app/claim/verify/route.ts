@@ -1,5 +1,6 @@
 import { finaliseClaim, type ClaimFinalisation } from "@template/core";
 
+import { atBoundary, type BoundaryOutcome } from "../../../lib/boundary-log";
 import { getServices } from "../../../lib/services";
 
 /**
@@ -34,26 +35,50 @@ import { getServices } from "../../../lib/services";
  * is an error page**: five of the six states leave the Handle held.
  */
 export async function GET(request: Request): Promise<Response> {
-  const token = new URL(request.url).searchParams.get("token") ?? "";
+  // One boundary line per call (#156). A thrown failure is logged `failed` and
+  // rethrown, so it still becomes the 500 described below; the token is never
+  // part of the line.
+  return atBoundary("claim.verify", async (record) => {
+    const token = new URL(request.url).searchParams.get("token") ?? "";
 
-  const { dispatches, accounts, claimFinaliser, clock } = getServices();
+    const { dispatches, accounts, claimFinaliser, clock } = getServices();
 
-  const result = await finaliseClaim({
-    token,
-    dispatches,
-    directory: accounts,
-    finaliser: claimFinaliser,
-    clock,
+    const result = await finaliseClaim({
+      token,
+      dispatches,
+      directory: accounts,
+      finaliser: claimFinaliser,
+      clock,
+    });
+
+    // A failure to *reach* the database propagates as a 500 rather than
+    // becoming "that link expired". The two look identical to a visitor and
+    // are opposite in meaning: one is retryable in an hour, the other in a
+    // moment, and telling somebody their link expired when it did not sends
+    // them round a loop that cannot end. Nothing is caught here for the same
+    // reason `finaliseClaim` separates `link-expired` from an exception.
+
+    record(outcomeOf(result));
+    return redirectTo(destinationFor(result), setCookiesOf(result));
   });
+}
 
-  // A failure to *reach* the database propagates as a 500 rather than becoming
-  // "that link expired". The two look identical to a visitor and are opposite
-  // in meaning: one is retryable in an hour, the other in a moment, and telling
-  // somebody their link expired when it did not sends them round a loop that
-  // cannot end. Nothing is caught here for the same reason `finaliseClaim`
-  // separates `link-expired` from an exception.
-
-  return redirectTo(destinationFor(result), setCookiesOf(result));
+/**
+ * The boundary outcome of each answer. Every answer is a 303, so the outcome
+ * says what the redirect means: a Claim that is final is a success, and a link
+ * that no longer works — for any of four reasons — is a rejection.
+ */
+function outcomeOf(result: ClaimFinalisation): BoundaryOutcome {
+  switch (result.state) {
+    case "claimed":
+    case "already-claimed":
+      return "redirected";
+    case "link-unknown":
+    case "link-superseded":
+    case "link-expired":
+    case "hold-expired":
+      return "rejected";
+  }
 }
 
 /**

@@ -1,6 +1,7 @@
 "use server";
 
 import { readAvailability } from "../lib/availability";
+import { atBoundary } from "../lib/boundary-log";
 import type { AvailabilityState } from "./availability-state";
 
 /**
@@ -25,9 +26,19 @@ import type { AvailabilityState } from "./availability-state";
 export async function checkAvailability(
   segment: unknown,
 ): Promise<AvailabilityState> {
-  if (typeof segment !== "string") {
-    return "unknown";
-  }
+  // One boundary line per call (#156). `"unknown"` from the read means the
+  // read failed and degraded (it has already written its `logFailure` line),
+  // so it is logged `failed`; every other state is an answer.
+  return atBoundary(
+    "availability.check",
+    async (record) => {
+      if (typeof segment !== "string") {
+        record("rejected");
+        return "unknown";
+      }
 
-  return readAvailability(segment);
+      return readAvailability(segment);
+    },
+    { outcomeOf: (state) => (state === "unknown" ? "failed" : "ok") },
+  );
 }

@@ -1,5 +1,10 @@
 import { toNextJsHandler } from "better-auth/next-js";
 
+import {
+  atBoundary,
+  authEndpointOf,
+  outcomeOfStatus,
+} from "../../../../lib/boundary-log";
 import { getServices } from "../../../../lib/services";
 
 /**
@@ -14,11 +19,30 @@ import { getServices } from "../../../../lib/services";
  * A thin transport adapter, which is all a route handler is allowed to be under
  * ADR-0006 decision 1. The handlers resolve services per request rather than at
  * module scope, so `next build` does not need a populated environment.
+ *
+ * **Each call writes one boundary line** (#156), its outcome read from the
+ * response status and its `endpoint` matched against a fixed list — never the
+ * path itself, which carries a reset token in `/reset-password/<token>`, and
+ * never the query string or the body.
  */
 export async function GET(request: Request): Promise<Response> {
-  return toNextJsHandler(getServices().auth).GET(request);
+  return atBoundary(
+    "auth.get",
+    () => toNextJsHandler(getServices().auth).GET(request),
+    {
+      outcomeOf: (response) => outcomeOfStatus(response.status),
+      endpoint: authEndpointOf(request.url),
+    },
+  );
 }
 
 export async function POST(request: Request): Promise<Response> {
-  return toNextJsHandler(getServices().auth).POST(request);
+  return atBoundary(
+    "auth.post",
+    () => toNextJsHandler(getServices().auth).POST(request),
+    {
+      outcomeOf: (response) => outcomeOfStatus(response.status),
+      endpoint: authEndpointOf(request.url),
+    },
+  );
 }

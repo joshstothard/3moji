@@ -58,6 +58,15 @@ const clientKey = (subnet: number): string =>
 const V4 = "198.51.100";
 
 /**
+ * The one counter every sign-in with no readable address shares **in this
+ * test run**. Better Auth's `getIP` answers `127.0.0.1` for such a request
+ * when `NODE_ENV` is `test` or `development`, before its rate limiter's
+ * production fallback — the shared `no-trusted-ip` key — is ever consulted.
+ * No other integration suite sends sign-in over HTTP, so this key is ours.
+ */
+const UNREADABLE_CLIENT_SIGN_IN_KEY = "127.0.0.1|/sign-in/email";
+
+/**
  * Twenty minutes into an hour far enough in the future that no other run's
  * pruning reaches it; rows are stored under the hour's start.
  */
@@ -89,6 +98,7 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
     await db.execute(sql`
       DELETE FROM auth_rate_limit
       WHERE key LIKE ${"2001:0db8:0158:%"} OR key LIKE ${`${V4}.%`}
+         OR key = ${UNREADABLE_CLIENT_SIGN_IN_KEY}
     `);
   };
 
@@ -387,20 +397,26 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
           forRegistered,
         ]);
 
-        // `X-Retry-After` is ceil((last admitted + window − now) / 1 s), read
-        // from the clock at each request, so two refusals milliseconds apart
-        // may straddle a second. It depends on the counter and the clock, and
-        // never on the address; ±1 s is that straddle and nothing more.
-        const retries = [...refused, ...onOneClient].map(
+        // `X-Retry-After` is ceil((counter's last admitted request + window −
+        // now) / 1 s). It depends on the counter and the clock, never on the
+        // address. **The property is agreement for one counter**: the two
+        // addresses sent on one spent counter read the same `lastRequest` (a
+        // refused request does not move it), so they may differ only by the
+        // one second two requests can straddle. The three arms are three
+        // counters last admitted at three different moments, so their "when"
+        // legitimately differs by however long the arms took to run — and no
+        // client can observe two counters — so across arms only the range is
+        // asserted.
+        for (const response of [...refused, ...onOneClient]) {
+          expect(response.retryAfter).toBeGreaterThanOrEqual(window - 60);
+          expect(response.retryAfter).toBeLessThanOrEqual(window);
+        }
+        const [first, second] = onOneClient.map(
           (response) => response.retryAfter,
         );
-        for (const retry of retries) {
-          expect(retry).toBeGreaterThanOrEqual(window - 60);
-          expect(retry).toBeLessThanOrEqual(window);
-        }
-        expect(Math.max(...retries) - Math.min(...retries)).toBeLessThanOrEqual(
-          1,
-        );
+        expect(
+          Math.abs((first ?? 0) - (second ?? Infinity)),
+        ).toBeLessThanOrEqual(1);
 
         // A refused request sends nothing.
         expect(emailSender.sent).toHaveLength(mailedBeforeRefusals);
@@ -416,6 +432,44 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
         { email: addressFor("who"), password: PASSWORD },
         headers,
       );
+
+    it(
+      "still limits requests with no forwarded address, in one shared bucket, apart from a real client",
+      async () => {
+        // **What this pins, and what it cannot.** In better-auth 1.7.4 a
+        // request whose address cannot be read is limited, not skipped, unless
+        // `advanced.ipAddress.disableIpTracking` is set — with it,
+        // `resolveRateLimitConfig` returns null and the request escapes every
+        // limit. This test goes red if that happens, or if an upgrade stops
+        // counting such requests. It cannot observe the production key,
+        // `no-trusted-ip|/sign-in/email`: under NODE_ENV=test Better Auth
+        // substitutes 127.0.0.1 first. That branch is recorded from its
+        // source in docs/architecture/auth.md.
+        const noAddress = {};
+
+        const admitted = await statusesOf(
+          AUTH_RATE_LIMITS.signInEmail.max,
+          () => signIn(noAddress),
+        );
+        const refused = await signIn(noAddress);
+        await refused.arrayBuffer();
+        const realClient = await signIn({ "x-forwarded-for": `${V4}.60` });
+        await realClient.arrayBuffer();
+
+        expect({
+          admitted: admitted.filter((status) => status !== 429).length,
+          refused: refused.status,
+          realClient: realClient.status,
+          shared: await storedCount(UNREADABLE_CLIENT_SIGN_IN_KEY),
+        }).toEqual({
+          admitted: AUTH_RATE_LIMITS.signInEmail.max,
+          refused: 429,
+          realClient: 401,
+          shared: AUTH_RATE_LIMITS.signInEmail.max,
+        });
+      },
+      SLOW,
+    );
 
     it(
       "reads x-vercel-forwarded-for first and x-forwarded-for after it, as client-address.ts does",

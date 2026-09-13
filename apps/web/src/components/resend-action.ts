@@ -4,6 +4,11 @@ import { canonicalise, resendVerification } from "@template/core";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import {
+  atBoundary,
+  type BoundaryOutcome,
+  type RecordOutcome,
+} from "../lib/boundary-log";
 import { clientAddressFrom } from "../lib/client-address";
 import { getServices } from "../lib/services";
 import { logFailure } from "../lib/log-error";
@@ -70,9 +75,38 @@ function destination(
 export async function requestNewVerificationLink(
   formData: FormData,
 ): Promise<void> {
+  await atBoundary("verification.resend", (record) =>
+    requestLink(formData, record),
+  );
+}
+
+/**
+ * The boundary outcome of each notice (#156). `sent` is what an unknown
+ * address, a verified one and a genuine unverified Account all get from the
+ * domain, so all three log the same `redirected`.
+ */
+function outcomeOfNotice(notice: ResendNotice): BoundaryOutcome {
+  switch (notice) {
+    case "sent":
+      return "redirected";
+    case "too-soon":
+    case "too-many":
+      return "rate-limited";
+    case "invalid":
+      return "rejected";
+    case "failed":
+      return "failed";
+  }
+}
+
+async function requestLink(
+  formData: FormData,
+  record: RecordOutcome,
+): Promise<void> {
   const email = formData.get("email");
 
   if (typeof email !== "string" || email.trim() === "") {
+    record(outcomeOfNotice("invalid"));
     redirect(destination(formData, "invalid"));
     return;
   }
@@ -112,5 +146,6 @@ export async function requestNewVerificationLink(
 
   // Outside the try: `redirect` works by throwing, so calling it inside would
   // be caught by our own handler and reported as a failure.
+  record(outcomeOfNotice(notice));
   redirect(destination(formData, notice, retrySeconds));
 }

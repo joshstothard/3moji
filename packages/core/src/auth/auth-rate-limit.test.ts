@@ -73,4 +73,15 @@ describe("authClientAddressOptions", () => {
       ipv6Subnet: 64,
     });
   });
+
+  it("never turns IP tracking off, so a request with no readable address is still limited", () => {
+    // In better-auth 1.7.4, `disableIpTracking` makes `resolveRateLimitConfig`
+    // return null for a request whose address it cannot read, and that request
+    // skips every limit. Without it, such requests share one bucket per path.
+    // `toEqual` above ignores an `undefined` property, so this is spelled out.
+    const options: Readonly<Record<string, unknown>> =
+      authClientAddressOptions();
+
+    expect(options.disableIpTracking ?? false).toBe(false);
+  });
 });

@@ -8,7 +8,9 @@
 
 /**
  * One Better Auth rate-limit rule: at most `max` requests from one client to
- * one path in a rolling `window` of **seconds** — Better Auth's unit, not ours.
+ * one path, with `window` in **seconds** — Better Auth's unit, not ours. The
+ * counter resets once `window` has passed since the last admitted request, and
+ * each admitted request moves that point on: neither fixed nor rolling.
  */
 export interface AuthRateLimit {
   readonly window: number;
@@ -139,6 +141,12 @@ export function authRateLimitOptions(
 export function authClientAddressOptions(): {
   readonly ipAddressHeaders: string[];
   readonly ipv6Subnet: 64;
+  /**
+   * Never `true`. With it, Better Auth skips rate limiting entirely for a
+   * request whose address it cannot read, so omitting the forwarded headers
+   * would bypass every limit. Pinned by a unit and an integration test.
+   */
+  readonly disableIpTracking?: false;
 } {
   return {
     ipAddressHeaders: [...CLIENT_ADDRESS_HEADERS],

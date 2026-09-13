@@ -231,7 +231,7 @@ Better Auth's own rate-limit counters, one row per client address and path ([#15
 | -------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `id`           | `text`, PK      | Not in Better Auth's field list, but required: its Drizzle adapter's atomic `incrementOne` updates by id, and answers "no row" when there is no id column    |
 | `key`          | `text`, unique  | `<client address>\|<path>`, the address in Better Auth's normalised form — IPv4, or an IPv6 `/64` written out in full. **Not hashed**: Better Auth builds it |
-| `count`        | `integer`       | Requests in the current rolling window                                                                                                                       |
+| `count`        | `integer`       | Requests since the counter last reset                                                                                                                        |
 | `last_request` | `bigint`, index | Epoch **milliseconds**, which overflows `integer`. Better Auth prunes rows older than its longest window on it                                               |
 
 **The increment is Better Auth's**: read the row, then `incrementOne` with a guard (`count < max` and `last_request` inside the window) in one `UPDATE … WHERE id IN (SELECT … LIMIT 1) RETURNING`, retrying on a lost race — so concurrent requests cannot both slip under the limit. A new key is created with a unique-violation retry.
