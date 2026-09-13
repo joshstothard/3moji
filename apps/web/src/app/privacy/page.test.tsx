@@ -67,14 +67,18 @@ describe("the privacy notice", () => {
     }
   });
 
-  it("does not claim every rate-limit counter is hashed", () => {
-    // Better Auth's own counters (`auth_rate_limit.key`) hold the client
-    // address unhashed; only `claim_rate_limit` hashes it (auth.md).
+  it("says every rate-limit counter holds a keyed hash, never the IP address itself", () => {
+    // Since #214 Better Auth's own counters (`auth_rate_limit.key`) are hashed
+    // like `claim_rate_limit`'s, under a key derived from the auth secret
+    // (auth.md). Until then this notice said they held the address as it is.
     render(<PrivacyPage />);
+    const counters = within(sectionNamed(sections.whatWeStore.heading))
+      .getAllByRole("listitem")
+      .map((item) => item.textContent)
+      .find((text) => text.startsWith("Rate-limit counters"));
 
-    expect(sectionNamed(sections.whatWeStore.heading)).toHaveTextContent(
-      /IP address as it is/,
-    );
+    expect(counters).toMatch(/Every counter holds a keyed hash/);
+    expect(counters).not.toMatch(/as it is|unhashed|in clear/);
   });
 
   it("says an unverified account can outlive its 24-hour hold", () => {
