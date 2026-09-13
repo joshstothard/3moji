@@ -16,6 +16,8 @@
 | Better Auth's rate limit            | `packages/core/src/auth/auth-rate-limit.ts`, applied in `create-auth.ts`             |
 | Resend's per-client-address limit   | `packages/core/src/auth/resend-rate-limit.ts`                                        |
 | The sign-in form's limit            | `packages/core/src/auth/sign-in-rate-limit.ts`, gated in `sign-in-action.ts`         |
+| Password reset                      | `packages/core/src/auth/password-reset.ts`, `apps/web/src/app/reset-password/`       |
+| The reset request form's limit      | `packages/core/src/auth/reset-request-rate-limit.ts`                                 |
 | Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app              |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
@@ -121,7 +123,31 @@ Better Auth answers `403 EMAIL_NOT_VERIFIED`, and that is rendered as **the hold
 
 The refusal is recognised by **reading properties, not `instanceof APIError`**: `--experimental-vm-modules` runs ESM in its own realm, so an `instanceof` check silently fails in tests while appearing to work in production.
 
-A successful password reset does **not** mark the email verified, even though it proves control of the address. The two are kept separate so the Claim gate has exactly one meaning.
+A successful password reset does **not** mark the email verified, even though it proves control of the address. The two are kept separate so the Claim gate has exactly one meaning. Both halves are asserted against Postgres in `auth.integration.test.ts`: through Better Auth directly, and through the reset pages' own use case (#192).
+
+### Password reset
+
+**An owner who forgets their password can set a new one, from two pages** ([#192](https://github.com/joshstothard/3moji/issues/192)): `/reset-password`, which asks for a link, and `/reset-password/<token>`, which the link opens. The sign-in page links to the first as "Forgot your password?", and so does the claim-collision email (`CoreServices.resetRequestUrl`), which 404'd before these pages existed. Both are plain `<form>`s posting to server actions, so both work without JavaScript; each action writes one boundary line, `password-reset.request` and `password-reset.set` ([system-overview.md](system-overview.md#api-boundary-logging)). Changing a password while signed in, and changing an email address, are not built.
+
+**The link points at our page, and the token stays a path segment.** Better Auth builds `{baseURL}/api/auth/reset-password/<token>?callbackURL=…` — its `GET` callback, which checks the token and then redirects with the token moved into a **query string**, or, for a bad token, to `?error=INVALID_TOKEN` with the token gone; given no callback, which is what the app passed before #192, it redirects to Better Auth's own error page. So `createAuth`'s `sendResetPassword` hook rewrites it to `{baseUrl}/reset-password/<token>`, for the reasons the verification link is rewritten (above): the page is ours, and a bad token is answered there, in our words. The callback is bypassed entirely; the token's expiry is checked, and the token consumed, by `auth.api.resetPassword` when the form is submitted. No `redirectTo` is passed, which also keeps the request out of Better Auth's `originCheck`.
+
+**The page does not check the token when it renders.** An invalid, used or expired token is found when the form is submitted, and all three send the visitor to the request form with one message (`?notice=link-invalid`) — which also leaves the dead token out of the address bar. A password Better Auth refuses as too short or too long returns to the same link with `?error=`. The lengths are stated, `PASSWORD_MIN_LENGTH` (8) and `PASSWORD_MAX_LENGTH` (128) in `packages/core/src/auth/password-length.ts`, rather than left to Better Auth's defaults, so the form tells the browser the numbers the server enforces. The set-new-password page sends no referrer to other sites (`same-origin`) and is not indexed, because its address holds the token. **Not `no-referrer`:** with it, the no-JavaScript E2E run found the form's own POST refused by Next.js as `Invalid Server Actions request`, and `same-origin` fixes it. The likely mechanism is the request's `Origin` failing Next.js's server-action origin check, but that was not measured.
+
+**Success revokes every session and verifies nothing.** `revokeSessionsOnPasswordReset` deletes every session row, so a request carrying a pre-reset session cookie is signed out — this browser's too, which is why success lands on `/sign-in?notice=password-reset`. The Account's `email_verified` is untouched (above).
+
+**The request answers the same for every address.** `requestPasswordReset` asks the per-client limit (below), then `auth.api.requestPasswordReset`, which mails a registered address and simulates the work for an unknown one; both answer `sent`, rendered as "if that address belongs to an account, a reset link is on its way". **Every answer is padded to `RESPONSE_FLOOR_MS`**, the refusal included. The floor pads the fast branches; a real send slower than 500 ms is still slower, the price the resend flow already pays. A failure — a limiter that cannot count, a send that throws — answers `failed` and is logged through `logFailure` (`password_reset_request_failed`, `password_reset_set_failed`). `password-reset-request.test.tsx` runs the real action, use case, floor and limiter for a registered and an unregistered address and compares everything observable.
+
+#### The reset request form's rate limit
+
+**The form accepts no more requests from one client than the HTTP endpoint does**, for the reason the sign-in form's limit exists: `requestPasswordReset` is a server-side `auth.api.*` call, which Better Auth's limiter never sees. The limit is asked first, handed the client address alone, and beyond it the form answers `?notice=rate-limited` without calling Better Auth.
+
+| Limit              | Value             | Constant                          |
+| ------------------ | ----------------- | --------------------------------- |
+| Per client address | 5 in a fixed hour | `RESET_REQUEST_CLIENT_RATE_LIMIT` |
+
+**Derived from `AUTH_RATE_LIMITS.requestPasswordReset`, not restated**, and the window semantics differ in the same way as the sign-in form's (a fixed window on the shared table). It reuses the Claim's table, store and hashing under the bucket kind `reset-request-client:`, its hour fits exactly inside `RATE_LIMIT_RETENTION_MS`, it fails closed, and its refusal says no "when". **A refusal cannot enumerate addresses:** nothing but the client address reaches the limiter, so a registered and an unregistered address are refused identically, and the refusal is padded to the floor like every other answer.
+
+**The set-new-password form has no limit of its own.** Better Auth's `POST /reset-password` falls under the `default` rule over HTTP, and the form bypasses even that; what it would protect is a guess at a 24-character random token that expires in an hour, which no rate of guessing reaches.
 
 ### Reading the session, and what is allowed to depend on it
 
@@ -131,9 +157,9 @@ It answers `undefined` rather than throwing when it cannot tell: the services ma
 
 ## Adjacent behaviour
 
-Duplicate sign-ups return a synthetic success, so the API never reveals whether an address is registered. Because every live Account owns exactly one Handle, a duplicate address can never claim a second one; the existing owner is told by email instead — naming the Handle they already own, and linking to the reset **form** rather than carrying a tokenised reset link, because sign-up is unauthenticated and a tokenised link there would let a stranger have live reset tokens mailed to somebody else's inbox. How many of those notices one address can receive is bounded by the Claim's per-email rate limit (below), which refuses the submission before the Claim opens.
+Duplicate sign-ups return a synthetic success, so the API never reveals whether an address is registered. Because every live Account owns exactly one Handle, a duplicate address can never claim a second one; the existing owner is told by email instead — naming the Handle they already own, and linking to the reset **form** (`/reset-password`, [above](#password-reset)) rather than carrying a tokenised reset link, because sign-up is unauthenticated and a tokenised link there would let a stranger have live reset tokens mailed to somebody else's inbox. `password-reset.spec.ts` requests the link the composition root builds and asserts it answers 200. How many of those notices one address can receive is bounded by the Claim's per-email rate limit (below), which refuses the submission before the Claim opens.
 
-Resend is rate limited per Account and per client address (above), the Claim per email and per client address (below), Better Auth's own HTTP endpoints per client address and path ([below](#better-auths-rate-limit)), and the sign-in form per client address ([below](#the-sign-in-forms-rate-limit)).
+Resend is rate limited per Account and per client address (above), the password reset request form per client address ([above](#the-reset-request-forms-rate-limit)), the Claim per email and per client address (below), Better Auth's own HTTP endpoints per client address and path ([below](#better-auths-rate-limit)), and the sign-in form per client address ([below](#the-sign-in-forms-rate-limit)).
 
 ### Better Auth's rate limit
 
@@ -156,7 +182,7 @@ Windows are in seconds, and **neither fixed nor rolling** — Better Auth's own 
 
 **`/sign-up/email` needs no rule.** #150's `disabledPaths` check runs in the router's `onRequest` before the limiter, so the path answers 404 without ever being counted — asserted: twelve requests, twelve 404s, no counter row. **The limiter is HTTP-only**, for the same reason `disabledPaths` is: it runs in `onRequest`, which `auth.api.*` calls never pass through. So the Claim's server-side `auth.api.signUpEmail` is not counted, and neither is anything else the app calls server-side.
 
-**The sign-in form is not behind this limiter.** It does not use `POST /api/auth/sign-in/email`: `signInAction` calls `auth.api.signInEmail` server-side, so Better Auth's limiter never sees it — measured in `sign-in-rate-limit.test.tsx`, which found the form accepting eleven attempts from one client where the endpoint allows ten. It has its own limit, with the same numbers: see [the sign-in form's rate limit](#the-sign-in-forms-rate-limit).
+**Neither the sign-in form nor the reset request form is behind this limiter.** The reset request form has its own limit ([above](#the-reset-request-forms-rate-limit)). The sign-in form does not use `POST /api/auth/sign-in/email`: `signInAction` calls `auth.api.signInEmail` server-side, so Better Auth's limiter never sees it — measured in `sign-in-rate-limit.test.tsx`, which found the form accepting eleven attempts from one client where the endpoint allows ten. It has its own limit, with the same numbers: see [the sign-in form's rate limit](#the-sign-in-forms-rate-limit).
 
 **Who is one client.** `advanced.ipAddress.ipAddressHeaders` is `CLIENT_ADDRESS_HEADERS` — `x-vercel-forwarded-for`, then `x-forwarded-for` — the same list, in the same order, that `apps/web/src/lib/client-address.ts` reads (its test pins the two together). Both group IPv6 by `/64` and count an IPv4-mapped IPv6 address as its IPv4 address; the integration test proves each against Better Auth's own handler. **One difference is kept on purpose:** with no `trustedProxies`, Better Auth trusts a header only when it holds a single address and falls through to the next header otherwise, and a request with no trustworthy address shares one `no-trusted-ip` counter per path — the analogue of our `unknown` bucket. Our transport takes the first entry of a list instead. On Vercel the edge sets both headers to one address, so the two agree; anywhere else both headers are client-writable anyway (see [the Claim's rate limit](#the-claims-rate-limit)). Setting `trustedProxies` to close the gap would add a spoofing surface to buy nothing. Better Auth falls back to `127.0.0.1` under `NODE_ENV` `test` or `development`, which is why every integration request names its client.
 
@@ -224,7 +250,7 @@ Defined in `packages/core/src/db/schema.ts`, migrated by `packages/core/migratio
 | `user`                  | Identity: name, unique email, `email_verified`, timestamps                                                                                                                |
 | `session`               | A session row per sign-in: unique token, expiry, IP, user agent, cascading to `user`                                                                                      |
 | `account`               | One row per auth method. For email and password, `provider_id = "credential"` and the hashed password lives in `account.password`. Cascades to `user`                     |
-| `verification`          | Better Auth's own token table. **Password-reset tokens only in practice**: email verification is a stateless JWT it never stores                                          |
+| `verification`          | Better Auth's own token table. **Password-reset tokens only in practice**, keyed `reset-password:<token>`: email verification is a stateless JWT it never stores          |
 | `verification_dispatch` | One row per verification link _we_ issued — the fingerprint, the Account and the time. Ours, not Better Auth's; see [the data model](data-model.md#verification-dispatch) |
 | `auth_rate_limit`       | Better Auth's rate-limit counters, one per client address and path (#158, migration `0007_auth_rate_limit`); see [the data model](data-model.md#auth-rate-limit)          |
 

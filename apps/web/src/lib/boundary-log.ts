@@ -72,6 +72,8 @@ export const BOUNDARIES = [
   "sign-in.form",
   "profile.save",
   "verification.resend",
+  "password-reset.request",
+  "password-reset.set",
   "og-image.generic",
   "og-image.handle",
 ] as const;

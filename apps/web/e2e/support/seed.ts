@@ -187,6 +187,94 @@ export async function seedClaimedHandle(
 }
 
 /**
+ * Asks for a password-reset link for `email`, **through the same resetter the
+ * request form uses**, and returns the token it carries
+ * ([#192](https://github.com/joshstothard/3moji/issues/192)).
+ *
+ * The app under test mails its links to a recording sender inside its own
+ * process, which nothing outside can read — deliberately, as there is no route
+ * for reading captured mail. So this wires its own services against the same
+ * database, as `seedClaimedHandle` does, and reads the link from its own
+ * recording sender. The token is a row in Better Auth's `verification` table,
+ * so the app accepts it exactly as if it had sent it.
+ *
+ * Also returns the path the email linked to, so a spec can follow **the link
+ * the email carries** rather than a path it assembled itself. The token is
+ * never logged: in a public Actions log it would be a live credential for an
+ * hour.
+ */
+export async function requestPasswordResetLink(
+  email: string,
+): Promise<{ readonly token: string; readonly path: string }> {
+  const emailSender = createRecordingEmailSender();
+  const clock = createSystemClock();
+  const { db, close } = createDatabase({ url: requiredEnv("DATABASE_URL") });
+
+  try {
+    const services = createCoreServices({
+      clock,
+      db,
+      auth: {
+        emailSender,
+        baseUrl: requiredEnv("BETTER_AUTH_URL"),
+        secret: requiredEnv("BETTER_AUTH_SECRET"),
+        from: requiredEnv("RESEND_FROM"),
+      },
+    });
+
+    if ((await services.passwordResetter.request(email)) !== "accepted") {
+      throw new Error("The seed reset request was refused as invalid.");
+    }
+    return resetLinkFrom(emailSender.lastSent()?.text);
+  } finally {
+    await close();
+  }
+}
+
+/**
+ * The path of the link the claim-collision email sends an existing owner to:
+ * `CoreServices.resetRequestUrl`, **read from the composition root** rather
+ * than retyped, so a spec that requests it proves that link resolves (#192).
+ */
+export async function claimCollisionResetPath(): Promise<string> {
+  const { db, close } = createDatabase({ url: requiredEnv("DATABASE_URL") });
+  try {
+    const services = createCoreServices({
+      clock: createSystemClock(),
+      db,
+      auth: {
+        emailSender: createRecordingEmailSender(),
+        baseUrl: requiredEnv("BETTER_AUTH_URL"),
+        secret: requiredEnv("BETTER_AUTH_SECRET"),
+        from: requiredEnv("RESEND_FROM"),
+      },
+    });
+    return new URL(services.resetRequestUrl).pathname;
+  } finally {
+    await close();
+  }
+}
+
+/**
+ * The token from a reset email. **A path segment**, `/reset-password/<token>`,
+ * never a query parameter — the other link shape, and the trap
+ * `quality-strategy.md` records: a helper that reads only `?token=` passes
+ * every verification test and fails every reset test.
+ */
+function resetLinkFrom(text: string | undefined): {
+  readonly token: string;
+  readonly path: string;
+} {
+  const match = /https?:\/\/[^\s/]+(\/reset-password\/([^/?\s]+))/.exec(
+    text ?? "",
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    throw new Error("The seed reset request sent no reset link.");
+  }
+  return { path: match[1], token: decodeURIComponent(match[2]) };
+}
+
+/**
  * Reads a variable the seed needs, **without ever echoing its value** — the
  * error names the variable and nothing else.
  */

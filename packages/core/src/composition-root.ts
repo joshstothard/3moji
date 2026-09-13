@@ -1,3 +1,4 @@
+import { createBetterAuthPasswordResetter } from "./auth/adapters/better-auth-password-resetter";
 import { createBetterAuthVerificationMailer } from "./auth/adapters/better-auth-verification-mailer";
 import type { AuthFactory } from "./auth/auth-factory";
 import { createAuth, type CreateAuthInput } from "./auth/create-auth";
@@ -7,6 +8,11 @@ import {
   type ResendClientRateLimiter,
 } from "./auth/resend-rate-limit";
 import type { VerificationMailer } from "./auth/resend-verification";
+import type { PasswordResetter } from "./auth/password-reset";
+import {
+  createResetRequestClientRateLimiter,
+  type ResetRequestClientRateLimiter,
+} from "./auth/reset-request-rate-limit";
 import {
   createSignInClientRateLimiter,
   type SignInClientRateLimiter,
@@ -120,6 +126,19 @@ export interface CoreServices {
    */
   readonly signInClientRateLimiter: SignInClientRateLimiter;
   /**
+   * The password reset request form's per-client-address limit (#192), for
+   * the reason {@link signInClientRateLimiter} exists: the form calls
+   * `auth.api.requestPasswordReset` server-side, which Better Auth's limiter
+   * never sees. On the Claim's counter table under its own bucket kind.
+   */
+  readonly resetRequestClientRateLimiter: ResetRequestClientRateLimiter;
+  /**
+   * Password reset's two verbs from Better Auth — ask for a link, set a new
+   * password from one (#192). Narrow for the reason
+   * {@link verificationMailer} is.
+   */
+  readonly passwordResetter: PasswordResetter;
+  /**
    * The Release's unit of work: the tombstone and the account deletion in one
    * transaction ([ADR-0009](../../../docs/adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)).
    *
@@ -230,6 +249,12 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
       clock: deps.clock,
       secret: deps.auth.secret,
     }),
+    resetRequestClientRateLimiter: createResetRequestClientRateLimiter({
+      store: rateLimitStore,
+      clock: deps.clock,
+      secret: deps.auth.secret,
+    }),
+    passwordResetter: createBetterAuthPasswordResetter(auth),
     // No auth rebinding and no deferred sender: a Release writes no Better Auth
     // row and sends no email, so it needs a plain transaction.
     releases: createDrizzleReleaseStore({ db: deps.db }),
