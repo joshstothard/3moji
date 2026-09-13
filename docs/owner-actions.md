@@ -27,7 +27,7 @@ Items are grouped by when they have to happen:
     - `BETTER_AUTH_SECRET`: at least 32 random characters. Generate it, never make one up.
     - `RESEND_API_KEY`: from Resend.
     - `RESEND_FROM`: the sender, on the Resend subdomain.
-    - `REPORT_CONTACT_EMAIL`: proposed, not yet in code. See the report mailbox item below.
+    - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown. See the report mailbox item below.
     - `NEXT_PUBLIC_APP_VERSION` is supplied by the build and needs nothing from you. **Never set `TEST_EMAIL_SENDER` on Vercel**: it's test-only, and the app refuses to start with it set there.
   - **Blocks:** [#32](https://github.com/joshstothard/3moji/issues/32), the first deploy. That in turn blocks every "on the live site" check, including dotted alias paths on Vercel's CDN, backups and uptime.
   - **Detail:** [#19](https://github.com/joshstothard/3moji/issues/19) (the checklist; the repo rename on it is already done), [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 5 for the exact DNS records, `apps/web/.env.example`.
@@ -79,8 +79,8 @@ Items are grouped by when they have to happen:
   - **Why it matters:** reports about phishing or abuse need to reach someone promptly, and the address is shown publicly.
   - **Options:** a dedicated alias (for example on `3moji.me`), or a personal inbox.
   - **Recommendation:** a dedicated alias that forwards to you, not a personal inbox. It can change hands later and keeps your own address private.
-  - **Blocks:** Phase 7's reporting link and the takedown runbook.
-  - **Detail:** [workstream](workstreams/3moji-mvp.md) Phase 7, deliverable 3.
+  - **Blocks:** the report link going live. It is built ([#197](https://github.com/joshstothard/3moji/issues/197)) and shows nothing until the variable is set.
+  - **Detail:** [takedown runbook](runbooks/takedown.md), [workstream](workstreams/3moji-mvp.md) Phase 7, deliverable 3.
 
 - [ ] **Where nightly database backups are stored**
   - **What:** Neon's free plan can only restore to a point in the last 6 hours or so. A mistake noticed the next day, such as a bad migration or an accidental deletion, would lose every Handle, Account and Profile. A nightly copy kept somewhere else fixes that.
@@ -94,7 +94,7 @@ Items are grouped by when they have to happen:
   - **Detail:** [workstream](workstreams/3moji-mvp.md) Open questions and Phase 7, deliverable 7; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 2 (restore window).
 
 - [ ] **Review the privacy notice and terms, and confirm the legal checks**
-  - **What:** In Phase 7 the agent drafts `/privacy` and `/terms` in plain English. You review them before announcing. You also check whether the ICO data protection fee applies to you, and confirm Phase 7's written assessment, citing Ofcom, of whether the Online Safety Act's user-to-user duties apply.
+  - **What:** In Phase 7 the agent drafts `/privacy` and `/terms` in plain English. You review them before announcing. You also check whether the ICO data protection fee applies to you, and confirm Phase 7's written assessment, citing Ofcom, of whether the Online Safety Act's user-to-user duties apply ([takedown runbook](runbooks/takedown.md) § 6).
   - **Why it matters:** the site collects email addresses and IP addresses and publishes user content, from a UK-based owner.
   - **Options:** review them yourself, or pay for a legal review.
   - **Recommendation:** review the drafts yourself. Use the ICO's fee self-assessment and Ofcom's Regulation Checker for the two checks. The workstream's own reading is that the Online Safety Act _likely_ applies, but that's an inference, not a conclusion.
