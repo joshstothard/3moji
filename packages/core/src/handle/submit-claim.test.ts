@@ -227,4 +227,97 @@ describe("submitClaim", () => {
       expect(result.failure.reason).toBe("wrong-length");
     });
   });
+
+  /**
+   * [#163](https://github.com/joshstothard/3moji/issues/163): a registered
+   * address typed with capitals is the same Account, so it must be the same
+   * answer, the same floor and the same notice to the owner.
+   *
+   * The fakes here compare **bytes**, as the real adapter and a database
+   * holding Better Auth's lowercased rows do. A fake that lowercased on its own
+   * would pass whether or not the domain normalised.
+   */
+  describe("an address typed with capitals", () => {
+    const caseSensitive = () => {
+      const { clock } = movableClock();
+      const lookedUp: string[] = [];
+      const slept: number[] = [];
+      const emailSender = createRecordingEmailSender();
+
+      const store: ClaimStore = {
+        async runInTransaction(work) {
+          const outcome = await work({
+            availabilityOf: () => Promise.resolve("available"),
+            freeExpiredHold: () => Promise.resolve({ freed: false }),
+            createAccount: (account) => {
+              const created: AccountCreated =
+                account.email === EMAIL
+                  ? { ok: false, reason: "email-taken" }
+                  : { ok: true, userId: "user-1" };
+              return Promise.resolve(created);
+            },
+            holdHandle: () => Promise.resolve({ ok: true }),
+          });
+          return outcome.value;
+        },
+      };
+
+      const directory: AccountDirectory = {
+        byEmail: (email) => {
+          lookedUp.push(email);
+          return Promise.resolve(
+            email === EMAIL
+              ? { userId: "user-9", email, emailVerified: true }
+              : undefined,
+          );
+        },
+        handleOf: () =>
+          Promise.resolve({
+            key: KEY,
+            heldUntil: new Date("2026-09-13T12:00:00.000Z"),
+            claimedAt: new Date("2026-09-12T09:00:00.000Z"),
+          }),
+      };
+
+      const submit = (email: string) =>
+        submitClaim({
+          segment: ICE,
+          email,
+          password: PASSWORD,
+          store,
+          clock,
+          directory,
+          emailSender,
+          resetRequestUrl: RESET_URL,
+          from: FROM,
+          sleep: (ms) => {
+            slept.push(ms);
+            return Promise.resolve();
+          },
+        });
+
+      const observed = () => ({
+        lookedUp: [...lookedUp],
+        slept: [...slept],
+        mailedTo: emailSender.sent.map((sent) => sent.to),
+      });
+
+      return { submit, observed };
+    };
+
+    it("answers exactly as the registered address itself does, and tells the owner", async () => {
+      const lowercase = caseSensitive();
+      const asTyped = await lowercase.submit(EMAIL);
+      const mixedCase = caseSensitive();
+      const withCapitals = await mixedCase.submit("  Claimant@Example.COM ");
+
+      expect(lowercase.observed()).toEqual({
+        lookedUp: [EMAIL],
+        slept: [RESPONSE_FLOOR_MS],
+        mailedTo: [EMAIL],
+      });
+      expect(withCapitals).toEqual(asTyped);
+      expect(mixedCase.observed()).toEqual(lowercase.observed());
+    });
+  });
 });

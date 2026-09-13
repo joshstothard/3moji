@@ -158,6 +158,11 @@ export function claimTransactionOn(
       // a synthetic success for an already-registered address on purpose (#15),
       // so its return value cannot distinguish the two — and this read is
       // inside the transaction, which is where the decision has to be made.
+      //
+      // An exact comparison, both here and in the read-back below, and that is
+      // correct only because the address arrives normalised: Better Auth
+      // stores it lowercased, so an address compared as typed would miss its
+      // own row (#163). `AccountToCreate.email` states the precondition.
       const existing = await tx
         .select({ id: user.id })
         .from(user)

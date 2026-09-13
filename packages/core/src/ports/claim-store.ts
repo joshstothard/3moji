@@ -3,6 +3,11 @@ import type { HandleOwnership } from "../handle/handle-ownership";
 
 /** The Account a Claim creates. */
 export interface AccountToCreate {
+  /**
+   * **Already normalised** — trimmed and lowercased, by the Claim itself
+   * (#163). That is the form Better Auth stores, so an adapter may compare it
+   * to `user.email` exactly, and use the column's unique index to do it.
+   */
   readonly email: string;
   readonly password: string;
   /**
