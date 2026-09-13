@@ -174,6 +174,13 @@ Trivy runs separately per image in Stage 5 with two passes: blocking on fixable 
 ADR reading policy. It no-ops until `docs/architecture/` exists. Skip it for a specific ADR with no
 current-state doc to update by adding `[skip-adr-sync: reason]` to a commit message on the branch.
 
+The same job runs `scripts/check-adr-numbers.mjs`, which fails if two files in `docs/adr` share a
+four-digit number. A pull request is checked out as its merge with `main`, so it also catches a number
+that merged to `main` after the branch was cut. ADR-0003 reached `main` twice before this check
+existed, and the repair meant editing an Accepted ADR (#35, #36). The `adr` skill numbers from
+`origin/main` and open pull requests; this check is the backstop when the skill is bypassed or two
+branches still race. Unlike `adr-sync` it has no skip marker. It also runs in `scripts/verify.sh`.
+
 ## Morlock
 
 `morlock.yml` runs on demand (`gh workflow run morlock.yml`); its nightly 01:00 UTC schedule is disabled — see the note at the top of the workflow. It invokes the Claude Code action seeded with the provider-neutral
