@@ -75,6 +75,29 @@ describe("the sign-in page", () => {
     expect(alert).not.toHaveTextContent(/password|no account|not registered/i);
   });
 
+  it('links to the password reset request form as "Forgot your password?" (#192)', async () => {
+    await renderPage();
+
+    expect(
+      screen.getByRole("link", { name: "Forgot your password?" }),
+    ).toHaveAttribute("href", "/reset-password");
+  });
+
+  it("says a password was reset, as news rather than an error (#192)", async () => {
+    await renderPage({ notice: "password-reset" });
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /password has been changed/i,
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("ignores a notice value it does not recognise", async () => {
+    await renderPage({ notice: "sent" });
+
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("ignores an error value it does not recognise", async () => {
     // A query string is public input and this one lands in copy a person reads.
     await renderPage({ error: "<script>alert(1)</script>" });

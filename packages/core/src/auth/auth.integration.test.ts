@@ -7,7 +7,10 @@ import { Pool } from "pg";
 
 import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import { createRecordingEmailSender } from "./adapters/recording-email-sender";
+import { createBetterAuthPasswordResetter } from "./adapters/better-auth-password-resetter";
 import { createAuth } from "./create-auth";
+import { PASSWORD_MIN_LENGTH } from "./password-length";
+import { setNewPassword } from "./password-reset";
 import { authSchema } from "../db/schema";
 
 const url = process.env.DATABASE_URL;
@@ -32,7 +35,8 @@ const addressFor = (name: string): string => `${SUITE_TAG}-${name}@example.com`;
  * The two link shapes differ, which a real run is the only way to discover:
  *
  * - verification: `/api/auth/verify-email?token=<TOKEN>&callbackURL=...`
- * - reset:        `/api/auth/reset-password/<TOKEN>?callbackURL=...`
+ * - reset:        `/reset-password/<TOKEN>` — our own page since #192, which
+ *                 rewrites Better Auth's `/api/auth/reset-password/<TOKEN>?…`
  *
  * The reset token is a **path segment**, not a query parameter. Handling only
  * the query form silently breaks every reset test.
@@ -234,5 +238,163 @@ describeWithDatabase("auth against a real Postgres", () => {
     // Clicking a reset link proves control of the address, but the claim gate
     // has exactly one meaning and this is not it (#15).
     expect((await userRow(email))?.email_verified).toBe(false);
+  });
+
+  describe("the reset pages' domain, against Better Auth (#192)", () => {
+    const resetter = () => createBetterAuthPasswordResetter(auth);
+    const NEW_PASSWORD = "a brand new passphrase for #192";
+
+    /** A verified Account, signed in, with the session cookie that proves it. */
+    const signedInOwner = async (name: string) => {
+      const email = addressFor(name);
+      await signUp(email);
+      await auth.api.verifyEmail({
+        query: { token: tokenFrom(emailSender.lastSent()?.text) },
+      });
+      const signIn = await auth.api.signInEmail({
+        body: { email, password: PASSWORD },
+        returnHeaders: true,
+      });
+      const cookie = signIn.headers
+        .getSetCookie()
+        .map((line) => line.split(";")[0])
+        .join("; ");
+      emailSender.clear();
+      return { email, cookie };
+    };
+
+    const sessionFor = (cookie: string) =>
+      auth.api.getSession({ headers: new Headers({ cookie }) });
+
+    const requestLink = async (email: string): Promise<string> => {
+      expect(await resetter().request(email)).toBe("accepted");
+      return tokenFrom(emailSender.lastSent()?.text);
+    };
+
+    it("mails a registered address a link to our own page, the token a path segment, and mails an unregistered one nothing", async () => {
+      const { email } = await signedInOwner("reset-link-shape");
+
+      expect(await resetter().request(addressFor("reset-nobody"))).toBe(
+        "accepted",
+      );
+      expect(emailSender.sent).toHaveLength(0);
+
+      expect(await resetter().request(email)).toBe("accepted");
+      const text = emailSender.lastSent()?.text ?? "";
+      expect(text.match(/https?:\/\/\S+/g)).toEqual([
+        `http://localhost:3000/reset-password/${tokenFrom(text)}`,
+      ]);
+      expect(text).not.toContain("/api/auth/");
+      expect(text).not.toContain("token=");
+    });
+
+    it("answers an address Better Auth's schema refuses as invalid, before any lookup", async () => {
+      expect(await resetter().request("not-an-address")).toBe("invalid");
+      expect(emailSender.sent).toHaveLength(0);
+    });
+
+    it("sets the new password: the new one signs in and the old one no longer does", async () => {
+      const { email } = await signedInOwner("reset-sets");
+      const token = await requestLink(email);
+
+      expect(
+        await setNewPassword({
+          token,
+          newPassword: NEW_PASSWORD,
+          resetter: resetter(),
+        }),
+      ).toEqual({ state: "reset" });
+
+      await expect(
+        auth.api.signInEmail({ body: { email, password: NEW_PASSWORD } }),
+      ).resolves.toBeDefined();
+      await expect(
+        auth.api.signInEmail({ body: { email, password: PASSWORD } }),
+      ).rejects.toBeDefined();
+    });
+
+    it("treats a request carrying a pre-reset session cookie as signed out", async () => {
+      const { email, cookie } = await signedInOwner("reset-cookie");
+      // The cookie really is a live session before the reset.
+      expect((await sessionFor(cookie))?.user.email).toBe(email);
+
+      await setNewPassword({
+        token: await requestLink(email),
+        newPassword: NEW_PASSWORD,
+        resetter: resetter(),
+      });
+
+      expect(await sessionFor(cookie)).toBeNull();
+    });
+
+    it("does not mark the email verified through the reset pages' path either", async () => {
+      const email = addressFor("reset-pages-no-verify");
+      await signUp(email);
+      emailSender.clear();
+
+      await setNewPassword({
+        token: await requestLink(email),
+        newPassword: NEW_PASSWORD,
+        resetter: resetter(),
+      });
+
+      expect((await userRow(email))?.email_verified).toBe(false);
+    });
+
+    it("answers a used, an unknown and an empty token alike as an invalid link", async () => {
+      const { email } = await signedInOwner("reset-invalid");
+      const token = await requestLink(email);
+      await setNewPassword({
+        token,
+        newPassword: NEW_PASSWORD,
+        resetter: resetter(),
+      });
+
+      for (const candidate of [token, "not-a-real-token-at-all", ""]) {
+        expect(
+          await setNewPassword({
+            token: candidate,
+            newPassword: NEW_PASSWORD,
+            resetter: resetter(),
+          }),
+        ).toEqual({ state: "invalid-link" });
+      }
+    });
+
+    it("answers an expired token as an invalid link", async () => {
+      const { email } = await signedInOwner("reset-expired");
+      const token = await requestLink(email);
+      await db.execute(
+        sql`UPDATE "verification" SET expires_at = now() - interval '1 minute' WHERE identifier = ${`reset-password:${token}`}`,
+      );
+
+      expect(
+        await setNewPassword({
+          token,
+          newPassword: NEW_PASSWORD,
+          resetter: resetter(),
+        }),
+      ).toEqual({ state: "invalid-link" });
+    });
+
+    it("refuses a password shorter than PASSWORD_MIN_LENGTH without spending the token", async () => {
+      const { email } = await signedInOwner("reset-short");
+      const token = await requestLink(email);
+
+      expect(
+        await setNewPassword({
+          token,
+          newPassword: "x".repeat(PASSWORD_MIN_LENGTH - 1),
+          resetter: resetter(),
+        }),
+      ).toEqual({ state: "password-too-short" });
+      expect(
+        await setNewPassword({
+          token,
+          newPassword: "x".repeat(PASSWORD_MIN_LENGTH),
+          resetter: resetter(),
+        }),
+      ).toEqual({ state: "reset" });
+    });
   });
 });

@@ -72,6 +72,22 @@ describe("createCoreServices", () => {
     await close();
   });
 
+  it("wires the password reset request form's per-client-address limiter the same way, and the resetter (#192)", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(Object.keys(services.resetRequestClientRateLimiter)).toEqual([
+      "admit",
+    ]);
+    expect(Object.keys(services.passwordResetter).sort()).toEqual([
+      "request",
+      "reset",
+    ]);
+    expect(services.resetRequestUrl).toBe(
+      "http://localhost:3000/reset-password",
+    );
+    await close();
+  });
+
   it("wires the Claim's unit of work", async () => {
     const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
 

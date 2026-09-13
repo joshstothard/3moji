@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   canonicalise,
@@ -49,6 +51,7 @@ const builderCopy = en.HandleBuilder;
 const handleCopy = en.HandlePage;
 const claimCopy = en.Claim;
 const editCopy = en.ProfileEdit;
+const resetCopy = en.PasswordReset;
 
 /** WCAG 1.4.3 Contrast (Minimum), for text at normal size. */
 const TEXT_CONTRAST = 4.5;
@@ -268,6 +271,50 @@ test("the sign-in form's field borders meet non-text contrast", async ({
   await expectBorderIdentifiesControl(
     page.getByLabel(claimCopy.signInPasswordLabel, { exact: true }),
     "sign-in password",
+  );
+});
+
+test("the password reset request page has no WCAG A or AA violations, and its field border meets non-text contrast", async ({
+  page,
+}) => {
+  // Measured without submitting: the request form is limited per client (#192).
+  await page.goto("/reset-password");
+  await expect(
+    page.getByRole("heading", { level: 1, name: resetCopy.requestHeading }),
+  ).toBeVisible();
+
+  expectAccessible(await checkPage(page), [
+    "label",
+    "button-name",
+    "autocomplete-valid",
+  ]);
+  expectLandmarksContained(await checkLandmarks(page));
+  await expectBorderIdentifiesControl(
+    page.getByLabel(resetCopy.emailLabel, { exact: true }),
+    "password reset request email",
+  );
+});
+
+test("the set-new-password page has no WCAG A or AA violations, and its field border meets non-text contrast", async ({
+  page,
+}) => {
+  // The token is checked when the form is submitted, not when the page
+  // renders, so any path segment renders the form (#192).
+  await page.goto(`/reset-password/${randomUUID().replaceAll("-", "")}`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: resetCopy.setHeading }),
+  ).toBeVisible();
+
+  expectAccessible(await checkPage(page), [
+    "label",
+    "button-name",
+    "autocomplete-valid",
+    "aria-valid-attr-value",
+  ]);
+  expectLandmarksContained(await checkLandmarks(page));
+  await expectBorderIdentifiesControl(
+    page.getByLabel(resetCopy.newPasswordLabel, { exact: true }),
+    "set-new-password password",
   );
 });
 
