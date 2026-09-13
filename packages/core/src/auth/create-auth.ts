@@ -6,6 +6,7 @@ import { authSchema } from "../db/schema";
 import type { Clock } from "../ports/clock";
 import type { VerificationDispatchStore } from "../ports/verification-dispatch-store";
 import type { EmailSender } from "./ports/email-sender";
+import { safeDatabaseAdapter } from "./safe-database-adapter";
 import { verificationTokenFingerprint } from "./verification-token";
 
 /** Better Auth's own minimum is 32 characters of randomness. */
@@ -114,10 +115,15 @@ export function createAuth(input: CreateAuthInput) {
   return betterAuth({
     secret: input.secret,
     baseURL: input.baseUrl,
-    database: drizzleAdapter(input.db, {
-      provider: "pg",
-      schema: authSchema,
-    }),
+    // Wrapped so a failed statement reaches Better Auth — and so its thrown
+    // value, its logger and the HTTP route's console output — without the
+    // statement's bound values (#148).
+    database: safeDatabaseAdapter(
+      drizzleAdapter(input.db, {
+        provider: "pg",
+        schema: authSchema,
+      }),
+    ),
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
