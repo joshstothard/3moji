@@ -141,20 +141,19 @@ Transitive dependencies that Dependabot cannot bump directly are pinned via the 
 
 **Current overrides and why they exist:**
 
-| Package       | Pinned to | Root cause                                                                    | Still needed?                    |
-| ------------- | --------- | ----------------------------------------------------------------------------- | -------------------------------- |
-| `tmp`         | `0.2.7`   | `@nestjs/cli` devDep (path traversal)                                         | **No** — absent from the tree    |
-| `multer@2`    | `2.3.0`   | `@nestjs/platform-express` (DoS — no file-upload endpoints, safe to override) | **No** — absent from the tree    |
-| `picomatch@2` | `2.3.2`   | `@angular-devkit` via `@nestjs/cli` (ReDoS)                                   | Unclear — other consumers remain |
-| `picomatch@4` | `4.0.5`   | `@angular-devkit` via `@nestjs/cli` (ReDoS)                                   | Unclear — other consumers remain |
-| `lodash`      | `4.18.1`  | `@nestjs/swagger` + `@nestjs/config` (prototype pollution)                    | Unclear — one consumer remains   |
-| others        | —         | see `overrides` in root `package.json`                                        | Unaffected by the API deletion   |
+| Package       | Pinned to | Root cause                                                                                                                                     | Still needed?                                                                                                  |
+| ------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `picomatch@2` | `2.3.2`   | `anymatch` (via `jest-haste-map`) and `micromatch` (via `@next/eslint-plugin-next` → `fast-glob`); ReDoS GHSA-c2c7-rcm5-vvqj, fixed in `2.3.2` | **Yes** — `anymatch` declares `^2.0.4`, so the pin is what guarantees the patched floor                        |
+| others        | —         | see `overrides` in root `package.json`                                                                                                         | Not re-examined in [#43](https://github.com/joshstothard/3moji/issues/43); no consumer changed with `apps/api` |
 
-**Every root cause in the first five rows was a NestJS package, and NestJS is gone.** `apps/api` was deleted ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)), removing 208 packages and every `@nestjs/*` entry from the tree. Measured immediately afterwards: `tmp` and `multer` have **zero** occurrences, while `picomatch` still has ten and `lodash` one, so those two may still be doing real work through other dependants.
+**Removed in [#43](https://github.com/joshstothard/3moji/issues/43).** Four overrides had lost the NestJS root cause that justified them when `apps/api` was deleted ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)). Each removal was verified with a full clean install (every `node_modules` and `package-lock.json` deleted) followed by `npm ls <package> --all`, and `npm audit --audit-level=high` reported zero high findings before and after:
 
-The overrides were deliberately **left in place** in that change. Root-cause rationale going stale is exactly the trap `docs/development/engineering-standards.md` § Dependency Management describes: an exact pin written to escape an advisory becomes the reason you are held on a vulnerable version later. Removing them safely needs the full clean-install verification that section prescribes, which is its own piece of work rather than a side effect of deleting an app.
-
-The `multer` lockfile patch described below is dead for the same reason: nothing depends on `multer` any more.
+| Removed       | Was pinned to | Why it could go                                                                                                                                                                                    |
+| ------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tmp`         | `0.2.7`       | No consumer — `npm ls tmp` is empty                                                                                                                                                                |
+| `multer@2`    | `2.3.0`       | No consumer — `npm ls multer` is empty. No `multer` lockfile patch remained either; it left the lockfile with `apps/api`                                                                           |
+| `picomatch@4` | `4.0.5`       | The pin had gone stale: it held `lint-staged` (which declares `^4.0.7`) **below its own range**. Without it every 4.x consumer dedupes onto `4.0.7`, above the `4.0.4` fix for GHSA-c2c7-rcm5-vvqj |
+| `lodash`      | `4.18.1`      | Its only consumer, `@textlint/linter-formatter` (via `secretlint`), declares `^4.18.1` itself — already above the `4.18.0` fix for GHSA-r5fr-rjxr-66jc                                             |
 
 **Maintenance rule:** when a HIGH-severity transitive finding appears:
 
@@ -173,6 +172,13 @@ Trivy runs separately per image in Stage 5 with two passes: blocking on fixable 
 `docs/adr/*.md` without also touching `docs/architecture/*.md` in the same diff — see AGENTS.md §
 ADR reading policy. It no-ops until `docs/architecture/` exists. Skip it for a specific ADR with no
 current-state doc to update by adding `[skip-adr-sync: reason]` to a commit message on the branch.
+
+The same job runs `scripts/check-adr-numbers.mjs`, which fails if two files in `docs/adr` share a
+four-digit number. A pull request is checked out as its merge with `main`, so it also catches a number
+that merged to `main` after the branch was cut. ADR-0003 reached `main` twice before this check
+existed, and the repair meant editing an Accepted ADR (#35, #36). The `adr` skill numbers from
+`origin/main` and open pull requests; this check is the backstop when the skill is bypassed or two
+branches still race. Unlike `adr-sync` it has no skip marker. It also runs in `scripts/verify.sh`.
 
 ## Morlock
 
