@@ -4,7 +4,8 @@
 **Date:** YYYY-MM-DD
 
 <!--
-Copy to docs/adr/NNNN-<slug>.md, where NNNN is the highest existing number + 1, zero-padded.
+Copy to docs/adr/NNNN-<slug>.md, where NNNN is the highest number on origin/main or in an open
+pull request, + 1, zero-padded. Never number from a local docs/adr: it may be stale (#36).
 Status: Proposed while drafting, Accepted once the user explicitly accepts it (set Date to that day).
 Once Accepted this file is immutable. The only permitted edit is the status line
 ("Superseded by ADR-XXXX") plus a one-line blockquote pointer under the Date line.

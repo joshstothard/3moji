@@ -44,6 +44,11 @@ npm run build
 echo "=== ADR Sync Check ==="
 bash scripts/check-adr-sync.sh origin/main
 
+# Two ADRs with the same number cannot both be right, and the repair means
+# editing an Accepted ADR (#36).
+echo "=== ADR Number Check ==="
+node scripts/check-adr-numbers.mjs
+
 echo "=== Security Scan ==="
 npm audit --audit-level=high || echo "Warning: npm audit found issues"
 
