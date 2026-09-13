@@ -163,6 +163,32 @@ describe("submitClaimAction", () => {
     expect(submitClaim).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      "an email address",
+      `Key (email)=(someone@example.com) already exists.`,
+      "someone@example.com",
+    ],
+    [
+      "a password",
+      `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+      "hunter2-Tr0ub4dor&3",
+    ],
+  ])(
+    "keeps %s in the error's message out of the log line (#134)",
+    async (_what, message, secret) => {
+      const logged = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      submitClaim.mockRejectedValue(new Error(message));
+      await submitClaimAction(form(FIELDS));
+      const output = JSON.stringify(logged.mock.calls);
+      expect(output).toContain("claim_submit_failed");
+      expect(output).not.toContain(secret);
+      logged.mockRestore();
+    },
+  );
+
   it("reports a failure rather than a rejection when the Claim throws", async () => {
     const logged = jest
       .spyOn(console, "error")

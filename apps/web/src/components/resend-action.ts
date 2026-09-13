@@ -4,6 +4,7 @@ import { canonicalise, resendVerification } from "@template/core";
 import { redirect } from "next/navigation";
 
 import { getServices } from "../lib/services";
+import { logFailure } from "../lib/log-error";
 import { holdReasonFrom, type ResendNotice } from "./claim-state";
 
 /**
@@ -95,12 +96,7 @@ export async function requestNewVerificationLink(
     // A misconfigured deployment or an unreachable database. Worth a log line
     // rather than a shrug, and worth *not* telling the visitor a link is on its
     // way when none is: they would wait for an email that never comes.
-    console.error(
-      JSON.stringify({
-        event: "verification_resend_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("verification_resend_failed", error);
   }
 
   // Outside the try: `redirect` works by throwing, so calling it inside would

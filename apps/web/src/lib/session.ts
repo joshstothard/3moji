@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import type { ProfileEditor } from "@template/core";
 
 import { getServices } from "./services";
+import { logFailure } from "./log-error";
 
 /**
  * Who is signed in, according to **the session cookie and nothing else**.
@@ -28,12 +29,7 @@ export async function readViewer(): Promise<ProfileEditor | undefined> {
     if (session === null) return undefined;
     return { userId: session.user.id };
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "session_read_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("session_read_failed", error);
     return undefined;
   }
 }

@@ -291,6 +291,32 @@ describe("saveProfileAction, when the domain rejects the draft", () => {
     expect(calls).toEqual([]);
   });
 
+  it.each([
+    [
+      "an email address",
+      `Key (email)=(someone@example.com) already exists.`,
+      "someone@example.com",
+    ],
+    [
+      "a password",
+      `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+      "hunter2-Tr0ub4dor&3",
+    ],
+  ])(
+    "keeps %s in the error's message out of the log line (#134)",
+    async (_what, message, secret) => {
+      const logged = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      editProfile.mockRejectedValue(new Error(message));
+      await saveProfileAction(IDLE, form(FILLED));
+      const output = JSON.stringify(logged.mock.calls);
+      expect(output).toContain("profile_save_failed");
+      expect(output).not.toContain(secret);
+      logged.mockRestore();
+    },
+  );
+
   it("hands the draft back when the write itself fails", async () => {
     editProfile.mockRejectedValue(new Error("connection refused"));
     jest.spyOn(console, "error").mockImplementation(() => undefined);

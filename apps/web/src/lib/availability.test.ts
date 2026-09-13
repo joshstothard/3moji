@@ -142,6 +142,28 @@ describe("the availability read", () => {
     await expect(readAvailability(ENCODED)).resolves.toBe("not-claimable");
   });
 
+  it.each([
+    [
+      "an email address",
+      `Key (email)=(someone@example.com) already exists.`,
+      "someone@example.com",
+    ],
+    [
+      "a password",
+      `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+      "hunter2-Tr0ub4dor&3",
+    ],
+  ])(
+    "keeps %s in the error's message out of the log line (#134)",
+    async (_what, message, secret) => {
+      handleAvailability.mockRejectedValue(new Error(message));
+      await readAvailability(ENCODED);
+      const output = JSON.stringify(logged);
+      expect(output).toContain("availability_check_failed");
+      expect(output).not.toContain(secret);
+    },
+  );
+
   it("logs the failure as one structured line rather than swallowing it", async () => {
     unconfigured();
 
@@ -151,7 +173,7 @@ describe("the availability read", () => {
     expect(typeof line).toBe("string");
     expect(JSON.parse(String(line))).toMatchObject({
       event: "availability_check_failed",
-      message: "DATABASE_URL is not set.",
+      error: { name: "Error", missing: "DATABASE_URL" },
     });
   });
 

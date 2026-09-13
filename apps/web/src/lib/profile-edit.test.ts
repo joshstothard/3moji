@@ -135,6 +135,32 @@ describe("readEditAuthority", () => {
     expect(await answer()).toEqual({ state: "no-handle" });
   });
 
+  it.each([
+    [
+      "an email address",
+      `Key (email)=(someone@example.com) already exists.`,
+      "someone@example.com",
+    ],
+    [
+      "a password",
+      `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+      "hunter2-Tr0ub4dor&3",
+    ],
+  ])(
+    "keeps %s in the error's message out of the log line (#134)",
+    async (_what, message, secret) => {
+      const logged = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      handleOf.mockRejectedValue(new Error(message));
+      await answer();
+      const output = JSON.stringify(logged.mock.calls);
+      expect(output).toContain("edit_authority_read_failed");
+      expect(output).not.toContain(secret);
+      logged.mockRestore();
+    },
+  );
+
   it("refuses a segment that is not a Handle", async () => {
     expect(await answer("not-emoji")).toEqual({ state: "not-owner" });
   });
@@ -187,6 +213,32 @@ describe("readEditableDraft", () => {
 
     expect(await readEditableDraft(KEY)).toBeUndefined();
   });
+
+  it.each([
+    [
+      "an email address",
+      `Key (email)=(someone@example.com) already exists.`,
+      "someone@example.com",
+    ],
+    [
+      "a password",
+      `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+      "hunter2-Tr0ub4dor&3",
+    ],
+  ])(
+    "keeps %s in the error's message out of the log line (#134)",
+    async (_what, message, secret) => {
+      const logged = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      profileOf.mockRejectedValue(new Error(message));
+      await readEditableDraft(KEY);
+      const output = JSON.stringify(logged.mock.calls);
+      expect(output).toContain("editable_profile_read_failed");
+      expect(output).not.toContain(secret);
+      logged.mockRestore();
+    },
+  );
 
   it("answers undefined for a segment that is not a Handle", async () => {
     expect(await readEditableDraft("not-emoji")).toBeUndefined();

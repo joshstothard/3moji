@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { readEditAuthority } from "../lib/profile-edit";
 import { getServices } from "../lib/services";
+import { logFailure } from "../lib/log-error";
 import type { ProfileEditFormState } from "./profile-edit-state";
 
 /**
@@ -67,12 +68,7 @@ export async function saveProfileAction(
       return { state: "invalid", violations: result.violations, draft };
     }
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "profile_save_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("profile_save_failed", error);
     return { state: "failed", draft };
   }
 

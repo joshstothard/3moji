@@ -393,6 +393,7 @@ npm run build         # Production build
 ## Observability
 
 - Structured JSON logging from day one.
+- **No free-text error messages on personal-data paths.** A catch on a path that handles an email, a password, a session or a Profile logs through `logFailure(event, error)` in `apps/web/src/lib/log-error.ts`, never `error.message`: a message thrown by Better Auth, the `pg` driver or an email provider can quote the values involved (`Key (email)=(someone@example.com) already exists`). The line keeps its `event` and carries only allow-listed fields — the error's `name`, a SQLSTATE/Node/Better Auth `code`, an HTTP `status`, the `missing` environment variable, and the `causes` chain's names ([#134](https://github.com/joshstothard/3moji/issues/134)).
 - trace_id and correlation_id propagated through all API boundaries.
 - Error tracking for both frontend and backend.
 - Runbooks in `docs/runbooks/` for top incident types.

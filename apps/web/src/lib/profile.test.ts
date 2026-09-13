@@ -148,6 +148,32 @@ describe("the Profile read", () => {
     logged.mockRestore();
   });
 
+  it.each([
+    [
+      "an email address",
+      `Key (email)=(someone@example.com) already exists.`,
+      "someone@example.com",
+    ],
+    [
+      "a password",
+      `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+      "hunter2-Tr0ub4dor&3",
+    ],
+  ])(
+    "keeps %s in the error's message out of the log line (#134)",
+    async (_what, message, secret) => {
+      const logged = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      profileOf.mockRejectedValue(new Error(message));
+      await readProfile(ENCODED, "claimed");
+      const output = JSON.stringify(logged.mock.calls);
+      expect(output).toContain("profile_read_failed");
+      expect(output).not.toContain(secret);
+      logged.mockRestore();
+    },
+  );
+
   it("shows nothing when the segment is not a Handle at all", async () => {
     await expect(readProfile("not-a-handle", "claimed")).resolves.toEqual({
       state: "none",
@@ -232,6 +258,32 @@ describe("the display-name read behind a listing", () => {
 
     expect(displayNamesOf).toHaveBeenCalledWith([KEY]);
   });
+
+  it.each([
+    [
+      "an email address",
+      `Key (email)=(someone@example.com) already exists.`,
+      "someone@example.com",
+    ],
+    [
+      "a password",
+      `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+      "hunter2-Tr0ub4dor&3",
+    ],
+  ])(
+    "keeps %s in the error's message out of the log line (#134)",
+    async (_what, message, secret) => {
+      const logged = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      displayNamesOf.mockRejectedValue(new Error(message));
+      await readDisplayNames([ENCODED]);
+      const output = JSON.stringify(logged.mock.calls);
+      expect(output).toContain("display_names_read_failed");
+      expect(output).not.toContain(secret);
+      logged.mockRestore();
+    },
+  );
 
   it("degrades to no names rather than throwing when the read fails", async () => {
     // The names decorate the rows; the emoji are the identity. A refused

@@ -4,6 +4,7 @@ import { canonicalise } from "@template/core";
 import { redirect } from "next/navigation";
 
 import { getServices } from "../lib/services";
+import { logFailure } from "../lib/log-error";
 
 /** What the sign-in form is told. There is no success case: success redirects. */
 export type SignInState =
@@ -89,15 +90,7 @@ export async function signInAction(formData: FormData): Promise<SignInState> {
     try {
       destination = await holdScreenFor(email.trim());
     } catch (lookupError) {
-      console.error(
-        JSON.stringify({
-          event: "hold_screen_lookup_failed",
-          message:
-            lookupError instanceof Error
-              ? lookupError.message
-              : "unknown error",
-        }),
-      );
+      logFailure("hold_screen_lookup_failed", lookupError);
       return { state: "failed" };
     }
   }
