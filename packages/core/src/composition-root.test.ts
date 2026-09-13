@@ -103,6 +103,19 @@ describe("createCoreServices", () => {
     await close();
   });
 
+  /**
+   * The other half of that split: the Profile's writes exist, and they exist
+   * **only** on a unit of work. `runInTransaction` being the whole of this
+   * port's surface is what makes "a Link list is rewritten in one transaction"
+   * structural rather than a convention a caller is trusted to follow.
+   */
+  it("wires the Profile's unit of work, with the writes only inside it", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(Object.keys(services.profileEdits)).toEqual(["runInTransaction"]);
+    await close();
+  });
+
   it("passes transport plugins through to auth", async () => {
     const handle = createDatabase({
       url: "postgresql://app:app@localhost:5432/app_test",

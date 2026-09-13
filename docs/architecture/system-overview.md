@@ -23,7 +23,7 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 ## Routing
 
-**Partly built.** Three routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, and the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊`.
+**Partly built.** Four routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — and the owner's edit surface at `/[handle]/edit`.
 
 ### The home page
 
@@ -87,6 +87,24 @@ The availability read is the same `checkAvailability` server action the home pag
 **Nothing widened to carry a Profile through.** `AvailabilityState` is still `HandleAvailability["state"] | "unknown"`, so the `Reservation` and the hold expiry still never leave `packages/core` ([#80](https://github.com/joshstothard/3moji/issues/80)). The Profile arrives as its own value, on its own read, gated on `claimed` three times over: `readProfile` issues no query otherwise, `profileStateOf` composes nothing otherwise, and the route's branch is nested under `claimed`. The unit suite forces the hostile case — a fully-populated Profile pushed at the page for a held, reserved and unknown Handle — and asserts the page still shows nothing but its line, because "I did not render it" is not evidence and a future debug view is exactly how this leaks.
 
 **A failed Profile read degrades to the line, not to an empty page.** `lib/services.ts` needs five environment variables, so on a clone with none the availability read already answers `unknown` and no Profile is ever fetched; when the Handle _is_ claimed and the Profile read fails anyway, the answer is `none` and the route falls back to "This Handle is taken." — never `unedited`, which would be a statement about an owner the query never reached.
+
+### Editing the Profile
+
+`/🧊🧊🧊/edit` is the owner's surface ([#106](https://github.com/joshstothard/3moji/issues/106)): the display name, the bio, and a list of Links that can be added to, changed and removed. Reordering is not here — it is [#107](https://github.com/joshstothard/3moji/issues/107), and until it lands the row order **is** the order.
+
+It canonicalises its segment exactly as `/[handle]` does, and redirects a non-canonical spelling to `/{encoded}/edit` rather than to the Profile, so an oddly-spelled URL does not silently drop the owner out of the form they asked for.
+
+**Authorisation is two independent layers, and the action's is the one that matters.** The page decides whether a form is rendered; `saveProfileAction` decides whether a write happens, and it enforces the rule itself rather than trusting that the form was ever shown — a server action is a public HTTP endpoint, so it can be posted to directly, with any Handle in the body, by anyone holding a session cookie. The rule is `profileEditAuthority` in `packages/core`, pure and composed by `lib/profile-edit.ts` from two server-side facts: who the **session** says is asking (`lib/session.ts`, the one place an identity enters the application) and what the Account directory says that id owns. The Handle in the request is the thing compared, never the thing trusted.
+
+It refuses four ways — signed out, no Handle, a Claim that is not final, and the Handle being somebody else's. The page sends the first to `/sign-in` and answers the rest `notFound()`, which says nothing about whether the Handle exists or who owns it; the action collapses all four into one `forbidden`. **The middle case is the one an authorisation bug actually reaches**: `profile.user_id` is the primary key, so a write derived from the session with no comparison would not fail loudly — it would quietly rewrite the requester's *own* Profile while they were asking about somebody else's.
+
+**Failing to read is refusing.** `lib/services.ts` needs five environment variables and every read here can be refused; each such failure answers "not signed in" or "owns nothing" rather than an error, because "we could not check" must never open an edit form. The same caution runs the other way for the Profile itself: a Profile that could not be **read** renders a notice instead of a blank form, since blanks offered to an owner are an invitation to save them over content that is still there, and the write replaces the whole Link list.
+
+**A rejected save keeps what was typed and says what to fix.** The limits are `validateProfile`'s and are not restated in the form: the action passes the draft to `editProfile`, and the form renders the violations that come back — each one associated with its own control by `aria-invalid` and `aria-describedby`, since a message merely sitting beside an input is invisible to a screen reader. The numbers in the messages are the violation's own, so a limit that moves in the domain moves here with it.
+
+**The save revalidates before it redirects**, in that order: without busting the cache first, Next serves the cached Handle page and the edit appears not to have taken effect (`docs/development/engineering-standards.md` § Frontend). The path is the percent-encoded segment, never the raw key.
+
+**There is no link to it from the public Handle page yet**, and that is deliberate rather than forgotten: rendering an owner-only control there means reading the session on the most-read page in the product, which makes it per-visitor and uncacheable. An owner reaches the form by URL until that trade-off is decided.
 
 ### The word alias
 

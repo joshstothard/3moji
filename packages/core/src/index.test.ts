@@ -13,6 +13,10 @@ import {
   createRecordingEmailSender,
   createResendEmailSender,
   createSystemClock,
+  createDrizzleProfileStore,
+  editProfile,
+  profileEditAuthority,
+  toHandleKey,
   findEmojiByCodepoint,
   isClaimableEmoji,
   isReservedHandle,
@@ -30,6 +34,7 @@ import type {
   CoreServices,
   EmojiSetEntry,
   ProfileDraft,
+  ProfileEditAuthority,
   ProfileValidationResult,
 } from "./index";
 
@@ -137,7 +142,7 @@ describe("package entry point", () => {
 
   /**
    * The Profile's field limits, through the public API alone. The form and the
-   * server action that will call this are #106's; an export left out here is a
+   * server action that call this are #106's; an export left out here is a
    * limit that lives nowhere the transport layer can reach, which is the exact
    * failure `data-model.md` § Profile says the domain enforcement exists to
    * prevent.
@@ -165,5 +170,27 @@ describe("package entry point", () => {
         },
       ],
     });
+  });
+
+  /**
+   * The Profile write path, reached from `apps/web` — the edit route, its
+   * server action, and the transport-side authority composition all import
+   * these. An export left out here is a rule the transport cannot reach, which
+   * is how a limit or an authorisation check ends up reimplemented in a form.
+   */
+  it("exports the Profile write path and its authority rule", () => {
+    expect(typeof editProfile).toBe("function");
+    expect(typeof createDrizzleProfileStore).toBe("function");
+    expect(typeof profileEditAuthority).toBe("function");
+
+    const key = toHandleKey("\u{1F9CA}\u{1F9CA}\u{1F9CA}");
+    if (key === undefined) throw new Error("the test Handle must canonicalise");
+
+    const verdict: ProfileEditAuthority = profileEditAuthority({
+      viewer: { userId: "somebody-else" },
+      owned: undefined,
+      requested: key,
+    });
+    expect(verdict).toEqual({ state: "no-handle" });
   });
 });

@@ -139,6 +139,29 @@ export type {
 export { createDrizzleProfileRepository } from "./adapters/drizzle-profile-repository";
 export { profileStateOf } from "./profile/profile-state";
 export type { ProfileState } from "./profile/profile-state";
+export type {
+  ProfileLinkToWrite,
+  ProfileStore,
+  ProfileToWrite,
+  ProfileTransaction,
+} from "./ports/profile-store";
+export {
+  createDrizzleProfileStore,
+  linkRowsFor,
+  profileTransactionOn,
+} from "./adapters/drizzle-profile-store";
+export type { DrizzleProfileStoreInput } from "./adapters/drizzle-profile-store";
+export { profileEditAuthority } from "./profile/profile-authority";
+export type {
+  ProfileEditAuthority,
+  ProfileEditAuthorityInput,
+  ProfileEditor,
+} from "./profile/profile-authority";
+export { editProfile } from "./profile/edit-profile";
+export type {
+  EditProfileInput,
+  ProfileEditResult,
+} from "./profile/edit-profile";
 export { submitClaim } from "./handle/submit-claim";
 export type { ClaimSubmission, SubmitClaimInput } from "./handle/submit-claim";
 
