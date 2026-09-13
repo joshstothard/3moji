@@ -83,9 +83,10 @@ describeWithDatabase("the auth migration against a real Postgres", () => {
    * database, so nothing on a machine without one can tell you it is stale. It
    * has already moved 1 → 2 (`handle`), 2 → 3 (the blocked-emoji `CHECK`),
    * 3 → 4 (`verification_dispatch`), 4 → 5 (`released_handle`), 5 → 6
-   * (`profile` and `link`), 6 → 7 (`claim_rate_limit`) and 7 → 8
-   * (`auth_rate_limit`). If you are reading this because CI says
-   * `Expected: "8" / Received: "9"`, your migration is the ninth and this
+   * (`profile` and `link`), 6 → 7 (`claim_rate_limit`), 7 → 8
+   * (`auth_rate_limit`) and 8 → 9 (clearing its unhashed keys, #214). If you
+   * are reading this because CI says `Expected: "9" / Received: "10"`, your
+   * migration is the tenth and this
    * literal is what needs the edit — it is tracking
    * `migrations/meta/_journal.json`.
    */
@@ -93,7 +94,7 @@ describeWithDatabase("the auth migration against a real Postgres", () => {
     const result = await db.execute<{ count: string }>(sql`
       SELECT count(*) AS count FROM drizzle.__drizzle_migrations
     `);
-    expect((result.rows as { count: string }[])[0]?.count).toBe("8");
+    expect((result.rows as { count: string }[])[0]?.count).toBe("9");
   });
 
   it("cascades a session delete when its user is removed", async () => {
