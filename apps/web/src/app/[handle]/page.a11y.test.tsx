@@ -185,6 +185,32 @@ describe("the Handle page's Profile and listing, checked by axe", () => {
     );
   });
 
+  it("reports no violations for a claimed Profile with its report link (#197)", async () => {
+    const saved = process.env.REPORT_CONTACT_EMAIL;
+    process.env.REPORT_CONTACT_EMAIL = "reports@example.com";
+    readProfile.mockResolvedValue({ state: "profile", profile: PROFILE });
+    try {
+      const { container } = render(await visit(ENCODED));
+      expect(
+        container.querySelector('a[href^="mailto:reports@example.com"]'),
+      ).not.toBeNull();
+
+      const report = await checkAccessibility(container);
+
+      expect(report.violations).toEqual([]);
+      expect(report.incomplete).toEqual([]);
+      expect(report.passed).toEqual(
+        expect.arrayContaining(["link-name", "list", "role-img-alt"]),
+      );
+    } finally {
+      if (saved === undefined) {
+        Reflect.deleteProperty(process.env, "REPORT_CONTACT_EMAIL");
+      } else {
+        process.env.REPORT_CONTACT_EMAIL = saved;
+      }
+    }
+  });
+
   it("reports no violations for a claimed Handle whose owner has edited nothing", async () => {
     readProfile.mockResolvedValue({ state: "unedited" });
     const { container } = render(await visit(ENCODED));
