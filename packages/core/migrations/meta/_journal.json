@@ -43,6 +43,13 @@
       "when": 1789251606389,
       "tag": "0005_profile_and_link",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789308240365,
+      "tag": "0006_claim_rate_limit",
+      "breakpoints": true
     }
   ]
 }

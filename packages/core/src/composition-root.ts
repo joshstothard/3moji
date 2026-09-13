@@ -5,6 +5,7 @@ import type { EmailSender } from "./auth/ports/email-sender";
 import type { VerificationMailer } from "./auth/resend-verification";
 import { createDrizzleAccountDirectory } from "./adapters/drizzle-account-directory";
 import { createDrizzleClaimFinaliser } from "./adapters/drizzle-claim-finaliser";
+import { createDrizzleClaimRateLimitStore } from "./adapters/drizzle-claim-rate-limit-store";
 import { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
 import { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
 import { createDrizzleProfileRepository } from "./adapters/drizzle-profile-repository";
@@ -12,6 +13,10 @@ import { createDrizzleProfileStore } from "./adapters/drizzle-profile-store";
 import { createDrizzleReleaseStore } from "./adapters/drizzle-release-store";
 import { createDrizzleVerificationDispatchStore } from "./adapters/drizzle-verification-dispatch-store";
 import type { Database } from "./db/client";
+import {
+  createClaimRateLimiter,
+  type ClaimRateLimiter,
+} from "./handle/claim-rate-limit";
 import type { AccountDirectory } from "./ports/account-directory";
 import type { ClaimFinaliser } from "./ports/claim-finaliser";
 import type { Clock } from "./ports/clock";
@@ -86,6 +91,13 @@ export interface CoreServices {
    * and the finalisation has no business creating an Account.
    */
   readonly claimFinaliser: ClaimFinaliser;
+  /**
+   * The Claim's rate limit, per client address and per email address (#157),
+   * already bound to its store, the `Clock` and the auth secret its bucket key
+   * is derived from. A transport hands it the client address it read and
+   * nothing more — it never holds the secret.
+   */
+  readonly claimRateLimiter: ClaimRateLimiter;
   /**
    * The Release's unit of work: the tombstone and the account deletion in one
    * transaction ([ADR-0009](../../../docs/adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)).
@@ -177,6 +189,14 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     profileEdits: createDrizzleProfileStore({ db: deps.db }),
     claims: createDrizzleClaimStore(transactional),
     claimFinaliser: createDrizzleClaimFinaliser(transactional),
+    // On the pooled client, never the claim transaction: a refused submission
+    // opens no transaction, and a count that rolled back with a failed Claim
+    // would stop counting exactly the submissions the limit is for.
+    claimRateLimiter: createClaimRateLimiter({
+      store: createDrizzleClaimRateLimitStore({ db: deps.db }),
+      clock: deps.clock,
+      secret: deps.auth.secret,
+    }),
     // No auth rebinding and no deferred sender: a Release writes no Better Auth
     // row and sends no email, so it needs a plain transaction.
     releases: createDrizzleReleaseStore({ db: deps.db }),
