@@ -54,7 +54,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | In progress |
 | 3     | You can claim a Handle end to end on the live site                           | #76        | Done        |
 | 4     | A claimed Handle shows a real page its owner controls                        | #101       | Done        |
-| 5     | It survives real people                                                      | —          | Not planned |
+| 5     | It survives real people                                                      | #149       | Planned     |
+| 6     | A Profile can be shared as a link that survives bios and chat apps           | #159       | Planned     |
 
 ### Phase 1 — Foundation and providers
 
@@ -206,7 +207,6 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 **Deliverables:**
 
 - A WCAG AA pass over the picker and the Profile.
-- Share affordances built on the **word alias**, plus an Open Graph image per Profile. ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) rejected offering the percent-encoded URL as the shareable form: it is 45 characters of `%F0%9F…` and destroys the thing the product is for.)
 - Structured JSON logging with a correlation id across every API boundary, and error tracking.
 - Rate limits and abuse protection on claims and on every email-sending endpoint.
 
@@ -219,9 +219,41 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Dependencies:** Phases 1 to 4.
 
+**Planned as epic [#149](https://github.com/joshstothard/3moji/issues/149).** Sharing on the word alias and the per-Profile Open Graph image moved to Phase 6 at planning, keeping this phase to the launch-critical safety and accessibility work. Error tracking stays a deliverable here but is **not planned as an issue**: the vendor and its account are the repo owner's decision, and [#148](https://github.com/joshstothard/3moji/issues/148)'s tracing proposal should land first. [#150](https://github.com/joshstothard/3moji/issues/150) comes first because planning found that `POST /api/auth/sign-up/email` is forwarded to Better Auth unrestricted, which very likely creates an Account with no Handle — against ADR-0004 — and is an unlimited email-sending endpoint; it measures before it fixes.
+
 **Issues:**
 
-- _Not planned yet._
+- #150 Block Account sign-up that bypasses the claim
+- #151 Give the E2E job migrations, app env and a test email sender
+- #152 Check the picker and Profile components with axe
+- #153 Check the rendered picker and Profile pages with axe in E2E
+- #154 Prove the picker works by keyboard alone, end to end
+- #155 Give every request a correlation id
+- #156 Log one structured JSON line at every API boundary
+- #157 Rate limit the claim action per IP and per email
+- #158 Rate limit Better Auth's sign-in and email endpoints
+
+### Phase 6 — Sharing
+
+**Outcome:** A Profile can be shared as a link that survives bios and chat apps, and it previews with its own image.
+
+**Deliverables:**
+
+- Share affordances built on the **word alias**, plus an Open Graph image per Profile. ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) rejected offering the percent-encoded URL as the shareable form: it is 45 characters of `%F0%9F…` and destroys the thing the product is for.)
+
+**Acceptance criteria:**
+
+- [ ] A claimed Profile offers its canonical word alias link to copy, and never the percent-encoded emoji URL.
+- [ ] A shared Profile link unfurls with Open Graph metadata and an image of that Profile, and its canonical URL is the emoji path.
+
+**Dependencies:** Phase 4. The E2E environment from Phase 5 ([#151](https://github.com/joshstothard/3moji/issues/151)) for the image test, and [#32](https://github.com/joshstothard/3moji/issues/32), because dotted alias paths are still unverified on Vercel's CDN.
+
+**Planned as epic [#159](https://github.com/joshstothard/3moji/issues/159)**, split out of Phase 5 at planning.
+
+**Issues:**
+
+- #160 Add a control that copies the canonical word alias link
+- #161 Add Open Graph metadata and an image for each Profile
 
 ## Risks & mitigations
 
@@ -258,6 +290,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - 2026-09-12 — The 30-day Handle cooldown is dropped for the MVP: a released Handle returns to the pool immediately. Release still writes a key-and-timestamp tombstone, because time cannot be backfilled. Resolves [#63](https://github.com/joshstothard/3moji/issues/63) and unblocks Phase 3; partially supersedes ADR-0004 decision 5 ([ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md))
 
 - 2026-09-12 — One Postgres driver in every environment: `node-postgres`, replacing the serverless HTTP driver in production. The driver was chosen by `NODE_ENV`, so CI exercised something production never ran and four merged PRs passed over a Claim path that could not open a transaction. Partially supersedes ADR-0006 decision 6's driver clause; unblocks #84 ([ADR-0010](../adr/0010-use-one-postgres-driver-in-every-environment.md))
+- 2026-09-13 — Phase 5 is split: sharing on the word alias and the per-Profile Open Graph image become **Phase 6 — Sharing**, so Phase 5 holds only the launch-critical safety and accessibility work. Decided by the repo owner when Phase 5 was planned.
 
 ## Changelog
 
@@ -343,3 +376,4 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   hooks silently (#119, with the provisioning decision split to #126); and the auto-merge gate read
   a run GitHub refused to start as a failure (#125, fixed by #127 and proven live on #128). #58 —
   the gate is not re-triggered after it updates a branch — is still open and reproduced on #128.
+- 2026-09-13 — Phase 5 planned: epic #149, issues #150–#158. Sharing and the Open Graph image moved to a new Phase 6 — Sharing, planned as epic #159 with issues #160–#161. Error tracking is not planned as an issue pending the vendor decision and #148. Planning found an unrestricted `POST /api/auth/sign-up/email`, filed as #150.
