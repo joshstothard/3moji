@@ -54,8 +54,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | In progress |
 | 3     | You can claim a Handle end to end on the live site                           | #76        | Done        |
 | 4     | A claimed Handle shows a real page its owner controls                        | #101       | Done        |
-| 5     | It survives real people                                                      | #149       | Planned     |
-| 6     | A Profile can be shared as a link that survives bios and chat apps           | #159       | Planned     |
+| 5     | It survives real people                                                      | #149       | Done        |
+| 6     | A Profile can be shared as a link that survives bios and chat apps           | #159       | Done        |
 
 ### Phase 1 — Foundation and providers
 
@@ -212,10 +212,10 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Acceptance criteria:**
 
-- [ ] An automated accessibility check passes on the picker and the Profile.
-- [ ] The picker is fully operable by keyboard, with a regression test for the focus loss the prototype exposed.
-- [ ] Every API boundary emits structured JSON logs carrying a correlation id.
-- [ ] Claim and email endpoints are rate limited, with tests proving the limits.
+- [x] An automated accessibility check passes on the picker and the Profile.
+- [x] The picker is fully operable by keyboard, with a regression test for the focus loss the prototype exposed.
+- [x] Every API boundary emits structured JSON logs carrying a correlation id.
+- [x] Claim and email endpoints are rate limited, with tests proving the limits.
 
 **Dependencies:** Phases 1 to 4.
 
@@ -223,16 +223,22 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- #150 Block Account sign-up that bypasses the claim
-- #151 Give the E2E job migrations, app env and a test email sender
-- #152 Check the picker and Profile components with axe
-- #153 Check the rendered picker and Profile pages with axe in E2E
-- #154 Prove the picker works by keyboard alone, end to end
-- #155 Give every request a correlation id
-- #156 Log one structured JSON line at every API boundary
-- #157 Rate limit the claim action per IP and per email
-- #158 Rate limit Better Auth's sign-in and email endpoints
-- #163 Claim treats email case differently from Better Auth, leaking existence and blocking sign-up
+- #150 Block Account sign-up that bypasses the claim — done
+- #151 Give the E2E job migrations, app env and a test email sender — done
+- #152 Check the picker and Profile components with axe — done
+- #153 Check the rendered picker and Profile pages with axe in E2E — done
+- #154 Prove the picker works by keyboard alone, end to end — done
+- #155 Give every request a correlation id — done
+- #156 Log one structured JSON line at every API boundary — done
+- #157 Rate limit the claim action per IP and per email — done
+- #158 Rate limit Better Auth's sign-in and email endpoints — done
+- #163 Claim treats email case differently from Better Auth, leaking existence and blocking sign-up — done
+- #169 Fail the build when a Better Auth upgrade could reopen Account creation over HTTP — done
+- #177 Bring the remaining light-grey text and affordances up to WCAG AA contrast — done
+- #180 Rate limit the sign-in form, which Better Auth's limiter never sees — done
+- #182 Measure whether form field borders meet WCAG 1.4.11 non-text contrast — done
+- #185 Bring Handle builder button boundaries up to WCAG 1.4.11 contrast — done
+- #187 Stop the alias-listing E2E test claiming Handles another spec needs unclaimed — done
 
 ### Phase 6 — Sharing
 
@@ -244,8 +250,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Acceptance criteria:**
 
-- [ ] A claimed Profile offers its canonical word alias link to copy, and never the percent-encoded emoji URL.
-- [ ] A shared Profile link unfurls with Open Graph metadata and an image of that Profile, and its canonical URL is the emoji path.
+- [x] A claimed Profile offers its canonical word alias link to copy, and never the percent-encoded emoji URL.
+- [x] A shared Profile link unfurls with Open Graph metadata and an image of that Profile, and its canonical URL is the emoji path.
 
 **Dependencies:** Phase 4. The E2E environment from Phase 5 ([#151](https://github.com/joshstothard/3moji/issues/151)) for the image test, and [#32](https://github.com/joshstothard/3moji/issues/32), because dotted alias paths are still unverified on Vercel's CDN.
 
@@ -253,8 +259,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- #160 Add a control that copies the canonical word alias link
-- #161 Add Open Graph metadata and an image for each Profile
+- #160 Add a control that copies the canonical word alias link — done
+- #161 Add Open Graph metadata and an image for each Profile — done
 
 ## Risks & mitigations
 
@@ -379,3 +385,4 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   the gate is not re-triggered after it updates a branch — is still open and reproduced on #128.
 - 2026-09-13 — Phase 5 planned: epic #149, issues #150–#158. Sharing and the Open Graph image moved to a new Phase 6 — Sharing, planned as epic #159 with issues #160–#161. Error tracking is not planned as an issue pending the vendor decision and #148. Planning found an unrestricted `POST /api/auth/sign-up/email`, filed as #150.
 - 2026-09-13 — #163 added to Phase 5 (epic #149): the Claim's case-sensitive email lookups disagree with Better Auth's lowercasing, which by the code path breaks non-enumeration and blocks mixed-case sign-ups. Found while landing #148 (PR #162); measured first.
+- 2026-09-13 — Synced from GitHub after #188: **Phase 5 Done** (epic #149 closed, all 16 issues closed — #150–#158 and #163 as planned, plus #169, #177, #180, #182, #185 and #187 added after planning) and **Phase 6 Done** (epic #159 closed, #160 and #161 closed). All four Phase 5 and both Phase 6 acceptance criteria ticked against their closed issues. Not yet met despite the Done status: `3moji.me` is not live, so Phase 5's outcome and Phase 6's unfurl on a real share wait on #32 (blocked on #19); and Phase 5's error tracking was never planned as an issue. Phase 1 (#32) and Phase 2 (#55) remain In progress, so the workstream stays Active.
