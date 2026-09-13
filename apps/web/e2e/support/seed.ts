@@ -186,6 +186,66 @@ export async function seedClaimedHandle(
   }
 }
 
+/** A cookie as `BrowserContext.addCookies` and a `Cookie` header both need it. */
+export interface SessionCookie {
+  readonly name: string;
+  readonly value: string;
+}
+
+/**
+ * A signed-in session for seeded credentials, **without the sign-in form**
+ * ([#193](https://github.com/joshstothard/3moji/issues/193)).
+ *
+ * The form is rate limited per client address, so a spec that signed in
+ * through it for every check would spend an allowance other specs share. This
+ * asks Better Auth directly, server-side — the same `auth.api.signInEmail` the
+ * form calls, which neither the form's limiter nor Better Auth's HTTP limiter
+ * counts — and returns the session cookie it sets.
+ *
+ * The value is a live credential for the test database; it is never logged.
+ */
+export async function sessionCookieFor(credentials: {
+  readonly email: string;
+  readonly password: string;
+}): Promise<readonly SessionCookie[]> {
+  const { db, close } = createDatabase({ url: requiredEnv("DATABASE_URL") });
+
+  try {
+    const services = createCoreServices({
+      clock: createSystemClock(),
+      db,
+      auth: {
+        emailSender: createRecordingEmailSender(),
+        baseUrl: requiredEnv("BETTER_AUTH_URL"),
+        secret: requiredEnv("BETTER_AUTH_SECRET"),
+        from: requiredEnv("RESEND_FROM"),
+      },
+    });
+    const response = await services.auth.api.signInEmail({
+      body: { email: credentials.email, password: credentials.password },
+      asResponse: true,
+    });
+    if (!response.ok) {
+      throw new Error(`The seed sign-in answered ${String(response.status)}.`);
+    }
+
+    const cookies = response.headers.getSetCookie().map((header) => {
+      const pair = header.split(";")[0] ?? "";
+      const separator = pair.indexOf("=");
+      return {
+        name: pair.slice(0, separator),
+        value: pair.slice(separator + 1),
+      };
+    });
+    if (cookies.length === 0 || cookies.some((cookie) => cookie.name === "")) {
+      throw new Error("The seed sign-in set no session cookie.");
+    }
+    return cookies;
+  } finally {
+    await close();
+  }
+}
+
 /**
  * Asks for a password-reset link for `email`, **through the same resetter the
  * request form uses**, and returns the token it carries

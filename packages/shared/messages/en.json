@@ -175,5 +175,12 @@
     "setTooShort": "That password is too short. Use at least {min} characters.",
     "setTooLong": "That password is too long. Use at most {max} characters.",
     "setFailed": "We could not set your password just now. Try again in a moment."
+  },
+  "AccountMenu": {
+    "signIn": "Sign in",
+    "toggle": "Signed in",
+    "yourProfile": "Your Profile",
+    "editProfile": "Edit your Profile",
+    "noHandle": "There is no Profile to show for this account just now."
   }
 }
