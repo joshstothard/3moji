@@ -1,6 +1,6 @@
 # Owner actions and decisions
 
-**Last checked:** 2026-09-13, against `main` and GitHub
+**Last checked:** 2026-09-14, against `main` and GitHub
 **Related:** [3moji MVP workstream](workstreams/3moji-mvp.md), [Authentication](architecture/auth.md), [Hosting and email report](reports/2026-09-11-hosting-and-email.md)
 
 Everything on this page needs the repo owner. An agent can't do it, either because it needs your accounts, payment method, DNS or phones, or because it's a product or legal call that's yours to make. Tick an item when it's done, and record the outcome where its **Detail** line points, so this page never becomes the only record.
@@ -223,6 +223,32 @@ Items are grouped by when they have to happen:
   - **Recommendation:** accept it, and alert on those three events when Phase 8's error tracking lands. Every one of those emails can be asked for again from the page the person is already on.
   - **Blocks:** nothing.
   - **Detail:** [Authentication](architecture/auth.md#what-an-operator-sees-when-a-send-fails).
+
+- [ ] **Allow an instrumentation file that only logs request errors ([#203](https://github.com/joshstothard/3moji/issues/203), [#148](https://github.com/joshstothard/3moji/issues/148))**
+  - **What:** Add `apps/web/src/instrumentation.ts` exporting only Next's `onRequestError`, delegating to the handler already merged in `apps/web/src/lib/request-error.ts`. It has no `register()` and no tracing import. Today the file doesn't exist, because `scripts/tracing-guard.test.mjs` fails the build whenever it does, pending the tracing decision in #148.
+  - **Why it matters:** without it, a page that fails to render on the server writes no structured log line. The branded error page is shown, but nothing with a correlation id reaches the logs, so the failure can't be traced. `error.tsx` runs in the browser and can't do this job.
+  - **Options:**
+    1. **Allow it**, and tighten `scripts/tracing-guard.test.mjs` to forbid only `register()` and tracing imports. The guard's reason, that OpenTelemetry spans record drizzle's bound parameters, still holds, because neither is allowed.
+    2. **Wait for #148**, and leave server render errors unlogged until then.
+  - **Recommendation:** allow it. It's a three-line file plus a guard change, and it keeps the protection the guard exists for.
+  - **Blocks:** the last acceptance criterion of #203, which stays open until this is decided.
+  - **Detail:** [the #203 comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457), [system overview](architecture/system-overview.md) § Error tracking.
+
+- [ ] **Decide whether the Handle-path spoken form needs a new ADR ([#201](https://github.com/joshstothard/3moji/issues/201))**
+  - **What:** Typing `3moji.me/three-ice-cubes` still 404s. The spoken form already works in the `/find` lookup (PR [#217](https://github.com/joshstothard/3moji/pull/217)), which needed no ADR.
+  - **Why it matters:** accepting the spoken form in the path reverses ADR-0008 decision 2, which rejected a hyphen-joined address as ambiguous. Phase 8's acceptance criterion asks for the path form, so the criterion and the ADR disagree until you pick one.
+  - **Options:** reword the Phase 8 criterion to the `/find` lookup only; authorise a short ADR where the spoken path redirects to a dotted alias and never renders; authorise a fuller ADR where the spoken path is a real address; or drop the path form.
+  - **Recommendation:** keep `/find` only, and write the redirect-only ADR (run `/adr`) only if the typed path must also work.
+  - **Blocks:** #201 and one Phase 8 acceptance criterion.
+  - **Detail:** [the #201 comment](https://github.com/joshstothard/3moji/issues/201#issuecomment-5656238125), [ADR-0008](adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md).
+
+- [ ] **Review: how axe checks the open account menu ([#225](https://github.com/joshstothard/3moji/pull/225))**
+  - **What:** The orchestrator took this call overnight. When an open dropdown covers page text, axe checks only the open menu panel, and the whole page is still checked with the menu closed. It uses a new optional `include` on `checkPage` in `apps/web/e2e/support/axe.ts`, and every other caller is unchanged.
+  - **Why it matters:** on Mobile Chrome the four-row account menu covers the Profile's own text, so axe can't judge that text's contrast while the menu is open. The scoped check still fails on violations and on anything axe can't decide.
+  - **Options:** confirm it, or overrule it and change the menu's mobile layout so it covers no page text.
+  - **Recommendation:** confirm it. It was observed failing on a deliberate contrast break and passing once the break was reverted.
+  - **Blocks:** nothing.
+  - **Detail:** PR [#225](https://github.com/joshstothard/3moji/pull/225) follow-up comments, [workstream](workstreams/3moji-mvp.md) Decision log, 2026-09-14.
 
 ## Decide after launch
 
