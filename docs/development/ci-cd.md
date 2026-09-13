@@ -19,7 +19,7 @@ push / PR
   │     build (artifact) · security (reusable workflow)
   │
   ├── Stage 3 (needs: build)
-  │     e2e (Playwright + postgres + redis services)
+  │     e2e (Playwright + postgres service; Drizzle migrations applied first)
   │
   ├── Stage 4 (independent)
   │     version (GitVersion → semver output)
@@ -90,6 +90,8 @@ The exemption covers the dispatch itself and nothing downstream of it. Measured 
 **When it cannot merge:** a failed merge or branch update is posted as a comment on the PR, and the run fails so it shows in the Actions tab. Merge by hand with `gh pr merge <number> --squash --delete-branch`.
 
 **Holding a PR:** remove the `automerge` label, or convert the PR to a draft (`gh pr ready <number> --undo`). A Dependabot minor or patch PR has no label to remove, so convert it to a draft or close it.
+
+**A Dependabot bump of `better-auth` or `@better-auth/*` fails CI, so it never auto-merges.** That is intended. `scripts/better-auth-audit.test.mjs` pins the audited version until someone does the recheck in [auth.md § Rechecking the Account-creation audit](../architecture/auth.md#rechecking-the-account-creation-audit) ([#169](https://github.com/joshstothard/3moji/issues/169)).
 
 ## Versioning
 

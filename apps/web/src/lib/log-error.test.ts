@@ -13,8 +13,12 @@
  * is logged is either an identifier-shaped value that passed an allow-list, or
  * a literal chosen from a fixed set.
  */
+import "../test-support/next-async-local-storage";
+
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { workUnitAsyncStorage } from "next/dist/server/app-render/work-unit-async-storage.external";
 
 import { describeError, logFailure, REQUIRED_VARIABLES } from "./log-error";
 
@@ -87,6 +91,7 @@ describe("logFailure", () => {
     const line: unknown = spy.mock.calls[0]?.[0];
     expect(JSON.parse(typeof line === "string" ? line : "null")).toEqual({
       event: "profile_read_failed",
+      correlationId: "none",
       error: {
         name: "DrizzleQueryError",
         code: "23505",
@@ -94,6 +99,79 @@ describe("logFailure", () => {
       },
     });
     spy.mockRestore();
+  });
+
+  /**
+   * #155. The id ties a failure to the request that produced it. It is read
+   * synchronously, so the line is still written before `logFailure` returns —
+   * every suite that awaits an action and then inspects the console relies on
+   * that.
+   */
+  describe("correlationId", () => {
+    const ID = "lhr1::iad1::8x2kq-1757770000000-3f9a1c2b7d4e";
+
+    function lineInside(store: unknown): unknown {
+      const output: unknown[] = [];
+      const spy = jest
+        .spyOn(console, "error")
+        .mockImplementation((...args: unknown[]) => {
+          output.push(args[0]);
+        });
+      try {
+        Reflect.apply(
+          workUnitAsyncStorage.run.bind(workUnitAsyncStorage),
+          undefined,
+          [
+            store,
+            () => {
+              logFailure("claim_submit_failed", new Error("boom"));
+            },
+          ],
+        );
+        expect(output).toHaveLength(1);
+        const [line] = output;
+        return JSON.parse(typeof line === "string" ? line : "null");
+      } finally {
+        spy.mockRestore();
+      }
+    }
+
+    it("carries the id of the request the failure happened in", () => {
+      expect(
+        lineInside({
+          type: "request",
+          headers: new Headers({ "x-correlation-id": ID }),
+        }),
+      ).toMatchObject({ event: "claim_submit_failed", correlationId: ID });
+    });
+
+    it("carries the sentinel outside a request, such as a build step", () => {
+      expect(lineInside(undefined)).toMatchObject({
+        event: "claim_submit_failed",
+        correlationId: "none",
+      });
+    });
+
+    it("never writes a forged id into the line", () => {
+      const line = lineInside({
+        type: "request",
+        headers: new Headers({ "x-correlation-id": `"},{"event":"forged` }),
+      });
+
+      expect(line).toMatchObject({ correlationId: "none" });
+      expect(JSON.stringify(line)).not.toContain("forged");
+    });
+
+    it("does not throw when the request store cannot be read", () => {
+      const hostile = {
+        type: "request",
+        get headers(): never {
+          throw new Error("boom");
+        },
+      };
+
+      expect(lineInside(hostile)).toMatchObject({ correlationId: "none" });
+    });
   });
 });
 
