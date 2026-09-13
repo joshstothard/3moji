@@ -179,3 +179,82 @@ test("the root-level dynamic route does not swallow the home page", async ({
     page.getByRole("heading", { level: 1, name: "3moji" }),
   ).toBeVisible();
 });
+
+/**
+ * The word alias
+ * ([ADR-0008](../../../docs/adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md)).
+ *
+ * This is the only place the real resolver meets the real route, and the only
+ * place a **dotted path segment** is proved to reach the route at all rather
+ * than being taken for a static file. That proof holds for `next dev` here;
+ * whether Vercel's CDN agrees is
+ * [#32](https://github.com/joshstothard/3moji/issues/32), and unverified.
+ */
+const CANONICAL_ALIAS = "/ice-cube.ice-cube.ice-cube";
+
+test("a word alias resolves in place, with no redirect at all", async ({
+  request,
+}) => {
+  // The load-bearing assertion of ADR-0008, made on the wire rather than
+  // argued from the code: a 308 to the emoji path would replace the shared
+  // ASCII link in the address bar with 45 characters of percent-escapes, which
+  // is the entire defect the alias exists to avoid. `maxRedirects: 0` is what
+  // makes the absence of a `Location` header observable.
+  const response = await request.get(CANONICAL_ALIAS, { maxRedirects: 0 });
+
+  expect(response.status()).toBe(200);
+  expect(response.headers().location).toBeUndefined();
+
+  const body = await response.text();
+  expect(EVERY_ANSWER.some((answer) => body.includes(answer))).toBe(true);
+});
+
+test("an alias page declares the emoji path as canonical", async ({
+  request,
+}) => {
+  // An alias is ambiguous by construction and can never be canonical, so the
+  // one indexable URL per Profile is the emoji one.
+  const response = await request.get(CANONICAL_ALIAS, { maxRedirects: 0 });
+  const body = await response.text();
+
+  expect(body).toContain(`rel="canonical"`);
+  expect(body).toContain(`${ICE}${ICE}${ICE}`);
+});
+
+test("an alias naming more than one Handle says so and lists nothing", async ({
+  request,
+}) => {
+  // `apple` is a synonym of both 🍎 and 🍏, so this names eight Handles. The
+  // listing is #109; until it exists the page says so and shows none of them.
+  const response = await request.get("/apple.apple.apple", {
+    maxRedirects: 0,
+  });
+
+  expect(response.status()).toBe(200);
+  const body = await response.text();
+  expect(body).toContain(copy.aliasSeveral);
+  expect(body).not.toContain(builderCopy.builderHeading);
+  expect(body).not.toContain(`rel="canonical"`);
+});
+
+/**
+ * Written as a loop rather than with `test.each`, which Playwright's runner
+ * does not have.
+ *
+ * The last case is the measured reason the separator is a dot: a hyphen-joined
+ * form has no unambiguous reading, so it is not a grammar at all and 404s like
+ * any other word.
+ */
+const NOT_AN_ALIAS: readonly (readonly [string, string])[] = [
+  ["a word we do not know", "/nonsense.nonsense.nonsense"],
+  ["the wrong number of terms", "/ice-cube.ice-cube"],
+  ["a hyphen where the separator belongs", "/ice-cube-ice-cube-ice-cube"],
+];
+
+for (const [name, path] of NOT_AN_ALIAS) {
+  test(`404s an ASCII segment with ${name}`, async ({ request }) => {
+    const response = await request.get(path, { maxRedirects: 0 });
+
+    expect(response.status()).toBe(404);
+  });
+}

@@ -47,11 +47,11 @@ A swap suggestion is the one control that **cannot** be permanent: taking it mak
 
 `apps/web/src/app/[handle]/page.tsx` is a thin transport adapter: it hands the received path segment to `canonicalise` in `packages/core`, asks `lib/availability.ts` what is true about the Handle, and formats the answer. It holds no canonicalisation logic and decides nothing about availability itself.
 
-| `canonicalise` says           | The route answers                                                                      |
-| ----------------------------- | -------------------------------------------------------------------------------------- |
-| not a Handle, for any reason  | `notFound()` — 404. Junk is never redirected                                           |
-| a Handle, spelled oddly       | `permanentRedirect("/" + encoded)` — 308 to the canonical path                         |
-| a Handle, spelled canonically | 200: the Profile if it is claimed, the builder if it is free, an honest line otherwise |
+| `canonicalise` says           | The route answers                                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| not a Handle, for any reason  | the segment gets its second chance as a **word alias** (§ below); anything that is not one is `notFound()` — 404. Junk is never redirected |
+| a Handle, spelled oddly       | `permanentRedirect("/" + encoded)` — 308 to the canonical path                                                                             |
+| a Handle, spelled canonically | 200: the Profile if it is claimed, the builder if it is free, an honest line otherwise                                                     |
 
 Two constraints from [the emoji URL report](../reports/2026-09-11-emoji-urls.md) bind any future work on this route, and both were re-confirmed against the pinned Next.js version:
 
@@ -102,6 +102,8 @@ The availability read is the same `checkAvailability` server action the home pag
 
 It canonicalises its segment exactly as `/[handle]` does, and redirects a non-canonical spelling to `/{encoded}/edit` rather than to the Profile, so an oddly-spelled URL does not silently drop the owner out of the form they asked for.
 
+**It knows the emoji grammar only**, deliberately: `/ice-cube.ice-cube.ice-cube/edit` 404s. The word alias exists so a Handle can be **shared** as ASCII (§ The word alias), and an owner reaches their own form from their own Profile rather than from a link somebody sent them — so the ambiguity an alias carries has no business anywhere near a write. A route that resolved a candidate set here would have to decide which of eight Handles an owner meant to edit, which is exactly the guess ADR-0008 exists to refuse.
+
 **Authorisation is two independent layers, and the action's is the one that matters.** The page decides whether a form is rendered; `saveProfileAction` decides whether a write happens, and it enforces the rule itself rather than trusting that the form was ever shown — a server action is a public HTTP endpoint, so it can be posted to directly, with any Handle in the body, by anyone holding a session cookie. The rule is `profileEditAuthority` in `packages/core`, pure and composed by `lib/profile-edit.ts` from two server-side facts: who the **session** says is asking (`lib/session.ts`, the one place an identity enters the application) and what the Account directory says that id owns. The Handle in the request is the thing compared, never the thing trusted.
 
 It refuses four ways — signed out, no Handle, a Claim that is not final, and the Handle being somebody else's. The page sends the first to `/sign-in` and answers the rest `notFound()`, which says nothing about whether the Handle exists or who owns it; the action collapses all four into one `forbidden`. **The middle case is the one an authorisation bug actually reaches**: `profile.user_id` is the primary key, so a write derived from the session with no comparison would not fail loudly — it would quietly rewrite the requester's _own_ Profile while they were asking about somebody else's.
@@ -116,13 +118,13 @@ It refuses four ways — signed out, no Handle, a Claim that is not final, and t
 
 ### The word alias
 
-**Planned, not yet built** ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md)). The emoji URL cannot be shared: an autolinker truncates a path at the first non-ASCII byte, so `3moji.me/🧊🧊🧊` in a bio becomes a link to `3moji.me/` with the emoji orphaned beside it as text. Nothing server-side changes that — both spellings reach the browser as the same percent-encoded `location.pathname`.
+**Built**, apart from the listing ([ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md)). The resolver is `resolveAlias` in `packages/core/src/handle/alias.ts` and the dispatch is in `apps/web/src/app/[handle]/page.tsx`. The emoji URL cannot be shared: an autolinker truncates a path at the first non-ASCII byte, so `3moji.me/🧊🧊🧊` in a bio becomes a link to `3moji.me/` with the emoji orphaned beside it as text. Nothing server-side changes that — both spellings reach the browser as the same percent-encoded `location.pathname`.
 
 So a Handle gets a second address: **three dot-separated term slugs**, `3moji.me/ice-cube.ice-cube.ice-cube`. The identity is unchanged — the alias is a derived lookup over the curated names, with no column and no migration.
 
 **The separator is a dot because a hyphen is measurably ambiguous.** Slugging collapses non-alphanumerics to `-`, so a hyphen-joined form cannot say where one word ends: `curry-rice-wine-pizza` reads as `curry` + `rice-wine` + `pizza` _and_ as `curry-rice` + `wine` + `pizza`, both three emoji, so ADR-0004's exactly-three rule does not disambiguate. A dot cannot occur inside a slug, so the parse is unambiguous by construction.
 
-Every position accepts any of that emoji's terms, so one Handle has many aliases and exactly one **canonical** alias (the `displayName` slugs). The resolver answers on the count of _claimed_ matches:
+Every position accepts any of that emoji's terms — the `displayName`, the CLDR `spokenName`, the plural and the synonyms, 937 distinct slugs over 307 emoji — so one Handle has many aliases and exactly one **canonical** alias (the `displayName` slugs, `canonicalAliasOf`). `resolveAlias` is pure and answers with a **candidate set**, never a Handle: it says which Handles the words could mean, and the route composes that with the availability read to find out which of them anybody has. The count of _claimed_ matches then decides:
 
 | Claimed Handles matching | The route answers                                                                                       |
 | ------------------------ | ------------------------------------------------------------------------------------------------------- |
@@ -130,9 +132,13 @@ Every position accepts any of that emoji's terms, so one Handle has many aliases
 | more than one            | a listing of the matches, each with its emoji and the owner's display name                              |
 | none                     | the claim call to action                                                                                |
 
-The alias page will declare `rel="canonical"` pointing at the emoji path: an alias is ambiguous by construction and so can never be canonical.
+**The listing is [#109](https://github.com/joshstothard/3moji/issues/109) and is not built**, so today "more than one" is a single honest line and nothing else — no emoji, no Handles, no controls. That line also covers the case the table above does not: an alias naming several Handles of which _none_ is claimed. The claim call to action is a page for one specific Handle, and `apple.apple.apple` with nothing claimed does not name one, so offering the builder there would mean guessing which of eight the visitor meant. A listing cannot cover it either — ADR-0008 omits unclaimed Handles from a listing — so the same line answers both, and #109 is where a real answer belongs. The claim call to action is therefore rendered only where the alias names exactly one Handle, which is the 96.8% case.
 
-Both grammars share the one root route, dispatching on the received segment. Dotted segments already reach it cleanly — `/apple.apple.apple` answers the route's own 404 rather than being taken for a static file.
+**"That Profile" is literally the Profile**, not a second rendering of one. Once the count has chosen a Handle to show, the alias path takes the same `lib/profile.ts` read and the same components as § The claimed Handle below — handed that candidate's own percent-encoded emoji segment, so the availability answer and the Profile cannot be about different Handles. It is **one** Profile read, issued after the choice rather than alongside the availability reads: a Profile per candidate would double a cost ADR-0008 measured at 64 reads in the worst case, to show exactly one. Where the alias shows no page, no Profile is read at all.
+
+An alias page declares `rel="canonical"` pointing at the emoji path: an alias is ambiguous by construction and so can never be canonical. It is emitted only when exactly one Handle is being shown — where the page shows none, there is no single emoji path to point at, and inventing one would assert a meaning the alias does not have.
+
+Both grammars share the one root route, dispatching on the received segment: `canonicalise` runs first and unchanged, and only its failure reaches the resolver. So the emoji path's four rejection reasons and its 308 are untouched and still run before any database read, and an ASCII segment that is not three dot-separated terms still 404s. Dotted segments reach the route cleanly — asserted on the wire in `apps/web/e2e/handle-url.spec.ts`, which also pins the absence of a `Location` header on an alias that resolves. **Under `next dev` only:** whether Vercel's CDN treats a dotted path segment as a static-file request is still unverified, and needs a deployed environment ([#32](https://github.com/joshstothard/3moji/issues/32), blocked on [#19](https://github.com/joshstothard/3moji/issues/19)).
 
 ## Deployment
 

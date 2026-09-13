@@ -53,7 +53,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | 1     | The app is live at `3moji.me` and a person can create an account and sign in | #26        | In progress |
 | 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | In progress |
 | 3     | You can claim a Handle end to end on the live site                           | #76        | Done        |
-| 4     | A claimed Handle shows a real page its owner controls                        | #101       | Planned     |
+| 4     | A claimed Handle shows a real page its owner controls                        | #101       | In progress |
 | 5     | It survives real people                                                      | —          | Not planned |
 
 ### Phase 1 — Foundation and providers
@@ -190,11 +190,11 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Issues:**
 
-- #102 Add the profile and link tables with their migration and read path
-- #103 Enforce the Profile field limits in the domain
-- #104 Render the Profile at a claimed Handle
+- #102 Add the profile and link tables with their migration and read path — done
+- #103 Enforce the Profile field limits in the domain — done
+- #104 Render the Profile at a claimed Handle — done
 - #105 Render the builder pre-filled at an unclaimed Handle — done
-- #106 Edit the Profile in place
+- #106 Edit the Profile in place — done
 - #107 Reorder Links by dragging, and by keyboard
 - #108 Resolve a dot-separated word alias to a Handle
 - #109 Render the listing when an alias matches several Handles
@@ -329,3 +329,9 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   criterion cannot close until the site deploys (#32, blocked on #19), and #108 records that rather
   than claiming it. One schema decision was made rather than left open: a Profile is keyed on the
   **Account**, not the Handle, so it cascades on Release through the path that already exists.
+- 2026-09-13 — Synced from GitHub: **Phase 4 In progress** (epic #101, 5 of 8 issues done —
+  #102–#106 merged as PRs #113, #112, #116, #114, #118). #107 is unblocked now #106 has merged;
+  #108 is open on PR #117, which conflicted with the Profile work rather than textually; #109
+  stays blocked behind #108. #106 was left open by the auto-merge squash bug (#42) and closed by
+  hand. New: #119 — a fresh worktree has no git hooks until `npm install`, and git does not say
+  so, which on a public repo means secretlint can be silently absent.

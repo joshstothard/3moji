@@ -71,6 +71,14 @@ export type {
   SwapSuggestionsInput,
 } from "./handle/swap-suggestions";
 
+export {
+  ALIAS_SEPARATOR,
+  aliasTermSlugs,
+  canonicalAliasOf,
+  resolveAlias,
+} from "./handle/alias";
+export type { AliasCandidate, AliasResolution } from "./handle/alias";
+
 export { canonicalise, HANDLE_LENGTH } from "./handle/canonicalise";
 export type {
   CanonicalHandle,
