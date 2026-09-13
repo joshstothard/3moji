@@ -58,11 +58,32 @@ If an Accepted ADR already covers it, STOP: point to it and ask whether this sho
 
 ## Step 3 — Number the ADR
 
+Never number from the local `docs/adr` folder. A branch cut before another ADR merged sees a stale folder, and two branches open at once then take the same number. ADR-0003 reached `main` twice that way, and the repair meant editing an Accepted ADR (#35, #36).
+
+Take the number from `origin/main`, freshly fetched, and from the ADR files that **open** pull requests add. Run this as one command:
+
 ```bash
-ls docs/adr | grep -E '^[0-9]{4}-' | sort | tail -1
+(
+  set -euo pipefail
+  git fetch --quiet origin main ||
+    { echo "STOP: cannot fetch origin/main. Refusing to number from the local docs/adr, which may be stale." >&2; exit 1; }
+  merged=$(git ls-tree --name-only origin/main docs/adr/ | sed -n 's|^docs/adr/\([0-9]\{4\}\)-.*|\1|p' | sort | tail -1)
+  claimed=$(gh pr list --state open --limit 1000 --json number,files \
+    --jq '.[] | .number as $pr | .files[].path | select(test("^docs/adr/[0-9]{4}-")) | "\(.[9:13]) #\($pr) \(.)"') ||
+    { echo "STOP: cannot list open pull requests. Refusing to guess which numbers they claim." >&2; exit 1; }
+  echo "Highest ADR on origin/main: ${merged:-none}"
+  echo "ADR files in open pull requests: ${claimed:-none}"
+  highest=$(printf '%s\n' "${merged:-0000}" $(printf '%s\n' "$claimed" | cut -d' ' -f1) | sort | tail -1)
+  printf 'NUMBER=%04d\n' $((10#$highest + 1))
+)
 ```
 
-`NUMBER` is the highest existing number plus one, zero-padded to four digits (`0002` → `0003`). The file is `docs/adr/<NUMBER>-<SLUG>.md`; below, `<adr-file>` stands for its filename, `<NUMBER>-<SLUG>.md`.
+- **It prints `STOP`** — the remote or GitHub could not be reached. STOP and tell the user. Do not fall back to `ls docs/adr`: a silently reused number is exactly the failure this step exists to prevent.
+- **Otherwise** `NUMBER` is the printed value: one more than the highest number on `origin/main` or in any open pull request. A gap left by a pull request that later closes unmerged is harmless; a duplicate is not.
+
+The file is `docs/adr/<NUMBER>-<SLUG>.md`; below, `<adr-file>` stands for its filename, `<NUMBER>-<SLUG>.md`.
+
+This narrows the race but cannot close it: a pull request opened after this step runs is not seen, and nor is an ADR in a pull request with so many changed files that `gh` truncates its file list. `scripts/check-adr-numbers.mjs` is the backstop. It runs in `scripts/verify.sh` and in CI, and fails when two files in `docs/adr` share a number. If it fails on this branch, renumber **this** ADR (it has not merged) to the next free number, never one already on `main`.
 
 ## Step 4 — Draft the ADR
 
