@@ -106,7 +106,9 @@ export async function submitClaim(
 
       if (claim.state === "already-registered") {
         await notifyExistingOwner({
-          email: input.email,
+          // The address the Claim collided on, already normalised by it — not
+          // the typed one, and not normalised a second time here (#163).
+          email: claim.email,
           directory: input.directory,
           emailSender: input.emailSender,
           resetRequestUrl: input.resetRequestUrl,

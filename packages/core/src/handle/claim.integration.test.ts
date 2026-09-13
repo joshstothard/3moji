@@ -9,6 +9,7 @@ import {
   claimTransactionOn,
   createDrizzleClaimStore,
 } from "../adapters/drizzle-claim-store";
+import { createDrizzleAccountDirectory } from "../adapters/drizzle-account-directory";
 import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import { createRecordingEmailSender } from "../auth/adapters/recording-email-sender";
 import type { AuthFactory } from "../auth/auth-factory";
@@ -23,6 +24,7 @@ import { releasedEmojiSet } from "../emoji/emoji-set";
 import type { Clock } from "../ports/clock";
 import type { ClaimStore } from "../ports/claim-store";
 import { claimHandle, type ClaimResult } from "./claim-handle";
+import { submitClaim } from "./submit-claim";
 import type {
   ReservedHandleEntry,
   ReservedHandleList,
@@ -60,6 +62,24 @@ const LONG_PAST = new Date("2020-01-01T00:00:00.000Z");
 /** Every Account this suite creates carries this tag, and only these are deleted. */
 const SUITE_TAG = `claim-int-${String(Date.now())}`;
 const addressFor = (name: string): string => `${SUITE_TAG}-${name}@example.com`;
+/**
+ * The same address as {@link addressFor}, typed with capitals — the way a
+ * phone keyboard capitalises an email field (#163).
+ *
+ * Only the part **after** `SUITE_TAG` changes case, so a row stored under the
+ * lowercased address still matches the `LIKE` cleanup below.
+ */
+const mixedCaseAddressFor = (name: string): string =>
+  `${SUITE_TAG}-${name.toUpperCase()}@Example.COM`;
+
+/** The `message` of an unknown rejection, without a cross-realm `instanceof`. */
+const messageOf = (error: unknown): string =>
+  typeof error === "object" &&
+  error !== null &&
+  "message" in error &&
+  typeof error.message === "string"
+    ? error.message
+    : String(error);
 
 /** A Handle from the Emoji Set, canonicalised the way the write path does. */
 function handleKeyFromSet(offset: number): HandleKey {
@@ -642,5 +662,110 @@ describeWithDatabase("the Claim against a real Postgres", () => {
     expect(await countHandles(owned)).toBe("1");
     expect(await countHandles(wanted)).toBe("0");
     expect(emailSender.sent).toHaveLength(0);
+  });
+
+  /**
+   * **#163 (a): a mixed-case new address.** Better Auth lowercases every
+   * address it stores, so a Claim that looked the address up as typed would
+   * never find the row Better Auth had just written. The Account must exist
+   * under the lowercased address and not the typed one — `countUsers` compares
+   * bytes, which is what makes the second assertion mean something.
+   */
+  it("claims a mixed-case new address and stores it lowercased (#163)", async () => {
+    const key = handleKeyFromSet(HANDLE_KEY_LENGTH * 40);
+    const typed = mixedCaseAddressFor("mixed-new");
+    const stored = addressFor("mixed-new");
+
+    const result = await claim({ segment: key, email: typed });
+
+    expect(result.state).toBe("held");
+    expect(await countUsers(stored)).toBe("1");
+    expect(await countUsers(typed)).toBe("0");
+    expect((await holdRow(key))?.user_id).toBe((await userRow(stored))?.id);
+    expect(emailSender.lastSent()?.to).toBe(stored);
+  });
+
+  /**
+   * **#163 (b): a mixed-case variant of an existing address.** It is the same
+   * Account to Better Auth, so it must be the same Account to the Claim:
+   * `already-registered`, no second Account, and the wanted Handle left free.
+   */
+  it("treats a mixed-case variant of an existing address as that address (#163)", async () => {
+    const owned = handleKeyFromSet(HANDLE_KEY_LENGTH * 41);
+    const wanted = handleKeyFromSet(HANDLE_KEY_LENGTH * 42);
+    const stored = addressFor("mixed-existing");
+    await claim({ segment: owned, email: stored });
+    emailSender.clear();
+
+    const result = await claim({
+      segment: wanted,
+      email: mixedCaseAddressFor("mixed-existing"),
+    });
+
+    expect(result.state).toBe("already-registered");
+    expect(await countUsers(stored)).toBe("1");
+    expect(await countHandles(owned)).toBe("1");
+    expect(await countHandles(wanted)).toBe("0");
+    expect(emailSender.sent).toHaveLength(0);
+  });
+
+  /**
+   * **#163's non-enumeration criterion, against the real database.** A
+   * mixed-case variant of a registered address must be indistinguishable from
+   * the address itself: the same answer, the same response floor, and the
+   * existing owner told in both cases. Everything observable is compared as one
+   * value, so a difference anywhere fails the test.
+   *
+   * Both submissions ask for the **same** Handle, which neither ends up
+   * holding, so even the Handle in the answer is the same.
+   */
+  it("answers a mixed-case variant of a registered address exactly as the address itself (#163)", async () => {
+    const owned = handleKeyFromSet(HANDLE_KEY_LENGTH * 43);
+    const wanted = handleKeyFromSet(HANDLE_KEY_LENGTH * 44);
+    const stored = addressFor("mixed-collision");
+    await claim({ segment: owned, email: stored });
+    const directory = createDrizzleAccountDirectory(db);
+
+    const observe = async (email: string) => {
+      emailSender.clear();
+      const slept: number[] = [];
+      let answer: unknown;
+      try {
+        answer = await submitClaim({
+          segment: wanted,
+          email,
+          password: PASSWORD,
+          store,
+          clock: fixedClock,
+          directory,
+          emailSender,
+          resetRequestUrl: "http://localhost:3000/reset-password",
+          from: "3moji <no-reply@mail.3moji.me>",
+          sleep: (ms) => {
+            slept.push(ms);
+            return Promise.resolve();
+          },
+        });
+      } catch (error) {
+        answer = { threw: messageOf(error) };
+      }
+      return {
+        answer,
+        slept,
+        mailedTo: emailSender.sent.map((sent) => sent.to),
+      };
+    };
+
+    const lowercase = await observe(stored);
+    const mixedCase = await observe(mixedCaseAddressFor("mixed-collision"));
+
+    // The baseline really is the collision path: pending, padded to the
+    // floor, and the owner mailed at their stored address.
+    expect(lowercase.answer).toMatchObject({ state: "pending" });
+    expect(lowercase.slept).toHaveLength(1);
+    expect(lowercase.mailedTo).toEqual([stored]);
+    expect(mixedCase).toEqual(lowercase);
+    expect(await countUsers(stored)).toBe("1");
+    expect(await countHandles(wanted)).toBe("0");
   });
 });
