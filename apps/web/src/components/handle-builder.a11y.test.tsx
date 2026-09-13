@@ -53,21 +53,60 @@ describe("the Handle builder, checked by axe", () => {
     );
   });
 
+  /**
+   * Each row also says what makes that state's DOM different — the claim form
+   * for an available Handle, three swap suggestions for a refused one — and
+   * asserts it rendered before axe runs. Without that, a state whose region
+   * failed to render would be checked against the same slots and preview as
+   * `unknown`, and pass without having looked at anything of its own.
+   */
   it.each([
-    ["available", "available", copy.stateAvailable, ["label", "button-name"]],
-    ["taken", "claimed", copy.stateClaimed, ["button-name", "role-img-alt"]],
-    ["on hold", "held", copy.stateHeld, ["button-name", "role-img-alt"]],
+    [
+      "available",
+      "available",
+      copy.stateAvailable,
+      { claimForm: true, swaps: 0 },
+      ["label", "button-name", "autocomplete-valid"],
+    ],
+    [
+      "taken",
+      "claimed",
+      copy.stateClaimed,
+      { claimForm: false, swaps: 3 },
+      ["button-name", "role-img-alt"],
+    ],
+    [
+      "on hold",
+      "held",
+      copy.stateHeld,
+      { claimForm: false, swaps: 3 },
+      ["button-name", "role-img-alt"],
+    ],
     [
       "reserved",
       "not-claimable",
       copy.stateNotClaimable,
+      { claimForm: false, swaps: 3 },
       ["button-name", "role-img-alt"],
     ],
-    ["unknown", "unknown", copy.stateUnknown, ["button-name", "role-img-alt"]],
+    [
+      "unknown",
+      "unknown",
+      copy.stateUnknown,
+      { claimForm: false, swaps: 0 },
+      ["button-name", "role-img-alt"],
+    ],
   ] as const)(
     "reports no violations when the Handle is %s",
-    async (_name, state: AvailabilityState, line, evaluated) => {
+    async (_name, state: AvailabilityState, line, region, evaluated) => {
       const container = await renderIn(state, line);
+
+      expect(screen.queryAllByRole("button", { name: /^Use / })).toHaveLength(
+        region.swaps,
+      );
+      expect(
+        screen.queryByRole("form", { name: en.Claim.claimHeading }) !== null,
+      ).toBe(region.claimForm);
 
       const report = await checkAccessibility(container);
 
