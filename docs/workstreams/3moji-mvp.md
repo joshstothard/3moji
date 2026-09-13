@@ -53,7 +53,7 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | 1     | The app is live at `3moji.me` and a person can create an account and sign in | #26        | In progress |
 | 2     | A URL containing emoji resolves to exactly one canonical Handle              | #48        | In progress |
 | 3     | You can claim a Handle end to end on the live site                           | #76        | Done        |
-| 4     | A claimed Handle shows a real page its owner controls                        | #101       | In progress |
+| 4     | A claimed Handle shows a real page its owner controls                        | #101       | Done        |
 | 5     | It survives real people                                                      | —          | Not planned |
 
 ### Phase 1 — Foundation and providers
@@ -174,19 +174,19 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 **Acceptance criteria:**
 
-- [ ] A visitor at a claimed Handle sees the display name, bio, and ordered Links.
+- [x] A visitor at a claimed Handle sees the display name, bio, and ordered Links. Done by [#104](https://github.com/joshstothard/3moji/issues/104) (the Profile page) and [#107](https://github.com/joshstothard/3moji/issues/107) (the order is the owner's, set by keyboard or drag).
 - [x] An unclaimed Handle renders the builder pre-filled with those three emoji and a claim call to action. Done by [#105](https://github.com/joshstothard/3moji/issues/105): the same `HandleBuilder`, given `initialEmoji` from the path. Reserved and `unknown` deliberately do **not** render it.
-- [ ] A held Handle reveals nothing about who holds it, and shows no expiry timestamp.
-- [ ] Limits are enforced in `packages/core`: 30, 160, 10, and 40 characters, with `http` and `https` URLs only.
-- [ ] A mutation revalidates the cache before redirecting, so the change is visible immediately.
-- [ ] A dot-separated word alias resolves: one claimed match renders that Profile **in place** rather than redirecting, several render the listing, none renders the claim call to action.
-- [ ] Dotted path segments survive the deployed environment, not only `next dev` — ADR-0008's evidence for this was measured locally only, and Vercel's CDN may treat a dotted segment as a static-file request.
+- [x] A held Handle reveals nothing about who holds it, and shows no expiry timestamp. Met by #80 and pinned by two regression assertions in `apps/web/src/app/[handle]/page.test.tsx` — one on the emoji path and one on the alias path.
+- [x] Limits are enforced in `packages/core`: 30, 160, 10, and 40 characters, with `http` and `https` URLs only. Done by [#103](https://github.com/joshstothard/3moji/issues/103); at most ten Links is also a database `CHECK`.
+- [x] A mutation revalidates the cache before redirecting, so the change is visible immediately. Done by [#106](https://github.com/joshstothard/3moji/issues/106): `revalidatePath` precedes `redirect` in `apps/web/src/components/profile-edit-action.ts`, and `profile-edit-action.test.ts` pins that order by recording the calls.
+- [ ] A dot-separated word alias resolves: one claimed match renders that Profile **in place** rather than redirecting, several render the listing, none renders the claim call to action. **Two of three met** — one claimed match in place ([#108](https://github.com/joshstothard/3moji/issues/108)), several as a listing ([#109](https://github.com/joshstothard/3moji/issues/109)). The third is met only when the alias names a single Handle: with several candidates and none claimed there is no one Handle to offer a claim for, and ADR-0008 omits unclaimed Handles from listings. Left unticked and carried by [#121](https://github.com/joshstothard/3moji/issues/121), which needs a new ADR.
+- [ ] Dotted path segments survive the deployed environment, not only `next dev` — ADR-0008's evidence for this was measured locally only, and Vercel's CDN may treat a dotted segment as a static-file request. **Not verifiable yet**: there is no deployment. Carried by [#32](https://github.com/joshstothard/3moji/issues/32), blocked on [#19](https://github.com/joshstothard/3moji/issues/19).
 
 **Dependencies:** Phase 3. [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
 
-**Status:** In progress. Planned as epic [#101](https://github.com/joshstothard/3moji/issues/101).
+**Status:** Done — epic [#101](https://github.com/joshstothard/3moji/issues/101) and all eight issues closed. **Two acceptance criteria are carried forward rather than met**, and are left unticked above on purpose: the several-candidates, none-claimed alias case ([#121](https://github.com/joshstothard/3moji/issues/121), needs an ADR) and dotted segments on the deployed site ([#32](https://github.com/joshstothard/3moji/issues/32), needs a deployment).
 
-**The storage layer is built** — [#102](https://github.com/joshstothard/3moji/issues/102): the `profile` and `link` tables, their migration, and the read port that resolves a canonical `HandleKey` to a Profile. A Profile is keyed on the Account, so Release takes it and its Links with it; Links carry an explicit order, and "at most ten" is enforced by the schema rather than by the write path. "Claimed but unedited" is a named state rather than an empty object. See [`data-model.md` § Profile](../architecture/data-model.md#profile). The field limits themselves are [#103](https://github.com/joshstothard/3moji/issues/103)'s and the write path is [#106](https://github.com/joshstothard/3moji/issues/106)'s; there is no page yet.
+**The storage layer is built** — [#102](https://github.com/joshstothard/3moji/issues/102): the `profile` and `link` tables, their migration, and the read port that resolves a canonical `HandleKey` to a Profile. A Profile is keyed on the Account, so Release takes it and its Links with it; Links carry an explicit order, and "at most ten" is enforced by the schema rather than by the write path. "Claimed but unedited" is a named state rather than an empty object. See [`data-model.md` § Profile](../architecture/data-model.md#profile). The field limits themselves are [#103](https://github.com/joshstothard/3moji/issues/103)'s and the write path is [#106](https://github.com/joshstothard/3moji/issues/106)'s.
 
 **Issues:**
 
@@ -195,9 +195,9 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - #104 Render the Profile at a claimed Handle — done
 - #105 Render the builder pre-filled at an unclaimed Handle — done
 - #106 Edit the Profile in place — done
-- #107 Reorder Links by dragging, and by keyboard
-- #108 Resolve a dot-separated word alias to a Handle
-- #109 Render the listing when an alias matches several Handles
+- #107 Reorder Links by dragging, and by keyboard — done
+- #108 Resolve a dot-separated word alias to a Handle — done
+- #109 Render the listing when an alias matches several Handles — done
 
 ### Phase 5 — Launch readiness
 
@@ -335,3 +335,11 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
   stays blocked behind #108. #106 was left open by the auto-merge squash bug (#42) and closed by
   hand. New: #119 — a fresh worktree has no git hooks until `npm install`, and git does not say
   so, which on a public repo means secretlint can be silently absent.
+- 2026-09-13 — Synced from GitHub: **Phase 4 Done** (epic #101 closed; #107, #108, #109 merged as
+  PRs #123, #117, #128). Five of seven acceptance criteria ticked, each against its evidence rather
+  than its issue's state; two carried forward unticked — the several-candidates, none-claimed alias
+  case (#121, needs an ADR) and dotted segments on the deployed site (#32, needs #19). Along the
+  way: formatting had no server-side gate and `main` went red (#122); a worktree can have no git
+  hooks silently (#119, with the provisioning decision split to #126); and the auto-merge gate read
+  a run GitHub refused to start as a failure (#125, fixed by #127 and proven live on #128). #58 —
+  the gate is not re-triggered after it updates a branch — is still open and reproduced on #128.
