@@ -67,7 +67,10 @@ export type ClaimSubmission =
 export interface SubmitClaimInput extends ClaimHandleInput {
   /** Reads the existing owner's Handle, for the collision email. */
   readonly directory: AccountDirectory;
-  /** Sends that email. Not the deferring sender: the transaction is over. */
+  /**
+   * Sends that email, after the answer (#216). Not the transaction's deferring
+   * sender: the transaction is over.
+   */
   readonly emailSender: EmailSender;
   /** Where the collision email points: the reset **form**. */
   readonly resetRequestUrl: string;
@@ -98,8 +101,10 @@ export interface SubmitClaimInput extends ClaimHandleInput {
  *    screen. The transport has nothing to decide.
  * 2. **The time it takes does not vary either.** A body that says nothing while
  *    the response time says everything is not a promise kept. A fresh Claim
- *    hashes a password, inserts two rows and sends mail; a collision does one
- *    `SELECT` and rolls back, which is *much* faster. So the fast branch is
+ *    hashes a password and inserts two rows; a collision does one `SELECT` and
+ *    rolls back, which is *much* faster. Neither sends mail inside the floor:
+ *    both emails go out after the answer (#216), so a slow or failing
+ *    provider cannot tell them apart either. So the fast branch is
  *    held back to {@link ../auth/response-floor.RESPONSE_FLOOR_MS}, the figure
  *    Better Auth uses on its own unauthenticated email endpoints.
  *

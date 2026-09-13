@@ -1,3 +1,5 @@
+import { createHeldBackgroundTasks } from "./adapters/held-background-tasks";
+import type { EmailSender, OutboundEmail } from "./auth/ports/email-sender";
 import { createRecordingEmailSender } from "./auth/adapters/recording-email-sender";
 import { createCoreServices } from "./composition-root";
 import { createDatabase } from "./db/client";
@@ -13,6 +15,7 @@ const build = (clock: Clock) => {
   const services = createCoreServices({
     clock,
     db: handle.db,
+    backgroundTasks: createHeldBackgroundTasks(),
     auth: {
       emailSender: createRecordingEmailSender(),
       baseUrl: "http://localhost:3000",
@@ -169,6 +172,7 @@ describe("createCoreServices", () => {
     const services = createCoreServices({
       clock: fixedClock("2026-09-12T10:00:00.000Z"),
       db: handle.db,
+      backgroundTasks: createHeldBackgroundTasks(),
       auth: {
         emailSender: createRecordingEmailSender(),
         baseUrl: "http://localhost:3000",
@@ -180,5 +184,108 @@ describe("createCoreServices", () => {
 
     expect(services.auth.options.plugins).toContainEqual(marker);
     await handle.close();
+  });
+});
+
+/**
+ * **Every email the services send goes out after the answer**
+ * ([#216](https://github.com/joshstothard/3moji/issues/216)). The provider
+ * here never answers, or fails; what is asserted is that the caller is not
+ * made to wait for it, and that a failure is reported under the event naming
+ * which email it was. The verification hook needs a dispatch store that can
+ * write, so its half is proved in `create-auth.test.ts`; the Claim's
+ * post-commit flush needs a transaction, so its half is proved against
+ * Postgres in `claim.integration.test.ts`.
+ */
+describe("createCoreServices sends email after the answer (#216)", () => {
+  const STILL_WAITING = "still waiting on the provider";
+  const EMAIL: OutboundEmail = {
+    to: "owner@example.com",
+    subject: "Someone tried to sign up with your 3moji email",
+    text: "Somebody just tried to claim a 3moji handle using this email address.",
+  };
+  const USER = {
+    id: "user-1",
+    name: "",
+    email: "owner@example.com",
+    emailVerified: true,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  };
+
+  /** Whether `promise` settles before a macrotask runs, before any I/O could. */
+  const answeredOrWaiting = (promise: Promise<void>): Promise<string> =>
+    Promise.race([
+      promise.then(() => "answered"),
+      new Promise<string>((resolve) => {
+        setImmediate(() => {
+          resolve(STILL_WAITING);
+        });
+      }),
+    ]);
+
+  const neverAnswers: EmailSender = {
+    send: () => new Promise<void>(() => undefined),
+  };
+  const failing: EmailSender = {
+    send: () => Promise.reject(new Error("the provider is unavailable")),
+  };
+
+  const wired = (provider: EmailSender) => {
+    const tasks = createHeldBackgroundTasks();
+    const handle = createDatabase({
+      url: "postgresql://app:app@localhost:5432/app_test",
+      nodeEnv: "test",
+    });
+    const services = createCoreServices({
+      clock: fixedClock("2026-09-12T10:00:00.000Z"),
+      db: handle.db,
+      backgroundTasks: tasks,
+      auth: {
+        emailSender: provider,
+        baseUrl: "http://localhost:3000",
+        secret: "a".repeat(32),
+        from: "3moji <no-reply@mail.3moji.me>",
+      },
+    });
+    const resetEmail = () =>
+      services.auth.options.emailAndPassword.sendResetPassword({
+        user: USER,
+        url: "http://localhost:3000/api/auth/reset-password/token",
+        token: "token",
+      });
+    return { services, tasks, resetEmail, close: handle.close };
+  };
+
+  it("hands out a sender for the claim-collision notice that does not wait on the provider", async () => {
+    const { services, tasks, close } = wired(neverAnswers);
+
+    expect(await answeredOrWaiting(services.emailSender.send(EMAIL))).toBe(
+      "answered",
+    );
+    expect(tasks.pending()).toBe(1);
+    await close();
+  });
+
+  it("wires Better Auth's reset email so it does not wait on the provider either", async () => {
+    const { tasks, resetEmail, close } = wired(neverAnswers);
+
+    expect(await answeredOrWaiting(resetEmail())).toBe("answered");
+    expect(tasks.pending()).toBe(1);
+    await close();
+  });
+
+  it("reports a failed send under the event that names which email it was", async () => {
+    const { services, tasks, resetEmail, close } = wired(failing);
+
+    await services.emailSender.send(EMAIL);
+    await resetEmail();
+    await tasks.release();
+
+    expect(tasks.failures.map((failure) => failure.event)).toEqual([
+      "claim_collision_email_failed",
+      "auth_email_send_failed",
+    ]);
+    await close();
   });
 });

@@ -1,3 +1,4 @@
+import { createHeldBackgroundTasks } from "./held-background-tasks";
 import { createInMemoryVerificationDispatchStore } from "./in-memory-verification-dispatch-store";
 import type { AuthFactory } from "../auth/auth-factory";
 import { createRecordingEmailSender } from "../auth/adapters/recording-email-sender";
@@ -57,6 +58,7 @@ const build = () => {
       db: handle.db,
       auth: authFactory,
       emailSender: createRecordingEmailSender(),
+      tasks: createHeldBackgroundTasks(),
     }),
     tx: finaliserTransactionOn(
       handle.db,

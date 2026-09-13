@@ -2,6 +2,7 @@ import { and, eq, isNull, lte } from "drizzle-orm";
 
 import type { Auth, AuthFactory } from "../auth/auth-factory";
 import type { EmailSender } from "../auth/ports/email-sender";
+import type { BackgroundTasks } from "../ports/background-tasks";
 import type { Database, DatabaseOrTransaction } from "../db/client";
 import { handle } from "../db/handle";
 import type { HandleKey } from "../db/handle-key";
@@ -27,6 +28,8 @@ export interface DrizzleClaimStoreInput {
   readonly auth: AuthFactory;
   /** The real sender. Wrapped per transaction, never called during one. */
   readonly emailSender: EmailSender;
+  /** Where the post-commit flush runs: after the answer, not inside it (#216). */
+  readonly tasks: BackgroundTasks;
 }
 
 /** Better Auth's own default, and the shortest password it will accept. */
