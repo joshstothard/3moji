@@ -72,6 +72,8 @@ export const BOUNDARIES = [
   "sign-in.form",
   "profile.save",
   "verification.resend",
+  "og-image.generic",
+  "og-image.handle",
 ] as const;
 export type Boundary = (typeof BOUNDARIES)[number];
 

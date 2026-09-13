@@ -67,3 +67,12 @@ export type {
  * array, importing nothing.
  */
 export { moveLink } from "./profile/reorder-links";
+
+/**
+ * The display name limit, for the one server-rendered surface that draws a
+ * display name outside the page: the Profile's Open Graph image and metadata
+ * ([#161](https://github.com/joshstothard/3moji/issues/161)) bound what they
+ * draw by the same number the write enforces. A constant from a module that
+ * imports nothing.
+ */
+export { DISPLAY_NAME_MAX_LENGTH } from "./profile/validate-profile";
