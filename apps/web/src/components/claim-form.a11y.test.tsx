@@ -37,7 +37,13 @@ describe("the claim form, checked by axe", () => {
     expect(report.violations).toEqual([]);
     expect(report.incomplete).toEqual([]);
     expect(report.passed).toEqual(
-      expect.arrayContaining(["label", "button-name", "autocomplete-valid"]),
+      expect.arrayContaining([
+        "label",
+        "button-name",
+        "autocomplete-valid",
+        // The privacy and terms links beside the email field (#198).
+        "link-name",
+      ]),
     );
   });
 

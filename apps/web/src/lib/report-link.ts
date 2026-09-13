@@ -72,3 +72,26 @@ export function reportLinkOf(encoded: string): string | undefined {
   );
   return `mailto:${address}?subject=${encodeURIComponent(subject)}`;
 }
+
+/**
+ * The footer's report link, on every page
+ * ([#198](https://github.com/joshstothard/3moji/issues/198)), or `undefined`
+ * when no address is configured.
+ *
+ * **Same mailbox, same check.** The address comes from
+ * {@link reportContactAddress}, so a value that would be refused on a Profile is
+ * refused here too, and there is one place that decides what an address is.
+ *
+ * **It names no page**, because the footer is rendered by the root layout and
+ * knowing the page would mean reading the request, which would make every page
+ * vary by request. The body asks the reporter for the address instead. Both
+ * are fixed copy, and both go through `encodeURIComponent`.
+ */
+export function siteReportLink(): string | undefined {
+  const address = reportContactAddress();
+  if (address === undefined) return undefined;
+
+  const subject = encodeURIComponent(en.Footer.reportSubject);
+  const body = encodeURIComponent(en.Footer.reportBody);
+  return `mailto:${address}?subject=${subject}&body=${body}`;
+}

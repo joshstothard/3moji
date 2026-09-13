@@ -249,6 +249,69 @@ test("the static guard: this spec calls no pointer API", () => {
   }
 });
 
+test("a visitor reaches the privacy notice and the terms from the footer by keyboard alone (#198)", async ({
+  page,
+}) => {
+  await page.addInitScript((events: readonly string[]) => {
+    window.keyboardOnlyPointerEvents = [];
+    const record = (event: Event) => {
+      window.keyboardOnlyPointerEvents?.push(event.type);
+    };
+    for (const type of events) {
+      window.addEventListener(type, record, { capture: true });
+    }
+    window.addEventListener(
+      "click",
+      (event) => {
+        if (event.detail > 0) record(event);
+      },
+      { capture: true },
+    );
+  }, POINTER_EVENTS);
+
+  const footerCopy = en.Footer;
+  const legalNav = () =>
+    page
+      .getByRole("contentinfo")
+      .getByRole("navigation", { name: footerCopy.legalNavLabel });
+
+  // From the terms page, whose content is short of controls, down to the
+  // footer's privacy link: every stop on the way must show focus.
+  await page.goto("/terms");
+  await moveFocusTo(
+    page,
+    legalNav().getByRole("link", { name: footerCopy.privacy }),
+    "Tab",
+  );
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { level: 1, name: en.Legal.Privacy.heading }),
+  ).toBeVisible();
+
+  // Onwards through the report entry and the licence credit, then back up to
+  // the terms link, so every footer link is shown to take focus visibly.
+  await moveFocusTo(
+    page,
+    page
+      .getByRole("contentinfo")
+      .getByRole("link", { name: footerCopy.emojiCreditLicence }),
+    "Tab",
+  );
+  await moveFocusTo(
+    page,
+    legalNav().getByRole("link", { name: footerCopy.terms }),
+    "Shift+Tab",
+  );
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { level: 1, name: en.Legal.Terms.heading }),
+  ).toBeVisible();
+
+  expect(
+    await page.evaluate(() => window.keyboardOnlyPointerEvents ?? null),
+  ).toEqual([]);
+});
+
 test("a visitor looks up a Handle by keyboard alone (#200)", async ({
   page,
 }) => {

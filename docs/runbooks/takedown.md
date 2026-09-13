@@ -23,6 +23,8 @@ Report a 3moji page: /%F0%9F%A7%8A%F0%9F%A7%8A%F0%9F%A7%8A
 
 The path is the Handle's **canonical emoji path**, percent-encoded, whichever address the reporter was looking at — the word alias and the emoji URL of one Handle produce the same subject. The reporter can edit it, so treat it as a claim to check, not a fact.
 
+The footer on every page also carries **Report a page**, to the same mailbox ([#198](https://github.com/joshstothard/3moji/issues/198)). It cannot know the page, so its subject is only `Report a 3moji page` and the body asks for the page's web address. A report with that subject and no address in it has to be answered with a request for one.
+
 - **No link on the page?** `REPORT_CONTACT_EMAIL` is unset or refused. It must be one plain address with nothing else in it — no display name, no second address, no spaces or line breaks (`apps/web/.env.example`). Choosing the mailbox is an owner action (`docs/owner-actions.md`).
 - **Reports by other routes** (a direct email, a message to the owner, a note from a registrar or a blocklist) go through the same steps.
 - **Target:** acknowledge within 2 working days, and act on anything in the "act now" row of the triage table the same day it is read. These are starting values for the owner to confirm, not a commitment that has been published anywhere.
