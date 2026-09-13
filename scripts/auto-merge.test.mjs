@@ -353,9 +353,19 @@ describe("evaluate: Dependabot pull requests", () => {
 // GitHub lists workflow runs newest first and honours `per_page`. `runs` is
 // given in that listed order, so slicing it reproduces exactly what `per_page=1`
 // returned on #117: the blocked run, alone.
+//
+// A run's jobs are read from `actions/runs/<id>/jobs`, whose `total_count` is
+// the number of jobs the run has. A run whose `jobsError` is set makes that read
+// throw, as a failed `gh api` call does.
 function fakeRunsApi(runs, calls = []) {
   return (path) => {
     calls.push(path);
+    const jobs = path.match(/actions\/runs\/(\d+)\/jobs/);
+    if (jobs) {
+      const run = runs.find((candidate) => candidate.id === Number(jobs[1]));
+      if (run?.jobsError) throw new Error(run.jobsError);
+      return { total_count: run?.jobCount ?? 0, jobs: [] };
+    }
     const perPage = Number(path.match(/[?&]per_page=(\d+)/)?.[1] ?? 30);
     return { workflow_runs: runs.slice(0, perPage) };
   };
@@ -368,6 +378,7 @@ const ciRun = (overrides) => ({
   head_sha: "head-sha",
   created_at: "2026-09-13T06:09:58Z",
   event: "workflow_dispatch",
+  jobCount: 15,
   ...overrides,
 });
 
@@ -377,6 +388,7 @@ const blockedRun = (overrides) =>
     id: 34742068666,
     conclusion: "action_required",
     event: "pull_request",
+    jobCount: 0,
     ...overrides,
   });
 
@@ -472,6 +484,105 @@ describe("latestCiRun", () => {
   });
 });
 
+// #145: GitHub does not keep the `action_required` label. The run it refused to
+// start is later finalised as `conclusion: failure`, still with zero jobs.
+// Measured on 2026-09-13:
+//
+//   34745540993 | pull_request | PR #128 | action_required, later failure       | 0 jobs
+//   34755777779 | pull_request | PR #142 | failure, updated_at = the merge moment | 0 jobs
+//
+// Both check suites read `latest_check_runs_count: 0`. So a conclusion is not
+// evidence that a run started: only its jobs are.
+const relabelledRun = (overrides) =>
+  blockedRun({ id: 34755777779, conclusion: "failure", ...overrides });
+
+const jobsCalls = (calls) => calls.filter((path) => path.includes("/jobs"));
+
+describe("latestCiRun: a refused run relabelled failure (#145)", () => {
+  it("reads the older dispatched run, not ci-failed, when a jobless failure is newest at the head", () => {
+    const warnings = [];
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([
+        relabelledRun({ created_at: "2026-09-13T11:57:29Z" }),
+        dispatchedRun({ id: 34755778296, created_at: "2026-09-13T11:57:28Z" }),
+      ]),
+      (line) => warnings.push(line),
+    );
+    assert.deepEqual(evaluate(ownerPr(), ci), MERGE);
+    assert.deepEqual(warnings, []);
+  });
+
+  it("reports ci-not-started when a jobless failure is the only run at the head", () => {
+    const ci = latestCiRun("o/r", "head-sha", fakeRunsApi([relabelledRun()]));
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-not-started"));
+  });
+
+  for (const conclusion of ["failure", "cancelled", "timed_out"]) {
+    it(`still reports a run that started and concluded ${conclusion} as ci-failed`, () => {
+      const calls = [];
+      const ci = latestCiRun(
+        "o/r",
+        "head-sha",
+        fakeRunsApi(
+          [
+            ciRun({ id: 7, event: "pull_request", conclusion, jobCount: 3 }),
+            dispatchedRun({ id: 6, created_at: "2026-09-13T06:00:00Z" }),
+          ],
+          calls,
+        ),
+      );
+      assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-failed"));
+      assert.deepEqual(jobsCalls(calls), [
+        "repos/o/r/actions/runs/7/jobs?per_page=1",
+      ]);
+    });
+  }
+
+  it("fails closed, never merging on an older green run, when a failed run's jobs cannot be read", () => {
+    const warnings = [];
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([
+        relabelledRun({
+          created_at: "2026-09-13T11:57:29Z",
+          jobsError: "HTTP 502: Bad Gateway",
+        }),
+        dispatchedRun({ id: 34755778296, created_at: "2026-09-13T11:57:28Z" }),
+      ]),
+      (line) => warnings.push(line),
+    );
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-failed"));
+    assert.equal(warnings.length, 1, JSON.stringify(warnings));
+    assert.match(warnings[0], /34755777779/);
+    assert.match(warnings[0], /HTTP 502: Bad Gateway/);
+  });
+
+  it("reads no jobs for a green, running or action_required run", () => {
+    for (const runs of [
+      [dispatchedRun()],
+      [dispatchedRun({ status: "in_progress", conclusion: null, jobCount: 0 })],
+      [blockedRun(), dispatchedRun()],
+      [blockedRun()],
+    ]) {
+      const calls = [];
+      latestCiRun("o/r", "head-sha", fakeRunsApi(runs, calls));
+      assert.deepEqual(jobsCalls(calls), [], JSON.stringify(runs));
+    }
+  });
+
+  it("still reports ci-running for a run that has not created its jobs yet", () => {
+    const ci = latestCiRun(
+      "o/r",
+      "head-sha",
+      fakeRunsApi([ciRun({ status: "queued", conclusion: null, jobCount: 0 })]),
+    );
+    assert.deepEqual(evaluate(ownerPr(), ci), skip("ci-running"));
+  });
+});
+
 // #58: after auto-merge updates a branch from main and dispatches CI, the
 // dispatched run's completion raises no `workflow_run` — it was started by
 // GITHUB_TOKEN, and GitHub suppresses the downstream event. Measured on #128: the
@@ -496,6 +607,7 @@ function fakeGitHub({
   mainMovesDuringWaits = 0,
   budgetMinutes = 20,
   extraRunsAtUpdatedHead = () => [],
+  blockedConclusion = "action_required",
   closingIssues = [],
   closeFails = false,
   mergeSucceeds = true,
@@ -526,7 +638,11 @@ function fakeGitHub({
       behindBy: clock >= mainMovesAt ? 1 : pr.behindBy,
     }),
     listCiRuns: (sha) => (runs.get(sha) ?? []).map(asListed),
-    latestCiRun: (sha) => selectCiRun(deps.listCiRuns(sha)),
+    latestCiRun: (sha) =>
+      selectCiRun(deps.listCiRuns(sha), {
+        jobCount: (run) => run.jobCount,
+        warn: (line) => warnings.push(line),
+      }),
     update: (current) => {
       updates += 1;
       const headSha = `updated-sha-${updates}`;
@@ -534,7 +650,12 @@ function fakeGitHub({
       const created_at = isoSeconds(clock);
       runs.set(headSha, [
         ...extraRunsAtUpdatedHead(headSha, clock),
-        blockedRun({ id: 1000 + updates * 2, head_sha: headSha, created_at }),
+        blockedRun({
+          id: 1000 + updates * 2,
+          head_sha: headSha,
+          created_at,
+          conclusion: blockedConclusion,
+        }),
         {
           ...dispatchedRun({
             id: 999 + updates * 2,
@@ -662,6 +783,16 @@ describe("gatePullRequest: after updating a branch (#58)", () => {
         }),
       ],
     });
+    const decision = gatePullRequest(12, github.deps);
+    assert.deepEqual(github.actions, [
+      "update stale-sha -> updated-sha-1",
+      "merge updated-sha-1 (squash)",
+    ]);
+    assert.deepEqual(decision, MERGE);
+  });
+
+  it("merges the updated head once GitHub has relabelled its refused run failure (#145)", () => {
+    const github = fakeGitHub({ blockedConclusion: "failure" });
     const decision = gatePullRequest(12, github.deps);
     assert.deepEqual(github.actions, [
       "update stale-sha -> updated-sha-1",

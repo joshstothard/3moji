@@ -181,24 +181,41 @@ function loadPullRequest(repo, number) {
 }
 
 // GitHub creates a workflow run for a commit authored by GITHUB_TOKEN and then
-// refuses to start it: the run has zero jobs and `action_required` in `status`,
-// `conclusion`, or both. It is the state a human resolves by approving the run,
-// and it is evidence of nothing — not of failure. Only `action_required` is
-// listed here because it is the state measured on #117 and #123; `cancelled` and
-// `timed_out` are real verdicts from jobs that did run, and stay failures.
-const isBlockedRun = (run) =>
+// refuses to start it. While it waits for a human to approve it, the run reads
+// `action_required` in `status`, `conclusion`, or both (#117, #123). **GitHub
+// does not keep that label**: the run is later finalised as `conclusion:
+// failure`, still with zero jobs (runs 34745540993 on #128 and 34755777779 on
+// #142, both measured on 2026-09-13; #145). A conclusion is therefore not
+// evidence that a run started. Its jobs are.
+const isAwaitingApproval = (run) =>
   run.status === "action_required" || run.conclusion === "action_required";
+
+// Whether a run's verdict depends on its jobs. Only a completed run that did not
+// succeed can be a refused run in disguise, so it is the only kind whose jobs
+// are read: a green head costs no call beyond the run list. A queued or
+// in-progress run can legitimately have no jobs yet, so it is never read, and
+// stays `ci-running`.
+const verdictNeedsJobs = (run) =>
+  run.status === "completed" && run.conclusion !== "success";
 
 // The CI run to judge a commit by, out of every run GitHub holds for it.
 //
 // After auto-merge updates a branch from main, two runs exist at the new head:
-// the blocked `pull_request` run above, and the `workflow_dispatch` run
+// the refused `pull_request` run above, and the `workflow_dispatch` run
 // `dispatchCi()` started, which does run. They share a `created_at`, so listed
 // order does not separate them and `per_page=1` could return either (#125).
 // Prefer a run that was allowed to start, newest first — `id` breaks the
 // created_at tie, since run ids increase. When nothing started, say so rather
-// than reporting the blocked run's conclusion as a verdict.
-export function selectCiRun(runs) {
+// than reporting the refused run's conclusion as a verdict.
+//
+// A run never started when it awaits approval, or when it completed without
+// success and has zero jobs, whatever its conclusion (#145). One that has jobs
+// and failed, was cancelled or timed out is a real verdict. `jobCount(run)`
+// returns the number of jobs a run has and may throw. If it does, the run is
+// treated as one that started, and warned about: its non-success conclusion then
+// becomes the verdict, so the gate skips with `ci-failed` rather than walking
+// past it to an older green run and merging on that.
+export function selectCiRun(runs, { jobCount, warn: warnOf }) {
   // An unparseable created_at gives NaN, which is falsy, so ordering falls back
   // to the id rather than leaving the comparator undefined.
   const newestFirst = [...runs].sort(
@@ -211,17 +228,49 @@ export function selectCiRun(runs) {
     headSha: run.head_sha,
     ...extra,
   });
-  const started = newestFirst.find((run) => !isBlockedRun(run));
+  const neverStarted = (run) => {
+    if (isAwaitingApproval(run)) return true;
+    if (!verdictNeedsJobs(run)) return false;
+    try {
+      return jobCount(run) === 0;
+    } catch (error) {
+      warnOf(
+        `CI run ${run.id} at ${run.head_sha} concluded ${run.conclusion}, but its jobs could not be read, so it is judged as a run that started: ${errorMessage(error)}`,
+      );
+      return false;
+    }
+  };
+  // find() stops at the first started run, so no older run's jobs are read.
+  const started = newestFirst.find((run) => !neverStarted(run));
   if (started) return shape(started);
   return newestFirst.length > 0
     ? shape(newestFirst[0], { neverStarted: true })
     : null;
 }
 
-// The CI verdict for a commit, in the shape evaluate() consumes.
+// `gh api` that throws on failure instead of ending the process, so a failed
+// jobs read reaches selectCiRun()'s fail-closed path.
+function apiOrThrow(path) {
+  const result = gh(["api", path], { allowFailure: true });
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || `gh api ${path} failed`);
+  }
+  return JSON.parse(result.stdout);
+}
 
-export function latestCiRun(repo, sha, fetchJson = api) {
-  return selectCiRun(ciRuns(repo, sha, fetchJson));
+// The CI verdict for a commit, in the shape evaluate() consumes. One call for
+// the run list, plus one `jobs?per_page=1` call — whose `total_count` is the
+// job count — for each completed non-success run walked past before a started
+// run is found. The run list carries no job or check-run count of its own, and
+// the check suite's `latest_check_runs_count` would cost the same one call but
+// need `checks: read`, which auto-merge.yml does not grant.
+export function latestCiRun(repo, sha, fetchJson = apiOrThrow, warnOf = warn) {
+  return selectCiRun(ciRuns(repo, sha, fetchJson), {
+    jobCount: (run) =>
+      fetchJson(`repos/${repo}/actions/runs/${run.id}/jobs?per_page=1`)
+        .total_count,
+    warn: warnOf,
+  });
 }
 
 // Every CI run GitHub holds for a commit, as the raw API objects.
