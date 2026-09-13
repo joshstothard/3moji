@@ -4,6 +4,11 @@ import { submitClaim } from "@template/core";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import {
+  atBoundary,
+  type BoundaryOutcome,
+  type RecordOutcome,
+} from "../lib/boundary-log";
 import { clientAddressFrom } from "../lib/client-address";
 import { getServices } from "../lib/services";
 import { logFailure } from "../lib/log-error";
@@ -58,6 +63,45 @@ export type ClaimFormState =
  */
 export async function submitClaimAction(
   formData: FormData,
+): Promise<ClaimFormState> {
+  return atBoundary("claim.submit", (record) => claim(formData, record), {
+    outcomeOf: outcomeOfClaim,
+  });
+}
+
+/**
+ * The boundary outcome of an answer that returned to the form (#156).
+ *
+ * Every refusal of the input is one `rejected`, so the log cannot draw a
+ * distinction the form's copy does not. The accepted Claim never reaches here:
+ * it records `redirected` and redirects — **for a fresh Claim and a collision
+ * alike**, which is what keeps the boundary line as indistinguishable as the
+ * URL.
+ */
+function outcomeOfClaim(result: ClaimFormState): BoundaryOutcome {
+  switch (result.state) {
+    case "idle":
+      return "ok";
+    case "taken":
+    case "not-claimable":
+    case "not-a-handle":
+    case "invalid":
+      return "rejected";
+    case "rate-limited":
+      return "rate-limited";
+    case "failed":
+      return "failed";
+  }
+}
+
+/**
+ * The Claim itself, behind both exported actions. Unexported so that each
+ * HTTP call writes exactly one boundary line: `claimFormAction` calling
+ * `submitClaimAction` would write two.
+ */
+async function claim(
+  formData: FormData,
+  record: RecordOutcome,
 ): Promise<ClaimFormState> {
   const segment = formData.get("handle");
   const email = formData.get("email");
@@ -123,6 +167,7 @@ export async function submitClaimAction(
 
   // Outside the try: `redirect` works by throwing, and catching it here would
   // report a successful Claim as a failure.
+  record("redirected");
   redirect(destination);
 }
 
@@ -139,6 +184,7 @@ export async function claimFormAction(
   _previous: ClaimFormState,
   formData: FormData,
 ): Promise<ClaimFormState> {
-  const result = await submitClaimAction(formData);
-  return result;
+  return atBoundary("claim.form", (record) => claim(formData, record), {
+    outcomeOf: outcomeOfClaim,
+  });
 }

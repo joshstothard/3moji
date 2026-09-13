@@ -4,6 +4,11 @@ import { canonicalise, editProfile, type ProfileDraft } from "@template/core";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  atBoundary,
+  type BoundaryOutcome,
+  type RecordOutcome,
+} from "../lib/boundary-log";
 import { readEditAuthority } from "../lib/profile-edit";
 import { getServices } from "../lib/services";
 import { logFailure } from "../lib/log-error";
@@ -34,6 +39,32 @@ import type { ProfileEditFormState } from "./profile-edit-state";
 export async function saveProfileAction(
   _previous: ProfileEditFormState,
   formData: FormData,
+): Promise<ProfileEditFormState> {
+  return atBoundary("profile.save", (record) => saveProfile(formData, record), {
+    outcomeOf: outcomeOfSave,
+  });
+}
+
+/**
+ * The boundary outcome of an answer that returned to the form (#156): a
+ * refusal of who is asking or of what they posted is `rejected`, and a write
+ * that threw is `failed`. A saved Profile records `redirected`.
+ */
+function outcomeOfSave(result: ProfileEditFormState): BoundaryOutcome {
+  switch (result.state) {
+    case "idle":
+      return "ok";
+    case "invalid":
+    case "forbidden":
+      return "rejected";
+    case "failed":
+      return "failed";
+  }
+}
+
+async function saveProfile(
+  formData: FormData,
+  record: RecordOutcome,
 ): Promise<ProfileEditFormState> {
   // Parsed before anything is decided, so that **every** answer can carry it
   // back. A refusal is most often a session that expired mid-edit, and losing
@@ -89,6 +120,7 @@ export async function saveProfileAction(
   // Outside the try, for the reason `submitClaimAction` gives: `redirect` works
   // by throwing, and catching it here would report a saved Profile as a
   // failure.
+  record("redirected");
   redirect(`/${handle.encoded}`);
 }
 
