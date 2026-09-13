@@ -39,12 +39,24 @@ The home page's lookup ([#200](https://github.com/joshstothard/3moji/issues/200)
 
 **The footer** (`components/footer.tsx`, rendered by the root layout) carries the privacy and terms links, a **Report a page** entry, the Twemoji credit and the UI version ([#198](https://github.com/joshstothard/3moji/issues/198)). It is a server component that reads configuration and nothing else — no header, no cookie, no path — so it cannot make a page, the public Profile included, vary by viewer. The report entry is `siteReportLink()` in `lib/report-link.ts`: the same `reportContactAddress()` check as a Profile's report link, a fixed subject, and a body asking for the page's address, since the footer cannot name the page without reading the request. No usable address means no entry.
 
+### Site metadata files
+
+Three App Router metadata files ([#204](https://github.com/joshstothard/3moji/issues/204)). They are metadata routes, not route handlers, so they are not API boundaries and write no boundary line.
+
+- **`app/icon.svg`** is the favicon: the project's own mark (three white dots on `indigo-600`), not a Twemoji glyph. Next.js serves it at `/icon.svg` and puts the `<link rel="icon">` in every page's head.
+- **`app/robots.ts`** serves `/robots.txt`: every crawler may fetch every path, and `Sitemap:` names `{origin}/sitemap.xml`. Pages that must stay out of an index say so with their own `robots` metadata (`/find`, `/reset-password`); a `Disallow` would stop a crawler reading that `noindex`.
+- **`app/sitemap.ts`** serves `/sitemap.xml`, listing `/`, `/privacy` and `/terms` and **nothing else**. **No Profile is ever listed**: a sitemap of claimed Handles would publish every one of them. `/find` and `/reset-password` are left out because they are `noindex`.
+
+**All three take their origin from `siteOrigin()`** (`BETTER_AUTH_URL`), read when they render. The home page, `robots.txt` and `sitemap.xml` are all prerendered, so in a production build that is **at build time**: the build needs the deployment's `BETTER_AUTH_URL`. With no usable origin, `robots.txt` has no `Sitemap:` line and the sitemap is empty, rather than naming a guessed host.
+
+**The home page's link preview** is `app/page.tsx`'s `generateMetadata`: `metadataBase` from the same origin, plus `genericMetadataOf` from `lib/og/metadata.ts`, the generic card and the `/og-image` image that every non-Profile page gets (see [A Profile's Open Graph card](#a-profiles-open-graph-card)). With no origin, `metadataBase` and every absolute URL are omitted. **None of it is in the root layout**, whose metadata every page inherits, Profiles included; `layout.test.tsx` asserts the layout declares no card and no base, and `e2e/site-metadata.spec.ts` asserts a claimed Profile's page carries exactly one `og:title`, `og:image` and `og:url`, all its own.
+
 ### The proxy
 
 Every request passes through `apps/web/src/proxy.ts` (Next.js 16 renamed `middleware.ts` to `proxy.ts`) before it is routed. It does one thing: give the request a **correlation id** ([#155](https://github.com/joshstothard/3moji/issues/155)). The id is a well-formed `x-vercel-id` when Vercel sent one, otherwise a random UUID; it is set on the request the application sees and returned on the response as `x-correlation-id`.
 
 - **It changes no routing.** It always answers `NextResponse.next()`, so the Handle route 308, the alias grammar and `/api/auth` behave exactly as they did; `apps/web/e2e/handle-url.spec.ts` is the proof.
-- **Its matcher skips only Next.js static output and the metadata files** (`_next/static`, `_next/image`, `favicon.ico`, `sitemap.xml`, `robots.txt`). `/api` stays in, because the auth API is a boundary worth correlating, and nothing is excluded by a dot or an extension, because a word alias (`/ice-cube.ice-cube.ice-cube`) is a page and server actions POST to the page path. `proxy.test.ts` pins both lists.
+- **Its matcher skips only Next.js static output and the metadata files** (`_next/static`, `_next/image`, `favicon.ico`, `icon.svg`, `sitemap.xml`, `robots.txt`). `/api` stays in, because the auth API is a boundary worth correlating, and nothing is excluded by a dot or an extension, because a word alias (`/ice-cube.ice-cube.ice-cube`) is a page and server actions POST to the page path. `proxy.test.ts` pins both lists.
 - **A client cannot choose the id text.** An incoming value is accepted only if it is ASCII letters, digits, `:`, `-` or `_`, at most 128 characters (`lib/correlation-id.ts`); anything else is replaced and never echoed, and an incoming `x-correlation-id` is always overwritten. The rule bounds characters and length rather than a grammar, because Vercel does not document the format of `x-vercel-id`.
 - **Reading it.** A route handler or server action calls `readCorrelationId()` in `lib/request-context.ts`, which goes through `headers()`. `logFailure` is synchronous, so it uses `currentCorrelationId()`, which reads the same per-request store synchronously. That store is a Next.js internal, and a contract test fails the build if an upgrade moves it. Both re-apply the allow-list and return the literal `"none"` when there is no request.
 
