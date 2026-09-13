@@ -45,7 +45,12 @@
     "aliasSeveralHeading": "More than one Handle",
     "aliasSeveral": "Those words name more than one Handle, so there is no single page to show you.",
     "aliasListing": "Those words name more than one Handle. Here are the ones somebody has.",
-    "aliasListingLabel": "Matching Handles"
+    "aliasListingLabel": "Matching Handles",
+    "shareHeading": "Share this Handle",
+    "shareCopy": "Copy link",
+    "shareCopied": "Link copied.",
+    "shareManual": "Copying did not work, so the link is selected below. Copy it from there.",
+    "shareManualLabel": "Link to this Handle"
   },
   "Claim": {
     "spoken": "Say it: {spoken}",
