@@ -1,6 +1,7 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../db/client";
+import { withSafeDatabaseErrors } from "../db/database-error";
 import { verificationDispatch } from "../db/verification-dispatch";
 import type {
   VerificationDispatch,
@@ -31,63 +32,73 @@ export function createDrizzleVerificationDispatchStore(
   const { db } = input;
   const newId = input.newId ?? (() => crypto.randomUUID());
 
+  // Every statement here binds a user id or a token fingerprint, so each
+  // failure leaves the adapter without its parameters (#144).
   return {
     async record(dispatch: VerificationDispatch): Promise<void> {
-      await db.insert(verificationDispatch).values({
-        id: newId(),
-        userId: dispatch.userId,
-        tokenHash: dispatch.tokenHash,
-        // From the caller's Clock, never `defaultNow()`: the rate-limit window
-        // is a domain rule and a SQL default would put it where no test can
-        // move time.
-        sentAt: dispatch.sentAt,
-      });
+      await withSafeDatabaseErrors(() =>
+        db.insert(verificationDispatch).values({
+          id: newId(),
+          userId: dispatch.userId,
+          tokenHash: dispatch.tokenHash,
+          // From the caller's Clock, never `defaultNow()`: the rate-limit window
+          // is a domain rule and a SQL default would put it where no test can
+          // move time.
+          sentAt: dispatch.sentAt,
+        }),
+      );
     },
 
     async since(userId, since) {
-      return db
-        .select({
-          userId: verificationDispatch.userId,
-          tokenHash: verificationDispatch.tokenHash,
-          sentAt: verificationDispatch.sentAt,
-        })
-        .from(verificationDispatch)
-        .where(
-          and(
-            eq(verificationDispatch.userId, userId),
-            gte(verificationDispatch.sentAt, since),
-          ),
-        )
-        .orderBy(desc(verificationDispatch.sentAt));
+      return withSafeDatabaseErrors(() =>
+        db
+          .select({
+            userId: verificationDispatch.userId,
+            tokenHash: verificationDispatch.tokenHash,
+            sentAt: verificationDispatch.sentAt,
+          })
+          .from(verificationDispatch)
+          .where(
+            and(
+              eq(verificationDispatch.userId, userId),
+              gte(verificationDispatch.sentAt, since),
+            ),
+          )
+          .orderBy(desc(verificationDispatch.sentAt)),
+      );
     },
 
     async newestFor(userId) {
-      const rows = await db
-        .select({
-          userId: verificationDispatch.userId,
-          tokenHash: verificationDispatch.tokenHash,
-          sentAt: verificationDispatch.sentAt,
-        })
-        .from(verificationDispatch)
-        .where(eq(verificationDispatch.userId, userId))
-        .orderBy(desc(verificationDispatch.sentAt))
-        .limit(1);
+      const rows = await withSafeDatabaseErrors(() =>
+        db
+          .select({
+            userId: verificationDispatch.userId,
+            tokenHash: verificationDispatch.tokenHash,
+            sentAt: verificationDispatch.sentAt,
+          })
+          .from(verificationDispatch)
+          .where(eq(verificationDispatch.userId, userId))
+          .orderBy(desc(verificationDispatch.sentAt))
+          .limit(1),
+      );
       return rows[0];
     },
 
     async findByTokenHash(tokenHash) {
-      const rows = await db
-        .select({
-          userId: verificationDispatch.userId,
-          tokenHash: verificationDispatch.tokenHash,
-          sentAt: verificationDispatch.sentAt,
-        })
-        .from(verificationDispatch)
-        .where(eq(verificationDispatch.tokenHash, tokenHash))
-        // Newest first, because the fingerprint is deliberately not unique:
-        // two links signed for one address inside one second are identical.
-        .orderBy(desc(verificationDispatch.sentAt))
-        .limit(1);
+      const rows = await withSafeDatabaseErrors(() =>
+        db
+          .select({
+            userId: verificationDispatch.userId,
+            tokenHash: verificationDispatch.tokenHash,
+            sentAt: verificationDispatch.sentAt,
+          })
+          .from(verificationDispatch)
+          .where(eq(verificationDispatch.tokenHash, tokenHash))
+          // Newest first, because the fingerprint is deliberately not unique:
+          // two links signed for one address inside one second are identical.
+          .orderBy(desc(verificationDispatch.sentAt))
+          .limit(1),
+      );
       return rows[0];
     },
   };

@@ -16,6 +16,12 @@ export const UNIQUE_VIOLATION = "23505";
  * what CI reported the first time the integration suite ran against a real
  * Postgres.
  *
+ * An error that has left an adapter carries its code directly: it is
+ * {@link ./database-error.DatabaseQueryFailed}, which keeps the code this
+ * function would have found and drops the `cause` that carried the statement's
+ * parameters (#144). Inside an adapter — the unique-violation branches of the
+ * Claim — the original is still what is caught.
+ *
  * `catch` gives `unknown` and the package forbids casting it into shape, so the
  * narrowing is spelled out. Code rather than message, because only the code
  * distinguishes a rejected insert from a connection drop or a typo in the SQL.

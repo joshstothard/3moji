@@ -1,6 +1,7 @@
 import { asc, eq, inArray } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../db/client";
+import { withSafeDatabaseErrors } from "../db/database-error";
 import { handle } from "../db/handle";
 import type { HandleKey } from "../db/handle-key";
 import { link } from "../db/link";
@@ -45,28 +46,30 @@ export function createDrizzleProfileRepository(
 ): ProfileRepository {
   return {
     async profileOf(key: HandleKey): Promise<Profile | undefined> {
-      const rows = await db
-        .select({
-          displayName: profile.displayName,
-          bio: profile.bio,
-          updatedAt: profile.updatedAt,
-          link: {
-            id: link.id,
-            title: link.title,
-            url: link.url,
-            position: link.position,
-          },
-        })
-        .from(handle)
-        // `innerJoin`, so a claimed Handle whose owner has never edited
-        // anything yields no row at all and the caller gets `undefined` — the
-        // "claimed but unedited" signal, carried by the row's absence rather
-        // than by a Profile of nulls.
-        .innerJoin(profile, eq(profile.userId, handle.userId))
-        // `leftJoin`, so a Profile with no Links is still a Profile.
-        .leftJoin(link, eq(link.userId, profile.userId))
-        .where(eq(handle.key, key))
-        .orderBy(asc(link.position));
+      const rows = await withSafeDatabaseErrors(() =>
+        db
+          .select({
+            displayName: profile.displayName,
+            bio: profile.bio,
+            updatedAt: profile.updatedAt,
+            link: {
+              id: link.id,
+              title: link.title,
+              url: link.url,
+              position: link.position,
+            },
+          })
+          .from(handle)
+          // `innerJoin`, so a claimed Handle whose owner has never edited
+          // anything yields no row at all and the caller gets `undefined` — the
+          // "claimed but unedited" signal, carried by the row's absence rather
+          // than by a Profile of nulls.
+          .innerJoin(profile, eq(profile.userId, handle.userId))
+          // `leftJoin`, so a Profile with no Links is still a Profile.
+          .leftJoin(link, eq(link.userId, profile.userId))
+          .where(eq(handle.key, key))
+          .orderBy(asc(link.position)),
+      );
 
       return profileFromRows(rows);
     },
@@ -97,11 +100,13 @@ export function createDrizzleProfileRepository(
     ): Promise<ReadonlyMap<HandleKey, string>> {
       if (keys.length === 0) return new Map();
 
-      const rows = await db
-        .select({ key: handle.key, displayName: profile.displayName })
-        .from(handle)
-        .innerJoin(profile, eq(profile.userId, handle.userId))
-        .where(inArray(handle.key, [...keys]));
+      const rows = await withSafeDatabaseErrors(() =>
+        db
+          .select({ key: handle.key, displayName: profile.displayName })
+          .from(handle)
+          .innerJoin(profile, eq(profile.userId, handle.userId))
+          .where(inArray(handle.key, [...keys])),
+      );
 
       const names = new Map<HandleKey, string>();
       for (const row of rows) {

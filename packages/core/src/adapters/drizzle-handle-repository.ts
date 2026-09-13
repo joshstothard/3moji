@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../db/client";
+import { withSafeDatabaseErrors } from "../db/database-error";
 import { handle } from "../db/handle";
 import type { HandleKey } from "../db/handle-key";
 import { ownershipOf, type HandleOwnership } from "../handle/handle-ownership";
@@ -27,11 +28,13 @@ export function createDrizzleHandleRepository(
 ): HandleRepository {
   return {
     async availabilityOf(key: HandleKey, now: Date): Promise<HandleOwnership> {
-      const rows = await db
-        .select({ heldUntil: handle.heldUntil, claimedAt: handle.claimedAt })
-        .from(handle)
-        .where(eq(handle.key, key))
-        .limit(1);
+      const rows = await withSafeDatabaseErrors(() =>
+        db
+          .select({ heldUntil: handle.heldUntil, claimedAt: handle.claimedAt })
+          .from(handle)
+          .where(eq(handle.key, key))
+          .limit(1),
+      );
 
       return ownershipOf(rows[0], now);
     },

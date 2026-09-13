@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import type { Database, DatabaseOrTransaction } from "../db/client";
+import { toSafeDatabaseError } from "../db/database-error";
 import { link } from "../db/link";
 import { profile } from "../db/profile";
 import type { TransactionOutcome } from "../ports/claim-store";
@@ -58,7 +59,9 @@ export function createDrizzleProfileStore(
         });
       } catch (error) {
         if (!(error instanceof ProfileEditRolledBack)) {
-          throw error;
+          // Without the Profile's text, which drizzle repeats as the
+          // statement's parameters, and with the SQLSTATE kept (#144).
+          throw toSafeDatabaseError(error);
         }
       }
 
