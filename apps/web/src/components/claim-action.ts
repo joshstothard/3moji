@@ -1,8 +1,10 @@
 "use server";
 
 import { submitClaim } from "@template/core";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { clientAddressFrom } from "../lib/client-address";
 import { getServices } from "../lib/services";
 import { logFailure } from "../lib/log-error";
 
@@ -21,6 +23,11 @@ export type ClaimFormState =
   | { readonly state: "not-claimable" }
   | { readonly state: "not-a-handle" }
   | { readonly state: "invalid" }
+  /**
+   * Too many submissions from this client address or naming this email
+   * address (#157) — deliberately without saying which, or for how long.
+   */
+  | { readonly state: "rate-limited" }
   | { readonly state: "failed" };
 
 /**
@@ -34,6 +41,12 @@ export type ClaimFormState =
  * **It cannot tell the difference either, and that is the design.**
  * `submitClaim` answers `pending` for both, so this action has one branch where
  * a less careful transport would have two. Both end at the same URL.
+ *
+ * **It supplies the client address and nothing else about the limit** (#157).
+ * The address comes from the forwarded headers (see `lib/client-address.ts` for
+ * exactly what that trusts); the rule, the counters and the secret the buckets
+ * are hashed under all live in `packages/core`. A limiter that cannot count
+ * throws, and the catch below refuses the Claim and logs it: it fails closed.
  *
  * Every field is read as `unknown`: a server action is a public HTTP endpoint,
  * and whatever a client posts arrives here.
@@ -63,8 +76,15 @@ export async function submitClaimAction(
   let destination: string;
 
   try {
-    const { claims, accounts, clock, resetRequestUrl, emailFrom, emailSender } =
-      getServices();
+    const {
+      claims,
+      accounts,
+      clock,
+      resetRequestUrl,
+      emailFrom,
+      emailSender,
+      claimRateLimiter,
+    } = getServices();
 
     const result = await submitClaim({
       segment,
@@ -76,6 +96,8 @@ export async function submitClaimAction(
       emailSender,
       resetRequestUrl,
       from: emailFrom,
+      rateLimiter: claimRateLimiter,
+      clientAddress: clientAddressFrom(await headers()),
     });
 
     switch (result.state) {
@@ -91,6 +113,8 @@ export async function submitClaimAction(
         return { state: "not-claimable" };
       case "not-a-handle":
         return { state: "not-a-handle" };
+      case "rate-limited":
+        return { state: "rate-limited" };
     }
   } catch (error) {
     logFailure("claim_submit_failed", error);

@@ -22,9 +22,11 @@ export interface ClaimCollisionEmailInput {
  * an attacker achieves is a nuisance message. #15 asks for "a reset link"; this
  * is the shape of it that cannot be turned into a weapon.
  *
- * The remaining gap is that nothing here limits how many of these one address
- * can receive. That is the workstream's Phase 5 item — rate limits on every
- * email-sending endpoint — and is deliberately not built in #82.
+ * How many of these one address can receive is bounded before this is ever
+ * reached: `submitClaim` refuses a submission past the per-email rate limit
+ * before the Claim opens, so a flood of Claims naming one inbox produces at
+ * most three notices an hour
+ * ([#157](https://github.com/joshstothard/3moji/issues/157)).
  *
  * **No token appears in the subject.** Nothing tokenised appears anywhere in
  * this message, but the rule the subject line obeys is the general one: subjects

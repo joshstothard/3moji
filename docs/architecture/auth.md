@@ -4,15 +4,16 @@
 
 ## Where each piece lives
 
-| Piece                               | Lives in                                                                   |
-| ----------------------------------- | -------------------------------------------------------------------------- |
-| The auth instance and its settings  | `packages/core/src/auth/create-auth.ts`                                    |
-| The email port and its two adapters | `packages/core/src/auth/ports/`, `packages/core/src/auth/adapters/`        |
-| The wiring                          | `apps/web/src/lib/services.ts`, the only module that reads the environment |
-| The HTTP surface                    | `apps/web/src/app/api/auth/[...all]/route.ts`                              |
-| The verification landing            | `apps/web/src/app/claim/verify/route.ts`                                   |
-| The hold screen and resend          | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`           |
-| Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app    |
+| Piece                               | Lives in                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------ |
+| The auth instance and its settings  | `packages/core/src/auth/create-auth.ts`                                              |
+| The email port and its two adapters | `packages/core/src/auth/ports/`, `packages/core/src/auth/adapters/`                  |
+| The wiring                          | `apps/web/src/lib/services.ts`, the only module that reads the environment           |
+| The HTTP surface                    | `apps/web/src/app/api/auth/[...all]/route.ts`                                        |
+| The verification landing            | `apps/web/src/app/claim/verify/route.ts`                                             |
+| The hold screen and resend          | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`                     |
+| The Claim's rate limit              | `packages/core/src/handle/claim-rate-limit.ts`, `apps/web/src/lib/client-address.ts` |
+| Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app              |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
 
@@ -122,9 +123,30 @@ It answers `undefined` rather than throwing when it cannot tell: the services ma
 
 ## Adjacent behaviour
 
-Duplicate sign-ups return a synthetic success, so the API never reveals whether an address is registered. Because every live Account owns exactly one Handle, a duplicate address can never claim a second one; the existing owner is told by email instead — naming the Handle they already own, and linking to the reset **form** rather than carrying a tokenised reset link, because sign-up is unauthenticated and a tokenised link there would let a stranger have live reset tokens mailed to somebody else's inbox. Nothing yet limits how many of those notices one address can receive; that is the workstream's Phase 5 item on rate-limiting every email-sending endpoint.
+Duplicate sign-ups return a synthetic success, so the API never reveals whether an address is registered. Because every live Account owns exactly one Handle, a duplicate address can never claim a second one; the existing owner is told by email instead — naming the Handle they already own, and linking to the reset **form** rather than carrying a tokenised reset link, because sign-up is unauthenticated and a tokenised link there would let a stranger have live reset tokens mailed to somebody else's inbox. How many of those notices one address can receive is bounded by the Claim's per-email rate limit (below), which refuses the submission before the Claim opens.
 
-Resend is rate limited per Account (above). The claim endpoint itself is not, and nor is the collision notice — both are Phase 5.
+Resend is rate limited per Account (above). Better Auth's own sign-in and email endpoints are not yet — that is [#158](https://github.com/joshstothard/3moji/issues/158).
+
+### The Claim's rate limit
+
+`submitClaim` asks `ClaimRateLimiter` (`packages/core/src/handle/claim-rate-limit.ts`) before anything else, and a submission over either limit gets `rate-limited` without the Claim's transaction ever opening — so it creates nothing and mails nobody, which is what bounds the collision notices one inbox can receive ([#157](https://github.com/joshstothard/3moji/issues/157)).
+
+| Limit              | Value                  |
+| ------------------ | ---------------------- |
+| Per email address  | 3 submissions an hour  |
+| Per client address | 10 submissions an hour |
+
+Both live in one constant, `CLAIM_RATE_LIMITS`, with an overridable parameter on the pure decision (`claimAdmission`). **Starting values to tune**, flagged for the repo owner on the pull request. Both windows are **fixed**, not rolling, so a bucket can make up to twice its limit across a window boundary: that is the price of an increment Postgres takes atomically in one statement.
+
+**Non-enumeration holds because the limit counts submissions, never Accounts.** Nothing in the limiter reads whether an address is registered, so a registered address is limited exactly as an unregistered one is. The answer carries no field saying which limit bound and no "try again in" — a client-address window and an email window would disagree about "when", and that is the signal — and it is padded to `RESPONSE_FLOOR_MS` like the answers about an address. Both counters are incremented on every submission, in one statement, so the two refusals also take the same time. `apps/web/src/components/claim-rate-limit.test.tsx` compares all of it, end to end.
+
+**Counters live in Postgres** (`claim_rate_limit`, see [data-model.md](data-model.md#claim-rate-limit)), keyed on a **keyed hash** rather than an address: `HMAC-SHA256` under a key derived from `BETTER_AUTH_SECRET` with a fixed label. The table alone does not reveal who tried to claim, and a guessed address cannot be confirmed without the secret, which a plain SHA-256 would allow. No new secret is required. The email address is normalised first (#163), so `Someone@Example.com` and `someone@example.com` share a counter.
+
+**It fails closed.** A store that cannot be read or written makes `admit` reject; the claim action's catch logs it through `logFailure` (`claim_submit_failed`) and answers `failed`. A Claim needs the database anyway.
+
+**The client address, and what it trusts.** `apps/web/src/lib/client-address.ts` reads `x-vercel-forwarded-for`, then `x-forwarded-for`, and takes the first entry. On Vercel both are set by Vercel's edge, which overwrites `X-Forwarded-For` and does not forward external IPs to prevent spoofing; `x-vercel-forwarded-for` cannot be overwritten by a proxy in front of Vercel. So the address is trusted **because the platform set it, and only on Vercel**. Anywhere else — `next dev`, a container, behind a proxy that passes the header through — a client can write it, and the per-client limit can be sidestepped or aimed at somebody else; the per-email limit does not depend on it. The domain validates the value (`clientAddressBucket`): IPv4 counts per address, IPv6 per `/64` (one subscriber is routinely given a whole `/64`), an IPv4-mapped IPv6 address as its IPv4 address, and anything missing or malformed in **one shared `unknown` bucket**. That costs something — everybody whose address cannot be read shares one limit — and is chosen over the alternative, in which omitting the header would bypass the limit.
+
+**A cost the requirement carries.** A per-email limit keyed on the _submitted_ address lets somebody spend a victim's three submissions and hold up that victim's own Claim for up to an hour.
 
 ## The tables, as they exist today
 

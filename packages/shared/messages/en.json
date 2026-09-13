@@ -91,7 +91,8 @@
     "claimNotClaimable": "This Handle cannot be claimed. Pick another one above.",
     "claimNotAHandle": "That is not a Handle. Pick three emoji above.",
     "claimInvalid": "Enter your email address and a password.",
-    "claimFailed": "We could not claim this Handle just now. Try again in a moment."
+    "claimFailed": "We could not claim this Handle just now. Try again in a moment.",
+    "claimRateLimited": "There have been too many attempts to claim a Handle just now. Wait a while, then try again."
   },
   "ProfileEdit": {
     "heading": "Edit your Profile",
