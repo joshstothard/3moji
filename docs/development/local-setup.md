@@ -102,7 +102,27 @@ If you do keep one, `.worktreeinclude` at the repo root copies it into new workt
 
 Note that `.claude/settings.json` hooks already resolve the repo root with
 `git rev-parse --show-toplevel`, which is worktree-correct, and `scripts/verify.sh` needs no
-credentials — so verification and the git hooks work in a worktree regardless.
+credentials — so verification works in a worktree regardless.
+
+### Git worktrees and the git hooks
+
+**The git hooks are a different matter, and a fresh worktree does not have them** ([#119](https://github.com/joshstothard/3moji/issues/119)).
+
+husky installs by running `git config core.hooksPath .husky/_` — a **relative** path — and `.husky/_` is generated, not tracked (it is gitignored; only `.husky/pre-commit` and `.husky/pre-push` are committed). A relative `core.hooksPath` resolves against each worktree's own root, so a worktree has no hooks at all until `npm install` has run **in that worktree**.
+
+Git does not tell you. A `core.hooksPath` that does not resolve is ignored **silently**: the commit succeeds with exit 0 and no warning, so nothing distinguishes "hooks ran and passed" from "there were no hooks". That window already cost a green `main` — PR #118 merged two unformatted files because its agent's hooks never ran.
+
+Two things follow.
+
+**Run `npm install` in every new worktree before you commit in it.** `npm run verify:hooks` (the first step of `scripts/verify.sh`, and also asserted by `npm run verify:agents`) fails loudly when the resolved hooks directory has no `pre-commit`, and its output names the fix.
+
+**Beware what `npm install` does to the shared config.** husky runs that `git config` with no `--worktree`, so it writes to the **shared** `.git/config` that every worktree reads. If the repository has been configured with an absolute `core.hooksPath` pointing at the main checkout's `.husky/_` — a setup that makes every worktree work immediately — then running `npm install` or `npm run prepare` from a worktree **replaces it with the relative path**, and every sibling worktree without its own `.husky/_` loses its hooks. Measured, not theorised. To give one worktree hooks without touching the others, set a worktree-local override instead (`extensions.worktreeConfig` is already on):
+
+```bash
+git config --worktree core.hooksPath /absolute/path/to/main/checkout/.husky/_
+```
+
+A local hook is not a substitute for a server-side gate in any case. Formatting is gated in CI; `secretlint` is not, which is why GitHub secret scanning with push protection is the real answer on a public repository.
 
 ## Coding Agent Setup
 
