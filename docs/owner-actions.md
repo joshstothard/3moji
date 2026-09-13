@@ -116,14 +116,13 @@ Items are grouped by when they have to happen:
     1. **Operator identity and contact:** the controller name and contact address that replace `Legal.operatorPlaceholder` and `Legal.contactPlaceholder`. The contact could be the `REPORT_CONTACT_EMAIL` mailbox.
     2. **Processor locations and transfers:** where Vercel, Neon and Resend process data, and the safeguards for any transfer outside the UK. Nothing in the repo establishes this.
     3. **Lawful basis for each purpose:** as drafted, contract for the account and Profile, and legitimate interests for sessions, counters and logs.
-    4. **Plaintext IP addresses in `auth_rate_limit`:** acceptable as stated, or hashed or truncated? Better Auth offers no hook, so changing it would be a follow-up issue.
-    5. **`verification_dispatch` retention:** kept for the life of the account. Should it be pruned?
-    6. **Log and backup retention:** how long Vercel logs and Neon backups keep data on your plans. The page says only "for a limited time".
-    7. **Cookies:** confirm that no analytics or other cookies are added before launch. Today there are only Better Auth's session cookies.
-    8. **Minimum age** for claiming a Handle (a placeholder in the terms).
-    9. **Governing law:** England and Wales, Scotland or Northern Ireland. Also the "last updated" dates.
-    10. **Limitation of liability wording**, ideally with legal advice.
-    11. **The "within one month" reply** to rights requests, the UK GDPR default: confirm you can meet it.
+    4. **`verification_dispatch` retention:** kept for the life of the account. Should it be pruned?
+    5. **Log and backup retention:** how long Vercel logs and Neon backups keep data on your plans. The page says only "for a limited time".
+    6. **Cookies:** confirm that no analytics or other cookies are added before launch. Today there are only Better Auth's session cookies.
+    7. **Minimum age** for claiming a Handle (a placeholder in the terms).
+    8. **Governing law:** England and Wales, Scotland or Northern Ireland. Also the "last updated" dates.
+    9. **Limitation of liability wording**, ideally with legal advice.
+    10. **The "within one month" reply** to rights requests, the UK GDPR default: confirm you can meet it.
   - **Why it matters:** the pages are an agent's plain-English draft, and nobody with legal training has reviewed them. The footer and claim form now link to them from every page ([#198](https://github.com/joshstothard/3moji/issues/198)).
   - **Options:** answer each yourself, or take the list to a legal review.
   - **Recommendation:** none recorded beyond the item above.
