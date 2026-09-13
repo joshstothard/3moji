@@ -5,6 +5,12 @@ set -euo pipefail
 # Run this before opening a PR. Adjust the script list to your project;
 # --if-present lets steps no-op until the matching npm script exists.
 
+# First, because it is the check that tells you whether the *other* local gates
+# ever ran. A checkout with no installed hooks commits with no prettier and no
+# secretlint, and git reports nothing (#119).
+echo "=== Git Hooks Installed ==="
+npm run verify:hooks
+
 echo "=== Format ==="
 npm run format:check
 
