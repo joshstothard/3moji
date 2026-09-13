@@ -15,6 +15,14 @@ import type { AxeResults, Result } from "axe-core";
  * target size, the document title, `lang` and `bypass` are evaluated here and
  * nowhere else.
  *
+ * **One narrowing, and only by name.** {@link checkPage} takes an optional
+ * `include` selector for an overlay that covers page content, such as the
+ * signed-in indicator's open list. With the overlay open, axe cannot measure
+ * the contrast of text underneath it and reports that text `incomplete`. The
+ * cause is the page underneath, not the overlay. So the page is checked whole
+ * with the overlay closed, and the open overlay is checked on its own. No rule
+ * is disabled either way, and `incomplete` still fails.
+ *
  * **What the WCAG tags do not include.** `landmark-one-main` and `region` are
  * tagged `best-practice` by axe, not WCAG, so they never load under the tags
  * below. `bypass` is the WCAG 2.4.1 rule for landmarks and skip links, and is
@@ -92,11 +100,26 @@ function findingsOf(results: readonly Result[]): readonly PageFinding[] {
  */
 export const LANDMARK_RULES = ["landmark-one-main", "region"] as const;
 
-/** Run axe over the whole rendered page, as it is now. */
-export async function checkPage(page: Page): Promise<PageReport> {
-  const results = await new AxeBuilder({ page })
-    .withTags([...WCAG_AA_TAGS])
-    .analyze();
+/** Narrows {@link checkPage} to part of the page. */
+export interface CheckPageOptions {
+  /**
+   * A CSS selector for the only part of the page to check, such as an open
+   * overlay. Leave it out to check the whole document.
+   */
+  readonly include?: string;
+}
+
+/**
+ * Run axe over the rendered page as it is now: the whole document, or only
+ * `options.include`.
+ */
+export async function checkPage(
+  page: Page,
+  options: CheckPageOptions = {},
+): Promise<PageReport> {
+  const builder = new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]);
+  if (options.include !== undefined) builder.include(options.include);
+  const results = await builder.analyze();
 
   return reportOf(results);
 }
