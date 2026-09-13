@@ -359,7 +359,7 @@ export function HandleBuilder({
                   clear(index);
                 }
               }}
-              className="w-20 h-20 text-4xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-disabled:border-dashed aria-disabled:hover:border-slate-200"
+              className="w-20 h-20 text-4xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-500 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-disabled:border-dashed aria-disabled:hover:border-slate-500"
             >
               <span aria-hidden="true">{emoji ?? ""}</span>
             </button>
@@ -415,7 +415,7 @@ export function HandleBuilder({
                   onClick={() => {
                     applySwap(suggestion);
                   }}
-                  className="px-3 h-12 text-2xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  className="px-3 h-12 text-2xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-500 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                 >
                   <span aria-hidden="true">{suggestion.handle.key}</span>
                 </button>
