@@ -220,10 +220,14 @@ export function selectCiRun(runs) {
 // The CI verdict for a commit, in the shape evaluate() consumes.
 
 export function latestCiRun(repo, sha, fetchJson = api) {
-  const { workflow_runs: runs } = fetchJson(
+  return selectCiRun(ciRuns(repo, sha, fetchJson));
+}
+
+// Every CI run GitHub holds for a commit, as the raw API objects.
+function ciRuns(repo, sha, fetchJson = api) {
+  return fetchJson(
     `repos/${repo}/actions/workflows/${CI_WORKFLOW}/runs?head_sha=${sha}&per_page=100`,
-  );
-  return selectCiRun(runs);
+  ).workflow_runs;
 }
 
 // A GITHUB_TOKEN merge or push starts no push/pull_request workflow, but a
@@ -233,7 +237,8 @@ export function latestCiRun(repo, sha, fetchJson = api) {
 // refuses to start, jobless and `action_required`, at the same `created_at` as
 // the dispatched one. selectCiRun() is what tells them apart. And the dispatched
 // run's completion does not trigger this workflow's `workflow_run` back, because
-// that event too was raised by GITHUB_TOKEN — #58 is the open issue for that.
+// that event too was raised by GITHUB_TOKEN (#58) — which is why gatePullRequest()
+// waits for it in the same run instead.
 function dispatchCi(repo, ref) {
   gh([
     "api",
@@ -319,35 +324,139 @@ function update(repo, pr) {
     { allowFailure: true },
   );
   if (result.status !== 0) {
-    return reportFailure(repo, pr, "update the branch of", result.stderr);
+    reportFailure(repo, pr, "update the branch of", result.stderr);
+    return null;
   }
   // update-branch is asynchronous: dispatch CI only once the new head exists.
   for (let attempt = 0; attempt < 10; attempt += 1) {
     sleep(3000);
-    if (api(`repos/${repo}/pulls/${pr.number}`).head.sha !== pr.headSha) {
+    const headSha = api(`repos/${repo}/pulls/${pr.number}`).head.sha;
+    if (headSha !== pr.headSha) {
+      const dispatchedAt = Date.now();
       dispatchCi(repo, pr.headRef);
       console.log(`#${pr.number}: updated from ${BASE_BRANCH}; CI dispatched`);
-      return true;
+      return { headSha, dispatchedAt };
     }
   }
-  return reportFailure(
+  reportFailure(
     repo,
     pr,
     "update the branch of",
     "GitHub accepted the update, but the head commit had not changed after 30 seconds.",
   );
+  return null;
 }
 
-function handle(repo, number) {
-  const pr = loadPullRequest(repo, number);
-  const ci = pr.state === "open" ? latestCiRun(repo, pr.headSha) : null;
-  const decision = evaluate(pr, ci);
-  console.log(
-    `#${number} ${pr.title}: ${decision.action} (${decision.reason})`,
+// How long one auto-merge run may spend waiting for CI it dispatched after
+// updating branches, across every PR it evaluates. CI took about five minutes on
+// every green run measured on 2026-09-13, so this covers a PR updated twice with
+// room to spare. The workflow's job `timeout-minutes` must stay above it.
+export const WAIT_BUDGET_MS = 20 * 60_000;
+export const CI_POLL_MS = 15_000;
+// The least budget worth starting an update with: about one CI run. With less,
+// the branch would be updated and then abandoned mid-wait, which is #58 again.
+export const MIN_WAIT_MS = 6 * 60_000;
+// Updates of one PR per run. A second covers main moving once during the wait;
+// after that the PR is left for a later run rather than chased indefinitely.
+export const MAX_UPDATES = 2;
+// `created_at` has one-second resolution and comes from GitHub's clock, not the
+// runner's.
+const DISPATCH_CLOCK_SKEW_MS = 30_000;
+
+// The CI runs dispatchCi() started after an update. The dispatch API returns no
+// run id, so they are recognised by what they must look like: a
+// `workflow_dispatch` run at the head the update created, created no earlier
+// than the dispatch. The head is a merge commit made seconds before, so no older
+// run can be at it; the time bound is a second guard, not the only one.
+export function dispatchedRuns(runs, { headSha, dispatchedAt }) {
+  const notBefore =
+    Math.floor(dispatchedAt / 1000) * 1000 - DISPATCH_CLOCK_SKEW_MS;
+  return runs.filter(
+    (run) =>
+      run.event === "workflow_dispatch" &&
+      run.head_sha === headSha &&
+      Date.parse(run.created_at) >= notBefore,
   );
-  if (process.env.AUTO_MERGE_DRY_RUN === "1") return;
-  if (decision.action === "merge") merge(repo, pr, decision.method);
-  if (decision.action === "update") update(repo, pr);
+}
+
+// Poll until the CI dispatched after an update has completed, or the run's wait
+// budget is spent. Completion only ends the wait; the verdict is still read by
+// latestCiRun() and evaluate() over every run at the head, so the #125 logic
+// and every other gate apply exactly as on any other run.
+function waitForDispatchedCi(updated, deps) {
+  const pollMs = deps.pollMs ?? CI_POLL_MS;
+  while (deps.now() < deps.deadline) {
+    deps.sleep(pollMs);
+    const mine = dispatchedRuns(deps.listCiRuns(updated.headSha), updated);
+    if (mine.length > 0 && mine.every((run) => run.status === "completed")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Evaluate one pull request and act on the decision. Every GitHub call comes in
+// through `deps`, so the whole path is unit-tested with a fake transport.
+//
+// A branch update is not the end of it (#58). The CI dispatched on the new head
+// is started by GITHUB_TOKEN, so its completion raises no `workflow_run` and
+// nothing would ever evaluate the PR again. So the gate waits for that run here
+// and evaluates the PR afresh: merge when it is green and still up to date,
+// update again (at most MAX_UPDATES times) when main moved meanwhile, and
+// otherwise skip with a reason. Nothing merges that evaluate() did not approve
+// on the head as it is at that moment.
+export function gatePullRequest(number, deps) {
+  const maxUpdates = deps.maxUpdates ?? MAX_UPDATES;
+  let updates = 0;
+  for (;;) {
+    const pr = deps.loadPullRequest(number);
+    const ci = pr.state === "open" ? deps.latestCiRun(pr.headSha) : null;
+    let decision = evaluate(pr, ci);
+    if (decision.action === "update" && !deps.dryRun) {
+      // Updating without waiting would recreate the stall this loop removes.
+      if (updates >= maxUpdates) {
+        decision = { action: "skip", reason: "behind-main-after-update" };
+      } else if (deps.deadline - deps.now() < MIN_WAIT_MS) {
+        decision = { action: "skip", reason: "wait-budget-spent" };
+      }
+    }
+    deps.log(`#${number} ${pr.title}: ${decision.action} (${decision.reason})`);
+    if (deps.dryRun) return decision;
+    if (decision.action === "merge") {
+      deps.merge(pr, decision.method);
+      return decision;
+    }
+    if (decision.action !== "update") return decision;
+    // A failed update has already been reported on the PR.
+    const updated = deps.update(pr);
+    if (!updated) return decision;
+    updates += 1;
+    if (!waitForDispatchedCi(updated, deps)) {
+      const timedOut = {
+        action: "skip",
+        reason: "ci-still-running-after-update",
+      };
+      deps.log(
+        `#${number} ${pr.title}: ${timedOut.action} (${timedOut.reason})`,
+      );
+      return timedOut;
+    }
+  }
+}
+
+function handle(repo, number, deadline) {
+  gatePullRequest(number, {
+    loadPullRequest: (n) => loadPullRequest(repo, n),
+    latestCiRun: (sha) => latestCiRun(repo, sha),
+    listCiRuns: (sha) => ciRuns(repo, sha),
+    merge: (pr, method) => merge(repo, pr, method),
+    update: (pr) => update(repo, pr),
+    sleep,
+    now: Date.now,
+    deadline,
+    log: (line) => console.log(line),
+    dryRun: process.env.AUTO_MERGE_DRY_RUN === "1",
+  });
 }
 
 const openPullNumbers = (repo) =>
@@ -371,9 +480,12 @@ const pullNumbersForSha = (repo, sha) =>
 
 function main() {
   const repo = currentRepo();
+  // One wait budget for the whole run, so several PRs updated in turn cannot
+  // outlast the job timeout and be killed between an update and its merge.
+  const deadline = Date.now() + WAIT_BUDGET_MS;
   const requested = process.env.AUTO_MERGE_PR?.trim();
   if (requested) {
-    handle(repo, toNumber(requested));
+    handle(repo, toNumber(requested), deadline);
     return;
   }
   // Runs share one concurrency group and GitHub keeps only the newest pending
@@ -387,7 +499,7 @@ function main() {
   );
   const targets = [...first, ...rest];
   if (targets.length === 0) console.log("No open pull request to evaluate.");
-  for (const number of targets) handle(repo, number);
+  for (const number of targets) handle(repo, number, deadline);
 }
 
 const isMain = (() => {
