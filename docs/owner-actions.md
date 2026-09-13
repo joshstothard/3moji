@@ -72,7 +72,7 @@ Items are grouped by when they have to happen:
   - **Options:** upgrade before the announcement, or stay on Hobby until something forces it.
   - **Recommendation:** upgrade with Resend Pro, before announcing. Pro is expected to add log drains and longer log retention, but **that needs confirming against Vercel's current docs**. It hasn't been verified here.
   - **Blocks:** error tracking (it uses Vercel's own logs, and waits on this), and any paid feature.
-  - **Detail:** [workstream](workstreams/3moji-mvp.md) Phase 7, deliverable 7; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 4.
+  - **Detail:** [workstream](workstreams/3moji-mvp.md) Phase 8, deliverable 4; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 4.
 
 - [ ] **Pick the mailbox abuse reports go to**
   - **What:** Every Profile will have a "report" link that opens an email to a contact address. The address is read from an environment variable, proposed as `REPORT_CONTACT_EMAIL`.
@@ -90,8 +90,8 @@ Items are grouped by when they have to happen:
     - A private GitHub repository.
     - GitHub Actions artifacts on this repo are **ruled out**: on a public repository anyone can download them.
   - **Recommendation:** an encrypted dump in a private Cloudflare R2 bucket.
-  - **Blocks:** Phase 7's backup job and its "restore from backup" runbook. The job itself also waits on [#32](https://github.com/joshstothard/3moji/issues/32).
-  - **Detail:** [workstream](workstreams/3moji-mvp.md) Open questions and Phase 7, deliverable 7; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 2 (restore window).
+  - **Blocks:** Phase 8's backup job and its "restore from backup" runbook. The job itself also waits on [#32](https://github.com/joshstothard/3moji/issues/32).
+  - **Detail:** [workstream](workstreams/3moji-mvp.md) Open questions and Phase 8, deliverable 4; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 2 (restore window).
 
 - [ ] **Review the privacy notice and terms, and confirm the legal checks**
   - **What:** In Phase 7 the agent drafts `/privacy` and `/terms` in plain English. You review them before announcing. You also check whether the ICO data protection fee applies to you, and confirm Phase 7's written assessment, citing Ofcom, of whether the Online Safety Act's user-to-user duties apply.
