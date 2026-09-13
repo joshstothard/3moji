@@ -1,15 +1,16 @@
 import path from "node:path";
 
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
 import { createDrizzleClaimRateLimitStore } from "../adapters/drizzle-claim-rate-limit-store";
 import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
-import { authSchema } from "../db/schema";
+import { authRateLimit, authSchema } from "../db/schema";
 import { createRecordingEmailSender } from "./adapters/recording-email-sender";
 import { AUTH_RATE_LIMITS, type AuthRateLimit } from "./auth-rate-limit";
+import { authRateLimitStoredKey } from "./auth-rate-limit-key";
 import { createAuth } from "./create-auth";
 import {
   RESEND_CLIENT_RATE_LIMIT,
@@ -67,9 +68,30 @@ const V4 = "198.51.100";
  * test run**. Better Auth's `getIP` answers `127.0.0.1` for such a request
  * when `NODE_ENV` is `test` or `development`, before its rate limiter's
  * production fallback — the shared `no-trusted-ip` key — is ever consulted.
- * No other integration suite sends sign-in over HTTP, so this key is ours.
+ * No other integration suite sends sign-in over HTTP, so this counter is ours.
  */
-const UNREADABLE_CLIENT_SIGN_IN_KEY = "127.0.0.1|/sign-in/email";
+const UNREADABLE_CLIENT = "127.0.0.1";
+
+/**
+ * The key a counter is stored under: Better Auth's `<address>|<path>`, hashed
+ * under a key derived from the auth secret (#214).
+ */
+const storedKey = (address: string, pathname: string): string =>
+  authRateLimitStoredKey(SECRET, `${address}|${pathname}`);
+
+/**
+ * Every path this suite sends to, as Better Auth's limiter names it: the
+ * pathname with `/api/auth` and any trailing slash removed, query dropped.
+ */
+const SUITE_PATHS = [
+  "/sign-in/email",
+  "/request-password-reset",
+  "/send-verification-email",
+  "/sign-up/email",
+  "/Sign-In/Email",
+  "//sign-in/email",
+  "/sign-in/%65mail",
+] as const;
 
 /**
  * Twenty minutes into an hour far enough in the future that no other run's
@@ -95,7 +117,7 @@ const SIGN_IN_WINDOW_START = new Date("2099-01-01T12:00:00.000Z");
  * the counters are rows rather than process memory, and that a refused
  * password-reset request says nothing about the address it named.
  *
- * These tests never drop anything; they delete exactly the keys they wrote.
+ * These tests never drop anything; they delete only keys they can write.
  */
 describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
   let pool: Pool;
@@ -103,12 +125,25 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
   let emailSender: ReturnType<typeof createRecordingEmailSender>;
   let auth: ReturnType<typeof createAuth>;
 
+  /**
+   * Keys are hashed (#214), so no prefix finds this suite's rows. Instead:
+   * every /64 of its IPv6 prefix and every host of its IPv4 range it could
+   * name, and the unreadable client, on every path it sends to.
+   */
   const forgetThisSuitesCounters = async (): Promise<void> => {
-    await db.execute(sql`
-      DELETE FROM auth_rate_limit
-      WHERE key LIKE ${"2001:0db8:0158:%"} OR key LIKE ${`${V4}.%`}
-         OR key = ${UNREADABLE_CLIENT_SIGN_IN_KEY}
-    `);
+    const addresses = [
+      ...Array.from({ length: 256 }, (_, subnet) => clientKey(subnet)),
+      ...Array.from({ length: 256 }, (_, host) => `${V4}.${String(host)}`),
+      UNREADABLE_CLIENT,
+    ];
+    await db.delete(authRateLimit).where(
+      inArray(
+        authRateLimit.key,
+        addresses.flatMap((address) =>
+          SUITE_PATHS.map((pathname) => storedKey(address, pathname)),
+        ),
+      ),
+    );
   };
 
   beforeAll(async () => {
@@ -231,7 +266,7 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
           refusedBody: await refused.json(),
           neighbourRefused: neighbour.status === 429,
           // A row, not process memory: on Vercel every instance has its own.
-          stored: await storedCount(`${clientKey(subnet)}|${pathname}`),
+          stored: await storedCount(storedKey(clientKey(subnet), pathname)),
         }).toEqual({
           admitted: limit.max,
           refused: 429,
@@ -262,7 +297,7 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
 
         expect({
           statuses: [...new Set(statuses)],
-          stored: await storedCount(`${clientKey(20)}|/sign-up/email`),
+          stored: await storedCount(storedKey(clientKey(20), "/sign-up/email")),
         }).toEqual({ statuses: [404], stored: undefined });
       },
       SLOW,
@@ -472,7 +507,9 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
           admitted: admitted.filter((status) => status !== 429).length,
           refused: refused.status,
           realClient: realClient.status,
-          shared: await storedCount(UNREADABLE_CLIENT_SIGN_IN_KEY),
+          shared: await storedCount(
+            storedKey(UNREADABLE_CLIENT, "/sign-in/email"),
+          ),
         }).toEqual({
           admitted: AUTH_RATE_LIMITS.signInEmail.max,
           refused: 429,
@@ -525,6 +562,55 @@ describeWithDatabase("Better Auth's rate limit against a real Postgres", () => {
           nextSlash64: (await signIn({ "x-forwarded-for": client(51, 1) }))
             .status,
         }).toEqual({ sameSlash64: 429, nextSlash64: 401 });
+      },
+      SLOW,
+    );
+  });
+
+  describe("what a counter row holds (#214)", () => {
+    it(
+      "is never the client's address or its /64, in any column, but a keyed hash per client and path",
+      async () => {
+        const ipv6 = client(60, 0x1234);
+        const ipv4 = `${V4}.70`;
+        const email = addressFor("stored");
+        const signInFrom = (from: string) =>
+          post(
+            "/sign-in/email",
+            { email, password: PASSWORD },
+            { "x-forwarded-for": from },
+          );
+
+        await statusesOf(2, () => signInFrom(ipv6));
+        await statusesOf(1, () =>
+          post(
+            "/request-password-reset",
+            { email, redirectTo: BASE_URL },
+            { "x-forwarded-for": ipv6 },
+          ),
+        );
+        await statusesOf(1, () => signInFrom(ipv4));
+
+        const rows = await db.execute(sql`SELECT * FROM auth_rate_limit`);
+        const everyColumn = JSON.stringify(rows.rows).toLowerCase();
+
+        expect({
+          // The address as sent, its /64 as written and as Better Auth
+          // expands it, and the IPv4 client.
+          inClear: [ipv6, "2001:db8:158:3c:", clientKey(60), ipv4].filter(
+            (form) => everyColumn.includes(form),
+          ),
+          signIn: await storedCount(storedKey(clientKey(60), "/sign-in/email")),
+          passwordReset: await storedCount(
+            storedKey(clientKey(60), "/request-password-reset"),
+          ),
+          otherClient: await storedCount(storedKey(ipv4, "/sign-in/email")),
+        }).toEqual({
+          inClear: [],
+          signIn: 2,
+          passwordReset: 1,
+          otherClient: 1,
+        });
       },
       SLOW,
     );
