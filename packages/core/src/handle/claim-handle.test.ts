@@ -349,4 +349,37 @@ describe("claimHandle", () => {
 
     expect(reads).toBe(1);
   });
+
+  /**
+   * **One normalisation, at the domain's Claim input**
+   * ([#163](https://github.com/joshstothard/3moji/issues/163)). Better Auth
+   * lowercases every address it stores, and the adapter compares bytes, so the
+   * store must never see the address as typed. The address the domain actually
+   * used travels on `already-registered`, so the collision notice looks up the
+   * same one rather than normalising a second time.
+   */
+  it("hands the store the address trimmed and lowercased, whatever was typed (#163)", async () => {
+    const { store, calls } = createFakeStore({
+      account: { ok: false, reason: "email-taken" },
+    });
+
+    const result = await claimHandle({
+      segment: ICE,
+      email: "  Claimant@Example.COM\t",
+      password: PASSWORD,
+      store,
+      clock: fixedClock(),
+    });
+
+    expect(
+      calls.filter((call) => call.startsWith("createAccount(")),
+    ).toHaveLength(1);
+    expect(calls).toContainEqual(
+      expect.stringMatching(/^createAccount\(claimant@example\.com, /),
+    );
+    expect(result).toMatchObject({
+      state: "already-registered",
+      email: EMAIL,
+    });
+  });
 });

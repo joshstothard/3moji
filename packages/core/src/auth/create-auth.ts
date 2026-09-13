@@ -41,6 +41,38 @@ function verificationLink(baseUrl: string, token: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/claim/verify?token=${encodeURIComponent(token)}`;
 }
 
+/**
+ * Better Auth endpoints that create an Account, **refused over HTTP (#150).**
+ *
+ * ADR-0004 decision 4: every live Account owns exactly one Handle, so the only
+ * way to create one is the Claim, which calls `auth.api.signUpEmail` on the
+ * server inside the transaction that writes the hold. Served over HTTP, the
+ * same endpoint created an Account with no Handle and sent a verification email
+ * from an endpoint nothing limits — measured against Postgres before this list
+ * existed (`direct-sign-up.integration.test.ts`).
+ *
+ * **Why `disabledPaths` and not `emailAndPassword.disableSignUp`.** Measured,
+ * not assumed: `disableSignUp` is checked inside the endpoint's own body, so it
+ * refuses the server-side `auth.api.signUpEmail` too and would take the Claim
+ * down with the bypass. `disabledPaths` is checked in the router's `onRequest`,
+ * which only an HTTP request passes through, and it answers a plain 404 before
+ * the body is parsed or the database read — so the refusal is the same bytes,
+ * in the same time, whatever address was sent.
+ *
+ * In better-auth 1.7.4 `internalAdapter.createUser` has exactly two callers:
+ * email sign-up, and `handleOAuthUserInfo`, reached from `/sign-in/social` and
+ * `/callback/:id`. No social provider is configured, so neither can create an
+ * Account today; `/sign-in/social` is listed anyway so the first provider added
+ * does not quietly reopen the bypass. `/callback/:id` cannot be listed — the
+ * match is on the exact path — and is reachable only with state issued by
+ * `/sign-in/social` or `/link-social`, the latter needing a signed-in Account.
+ * Recheck this list on every Better Auth upgrade and every plugin added.
+ */
+const HTTP_DISABLED_AUTH_PATHS: readonly string[] = [
+  "/sign-up/email",
+  "/sign-in/social",
+];
+
 export interface CreateAuthInput {
   /**
    * The client, **or a transaction opened on it**. The Claim rebuilds auth
@@ -115,6 +147,8 @@ export function createAuth(input: CreateAuthInput) {
   return betterAuth({
     secret: input.secret,
     baseURL: input.baseUrl,
+    // Refused over HTTP only; the Claim still calls sign-up server-side (#150).
+    disabledPaths: [...HTTP_DISABLED_AUTH_PATHS],
     // Wrapped so a failed statement reaches Better Auth — and so its thrown
     // value, its logger and the HTTP route's console output — without the
     // statement's bound values (#148).
