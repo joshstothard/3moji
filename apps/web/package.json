@@ -35,6 +35,7 @@
     "lightningcss-linux-x64-musl": "1.33.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@template/eslint-config": "*",
     "@template/jest-config": "*",

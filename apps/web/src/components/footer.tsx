@@ -7,7 +7,7 @@ export function Footer() {
   return (
     <footer className="bg-white border-t border-slate-200">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <p className="text-xs text-slate-400 text-center">{uiLabel}</p>
+        <p className="text-xs text-slate-500 text-center">{uiLabel}</p>
       </div>
     </footer>
   );

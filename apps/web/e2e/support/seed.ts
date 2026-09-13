@@ -48,6 +48,17 @@ export interface SeededHandle {
 export interface SeedClaimedHandleOptions {
   /** What to save as the Profile. A plain one is used when omitted. */
   readonly profile?: ProfileDraft;
+  /**
+   * Chooses the three emoji to try on each attempt. Three random emoji from
+   * the whole curated set when omitted.
+   *
+   * It is called afresh on every attempt, so a chooser drawing at random from
+   * a narrower pool keeps the collision-free property: a pick that is taken or
+   * reserved is simply tried again. The accessibility spec uses it to seed two
+   * Handles one word alias names
+   * ([#153](https://github.com/joshstothard/3moji/issues/153)).
+   */
+  readonly chooseEmoji?: () => readonly CuratedEmoji[];
 }
 
 /** How many random Handles to try before concluding something is wrong. */
@@ -74,6 +85,7 @@ export async function seedClaimedHandle(
   options: SeedClaimedHandleOptions = {},
 ): Promise<SeededHandle> {
   const profile = options.profile ?? DEFAULT_PROFILE;
+  const chooseEmoji = options.chooseEmoji ?? randomHandleEmoji;
   const emailSender = createRecordingEmailSender();
   const clock = createSystemClock();
   const { db, close } = createDatabase({ url: requiredEnv("DATABASE_URL") });
@@ -91,7 +103,7 @@ export async function seedClaimedHandle(
     });
 
     for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
-      const emoji = randomHandleEmoji();
+      const emoji = chooseEmoji();
       const segment = emoji.map((entry) => entry.emoji).join("");
       const email = `e2e-${randomUUID()}@example.com`;
 
