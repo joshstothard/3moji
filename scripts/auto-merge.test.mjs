@@ -622,8 +622,10 @@ describe("gatePullRequest: after updating a branch (#58)", () => {
     assert.deepEqual(decision, skip("behind-main-after-update"));
   });
 
-  it("does not update a branch when no wait budget is left to see its CI through", () => {
-    const github = fakeGitHub({ budgetMinutes: 0 });
+  // Five minutes left is not zero, but it is less than one CI run: updating now
+  // would leave the branch updated with nothing left to see its CI through.
+  it("does not update a branch when too little wait budget is left to see its CI through", () => {
+    const github = fakeGitHub({ budgetMinutes: 5 });
     const decision = gatePullRequest(12, github.deps);
     assert.deepEqual(github.actions, []);
     assert.deepEqual(decision, skip("wait-budget-spent"));

@@ -353,6 +353,9 @@ function update(repo, pr) {
 // room to spare. The workflow's job `timeout-minutes` must stay above it.
 export const WAIT_BUDGET_MS = 20 * 60_000;
 export const CI_POLL_MS = 15_000;
+// The least budget worth starting an update with: about one CI run. With less,
+// the branch would be updated and then abandoned mid-wait, which is #58 again.
+export const MIN_WAIT_MS = 6 * 60_000;
 // Updates of one PR per run. A second covers main moving once during the wait;
 // after that the PR is left for a later run rather than chased indefinitely.
 export const MAX_UPDATES = 2;
@@ -413,7 +416,7 @@ export function gatePullRequest(number, deps) {
       // Updating without waiting would recreate the stall this loop removes.
       if (updates >= maxUpdates) {
         decision = { action: "skip", reason: "behind-main-after-update" };
-      } else if (deps.now() >= deps.deadline) {
+      } else if (deps.deadline - deps.now() < MIN_WAIT_MS) {
         decision = { action: "skip", reason: "wait-budget-spent" };
       }
     }
