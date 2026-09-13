@@ -1,6 +1,7 @@
 import { notFound, permanentRedirect } from "next/navigation";
 import {
   canonicalise,
+  resolveAlias,
   spokenHandle,
   type CanonicalHandle,
   type Profile,
@@ -57,11 +58,15 @@ export default async function HandlePage({ params }: HandlePageProps) {
   const result = canonicalise(handle);
 
   if (!result.ok) {
-    // Every rejection reason is a 404. They are different answers to the
-    // domain — "not an emoji we know" is not "not claimable yet" — but over
-    // HTTP they are one: there is no Handle at this URL. Redirecting or
-    // explaining would only help a crawler index junk.
-    notFound();
+    // The segment is not an emoji Handle, so it gets its second chance as a
+    // **word alias** ([ADR-0008](../../../../../docs/adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md)
+    // decision 7: both grammars live on this one route). That ADR supersedes
+    // exactly one clause of ADR-0004 decision 1 — "one that cannot be
+    // canonicalised returns 404" — and nothing else: every rejection above ran
+    // first and unchanged, the 308 with it, and an ASCII segment that is not
+    // three dot-separated terms still 404s below. Junk is still never
+    // redirected, and explaining it would only help a crawler index it.
+    return await AliasedHandle({ segment: handle });
   }
 
   if (!result.isCanonical) {
@@ -79,6 +84,130 @@ export default async function HandlePage({ params }: HandlePageProps) {
 }
 
 const copy = en.HandlePage;
+
+/**
+ * What the Handle rendering below actually reads: a key to show and the three
+ * entries behind it.
+ *
+ * A `Pick` of {@link CanonicalHandle} rather than a new interface, because both
+ * grammars arrive here — the emoji path with a `CanonicalHandle`, the alias
+ * path with an alias candidate — and an alias candidate is structurally a
+ * `CanonicalHandle` **minus the routing fields**. Dropping `isCanonical` is the
+ * point: it is a 308 answer about a received emoji segment, it is meaningless
+ * for an alias, and a component that could read it is a component that could
+ * redirect a page which must not redirect.
+ */
+type RenderedHandle = Pick<CanonicalHandle, "key" | "emoji">;
+
+/**
+ * The word alias: `3moji.me/ice-cube.ice-cube.ice-cube`, the ASCII address of
+ * the same Handle
+ * ([ADR-0008](../../../../../docs/adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md)).
+ *
+ * The resolver in `packages/core` is pure and answers with a **candidate set**,
+ * never a Handle: `apple` names both 🍎 and 🍏, so `apple.apple.apple` names
+ * eight Handles and choosing one of them here would be inventing an answer.
+ * What this function adds is the only thing the domain cannot know — which of
+ * them anybody actually has — and the count is what decides the response
+ * (decision 4).
+ *
+ * **One match renders in place. It must never redirect.** The whole reason the
+ * alias exists is that the shared link is ASCII; a 308 to the emoji path would
+ * replace it in the address bar with 45 characters of `%F0%9F…`, which is the
+ * defect the ADR was written to avoid. So the Profile is rendered under the
+ * alias URL, and `rel="canonical"` — which is for machines, not for the address
+ * bar — points at the emoji path instead (decision 5).
+ *
+ * **Several matches are a listing, and the listing is
+ * [#109](https://github.com/joshstothard/3moji/issues/109).** Until it exists
+ * this says so in one line and shows nothing: a listing rendered ahead of its
+ * own issue would be the half of it that leaks Handles nobody claimed.
+ */
+async function AliasedHandle({ segment }: { readonly segment: string }) {
+  const alias = resolveAlias(segment);
+  if (!alias.ok) {
+    // Not three dot-separated terms, or a word we do not know. Both are the
+    // same answer over HTTP as the four canonicalisation rejections above:
+    // there is no Handle at this URL.
+    notFound();
+  }
+
+  // Independent reads, so they go together rather than one after another. The
+  // worst alias measured by ADR-0008 (`celebration`, four emoji) is 64 of
+  // them; the listing issue owns whatever bound that eventually needs.
+  const matches = await Promise.all(
+    alias.candidates.map(async (candidate) => ({
+      candidate,
+      state: await readAvailability(candidate.encoded),
+    })),
+  );
+
+  const claimed = matches.filter((match) => match.state === "claimed");
+  // Exactly one claimed match is the Profile to show. Failing that, an alias
+  // that names exactly one Handle still has a page — unclaimed, held, reserved
+  // or unknown, whatever the read says — and it is the same page the emoji
+  // path renders. `at` rather than `[0]`, so nothing here asserts non-null.
+  const shown =
+    claimed.length === 1
+      ? claimed.at(0)
+      : matches.length === 1
+        ? matches.at(0)
+        : undefined;
+
+  if (shown === undefined) {
+    return <AmbiguousAlias />;
+  }
+
+  /*
+   * The Profile read, and **one of them, after the decision rather than with
+   * the availability reads**. It is the same second read the emoji path makes
+   * (§ The claimed Handle), handed the same percent-encoded segment the
+   * availability read was asked about, so the two answers cannot be about
+   * different Handles. Folding it into the `Promise.all` above would fetch a
+   * Profile for every candidate — doubling a cost ADR-0008 measured at 64
+   * reads in the worst case — to show exactly one.
+   */
+  const profile = await readProfile(shown.candidate.encoded, shown.state);
+
+  return (
+    <>
+      {/*
+       * An alias is ambiguous by construction and so can never be canonical:
+       * one indexable URL per Profile, and it is the emoji one. React hoists
+       * this into the document head; `generateMetadata` would be the other
+       * place to put it, and would re-run the resolver and every read above to
+       * produce one string.
+       */}
+      <link rel="canonical" href={`/${shown.candidate.encoded}`} />
+      <ResolvedHandle
+        handle={shown.candidate}
+        state={shown.state}
+        profile={profile}
+      />
+    </>
+  );
+}
+
+/**
+ * An alias that could be more than one Handle.
+ *
+ * It says so and stops. No emoji, no Handles, no controls: which of them to
+ * show — and the privacy and ranking questions an index of Profiles brings —
+ * is [#109](https://github.com/joshstothard/3moji/issues/109), and a listing
+ * improvised here would answer those questions by accident.
+ */
+function AmbiguousAlias() {
+  return (
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+      <div className="text-center">
+        <h1 className="text-3xl sm:text-4xl mb-8 tracking-tight text-slate-900">
+          {copy.aliasSeveralHeading}
+        </h1>
+        <p className="text-lg text-slate-500">{copy.aliasSeveral}</p>
+      </div>
+    </main>
+  );
+}
 
 /**
  * What a visitor can be told about a Handle that resolves.
@@ -149,7 +278,7 @@ function ResolvedHandle({
   state,
   profile,
 }: {
-  readonly handle: CanonicalHandle;
+  readonly handle: RenderedHandle;
   readonly state: AvailabilityState;
   readonly profile: ProfileState;
 }) {
@@ -230,7 +359,7 @@ function HandleHeading({
   handle,
   spoken,
 }: {
-  readonly handle: CanonicalHandle;
+  readonly handle: RenderedHandle;
   readonly spoken: string | undefined;
 }) {
   return (
@@ -272,7 +401,7 @@ function UneditedHandle({
   handle,
   spoken,
 }: {
-  readonly handle: CanonicalHandle;
+  readonly handle: RenderedHandle;
   readonly spoken: string | undefined;
 }) {
   return (
@@ -305,7 +434,7 @@ function ProfilePage({
   spoken,
   profile,
 }: {
-  readonly handle: CanonicalHandle;
+  readonly handle: RenderedHandle;
   readonly spoken: string | undefined;
   readonly profile: Profile;
 }) {
