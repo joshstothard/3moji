@@ -129,5 +129,17 @@
     "errorLinkTitleTooLong": "Use {limit} characters or fewer. This is {length}.",
     "errorLinkUrlScheme": "A link must start with http:// or https://.",
     "errorLinkUrlMalformed": "That is not a web address."
+  },
+  "OpenGraph": {
+    "siteName": "3moji",
+    "genericTitle": "3moji",
+    "genericDescription": "A web address you can say out loud.",
+    "genericImageAlt": "3moji: a web address you can say out loud.",
+    "profileTitle": "{name} · {handle}",
+    "handleTitle": "{handle} on 3moji",
+    "handleDescription": "Say it: {spoken}. A web address you can say out loud, on 3moji.",
+    "profileImageAlt": "{spoken}, {name}",
+    "handleImageAlt": "{spoken}",
+    "imageTagline": "A web address you can say out loud."
   }
 }

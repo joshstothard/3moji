@@ -257,10 +257,20 @@ jest.mock("../../components/claim-action", () => ({
     claimFormAction(previous, formData),
 }));
 
-import HandlePage from "./page";
+import HandlePage, { generateMetadata } from "./page";
 
 function visit(handle: string): Promise<ReactElement> {
   return HandlePage({ params: Promise.resolve({ handle }) });
+}
+
+/**
+ * The metadata Next.js would put in the head for `handle`
+ * ([#161](https://github.com/joshstothard/3moji/issues/161)). The canonical URL
+ * is emitted here and nowhere else: a second `<link rel="canonical">` rendered
+ * by the page would be two canonicals, which is no canonical at all.
+ */
+function metadataOf(handle: string) {
+  return generateMetadata({ params: Promise.resolve({ handle }) });
 }
 
 /**
@@ -827,7 +837,9 @@ describe("a word alias", () => {
     ).toBeInTheDocument();
     // Still the alias URL: the Profile is rendered here, not redirected to.
     expect(permanentRedirect).not.toHaveBeenCalled();
-    expect(canonicalLink()).toHaveAttribute("href", `/${ENCODED}`);
+    expect(
+      (await metadataOf("ice-cube.ice-cube.ice-cube")).alternates?.canonical,
+    ).toBe(`${ORIGIN}/${ENCODED}`);
   });
 
   it("reads a Profile for the Handle it shows and for no other candidate", async () => {
@@ -869,9 +881,28 @@ describe("a word alias", () => {
   it("points rel=canonical at the emoji path, never at the alias", async () => {
     // An alias is ambiguous by construction and so can never be canonical
     // (decision 5): one indexable URL per Profile, and it is the emoji one.
+    const metadata = await metadataOf("ice-cube.ice-cube.ice-cube");
+
+    expect(metadata.alternates?.canonical).toBe(`${ORIGIN}/${ENCODED}`);
+  });
+
+  it("emits its canonical URL once, through the metadata, and not again from the page", async () => {
     render(await visit("ice-cube.ice-cube.ice-cube"));
 
-    expect(canonicalLink()).toHaveAttribute("href", `/${ENCODED}`);
+    expect(canonicalLink()).toBeNull();
+  });
+
+  it("declares the emoji path as canonical whatever spelling the metadata is handed", async () => {
+    // Observed against a production build: the emoji page answered 200 with
+    // no canonical at all. The page decides the 308, so metadata for another
+    // spelling is never sent; it must still name the one canonical path
+    // rather than depend on which spelling Next.js handed it.
+    canonicalise.mockReturnValue({ ...resolved, isCanonical: false });
+
+    const metadata = await metadataOf(ENCODED);
+
+    expect(metadata.alternates?.canonical).toBe(`${ORIGIN}/${ENCODED}`);
+    expect(metadata.openGraph?.url).toBe(`${ORIGIN}/${ENCODED}`);
   });
 
   it("shows the single claimed Handle out of several candidates", async () => {
@@ -890,7 +921,9 @@ describe("a word alias", () => {
     expect(screen.getByRole("img", { name: SPOKEN })).toHaveTextContent(
       GREEN_KEY,
     );
-    expect(canonicalLink()).toHaveAttribute("href", `/${GREEN_ENCODED}`);
+    expect((await metadataOf("apple.apple.apple")).alternates?.canonical).toBe(
+      `${ORIGIN}/${GREEN_ENCODED}`,
+    );
     expect(permanentRedirect).not.toHaveBeenCalled();
   });
 
@@ -954,9 +987,10 @@ describe("a word alias", () => {
     });
     readAvailability.mockResolvedValue("available");
 
-    render(await visit("apple.apple.apple"));
+    const metadata = await metadataOf("apple.apple.apple");
 
-    expect(canonicalLink()).toBeNull();
+    expect(metadata.alternates).toBeUndefined();
+    expect(metadata.openGraph?.url).toBeUndefined();
   });
 });
 
@@ -1185,8 +1219,13 @@ describe("a listing of the claimed Handles an alias names", () => {
   it("declares no canonical URL, because it is showing no single Handle", async () => {
     // Decision 5 points `rel="canonical"` at *the* emoji path. A listing has
     // several, and picking one would assert a meaning the alias does not have.
-    render(await visit("apple.apple.apple"));
+    const metadata = await metadataOf("apple.apple.apple");
 
+    expect(metadata.alternates).toBeUndefined();
+    expect(metadata.openGraph?.url).toBeUndefined();
+    // Nor does it say whose Handles they are: a listing names its owners on
+    // the page, but its unfurl is the site's.
+    expect(JSON.stringify(metadata)).not.toMatch(/Ada Rose|Bruno Green/);
     expect(canonicalLink()).toBeNull();
   });
 
