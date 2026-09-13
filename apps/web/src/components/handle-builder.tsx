@@ -272,6 +272,24 @@ export function HandleBuilder({
         : "checking";
 
   /**
+   * A rare find: three of the same emoji, and free
+   * ([#202](https://github.com/joshstothard/3moji/issues/202)).
+   * Three-of-a-kind Handles stay claimable rather than reserved, and finding an
+   * available one is celebrated.
+   *
+   * **Derived only from what the builder already shows**, and that is the
+   * privacy property rather than a convenience. The slots are on screen and the
+   * availability line already reads "available", so the celebration can say
+   * nothing the page does not: it never appears for a taken, held, reserved or
+   * unknown triple, and never while the answer is still being checked, so it
+   * cannot distinguish one refusal from another or arrive ahead of the answer.
+   */
+  const rare =
+    availability === "available" &&
+    full &&
+    filled.every((each) => each === filled[0]);
+
+  /**
    * Derived, not stored: the suggestions are a pure function of the pick and
    * the answer about it, so there is no second piece of state to fall out of
    * step with the first. `swapSuggestions` is domain — same group, never
@@ -361,7 +379,23 @@ export function HandleBuilder({
               }}
               className="w-20 h-20 text-4xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-500 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-disabled:border-dashed aria-disabled:hover:border-slate-500"
             >
-              <span aria-hidden="true">{emoji ?? ""}</span>
+              {/* Keyed on the rarity so the glyph, never the button, remounts:
+                  the hop replays on every return to a rare triple, and the
+                  permanent control keeps its focus. */}
+              <span
+                key={rare ? "rare" : "plain"}
+                aria-hidden="true"
+                className={
+                  rare ? "inline-block motion-safe:animate-rare-hop" : undefined
+                }
+                style={
+                  rare
+                    ? { animationDelay: `${String(index * 120)}ms` }
+                    : undefined
+                }
+              >
+                {emoji ?? ""}
+              </span>
             </button>
           ))}
         </div>
@@ -391,6 +425,29 @@ export function HandleBuilder({
         >
           {availability === undefined ? "" : AVAILABILITY_COPY[availability]}
         </p>
+
+        {/* The rarity's one announcement. The region is permanent, because a
+            live region inserted together with its text is not reliably read,
+            and React leaves its text alone on any render that keeps the
+            Handle rare, so it is not read again. It moves no focus. */}
+        <p aria-live="polite" data-rare-announcement="" className="sr-only">
+          {rare ? copy.rareAnnouncement : ""}
+        </p>
+
+        {rare ? (
+          // Hidden from assistive technology, which has the sentence above;
+          // keyed on the Handle so a new rare triple plays the pop afresh.
+          <div
+            key={segment}
+            aria-hidden="true"
+            className="mt-3 flex justify-center"
+          >
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-sm font-semibold text-white shadow-sm motion-safe:animate-rare-pop">
+              <span>{"✨"}</span>
+              <span>{copy.rareBadge}</span>
+            </span>
+          </div>
+        ) : null}
 
         {suggestions.length === 0 ? null : (
           <div className="mt-6">
