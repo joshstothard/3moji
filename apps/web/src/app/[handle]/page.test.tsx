@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { UserEvent } from "@testing-library/user-event";
 import type { Profile, ProfileState } from "@template/core";
@@ -231,6 +231,21 @@ import HandlePage from "./page";
 
 function visit(handle: string): Promise<ReactElement> {
   return HandlePage({ params: Promise.resolve({ handle }) });
+}
+
+/**
+ * Let the builder's own availability read land inside `act`.
+ *
+ * Since #115 the route hands the builder the answer it has just read, so the
+ * availability line is on the page from the first render — which means waiting
+ * for that line no longer waits for the builder's re-check, and its answer
+ * would otherwise arrive after the test, outside `act`. The fake read resolves
+ * immediately, so one turn of the microtask queue is all it needs.
+ */
+async function settleBuilderRead(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+  });
 }
 
 describe("the Handle route", () => {
@@ -493,6 +508,7 @@ describe("an unclaimed Handle", () => {
     const user = userEvent.setup();
     render(await visit(ENCODED));
     await screen.findByText(settled);
+    await settleBuilderRead();
     return user;
   }
 
@@ -850,6 +866,7 @@ describe("a word alias", () => {
 
     render(await visit("ice-cube.ice-cube.ice-cube"));
     await screen.findByText(builderCopy.stateAvailable);
+    await settleBuilderRead();
 
     expect(screen.getByText(copy.unclaimed)).toBeInTheDocument();
     expect(
