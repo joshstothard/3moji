@@ -224,6 +224,10 @@ export function AccountMenu() {
                   {copy.editProfile}
                 </AccountLink>
               </li>
+              <li>
+                {/* An owner page that reads the session itself (#195). */}
+                <AccountLink href="/account">{copy.account}</AccountLink>
+              </li>
             </ul>
           ) : (
             <p className="px-3 py-2 text-base text-slate-700">
@@ -231,10 +235,6 @@ export function AccountMenu() {
             </p>
           )}
           <SignOutForm />
-          {/*
-           * Account deletion (#195) attaches here: a link to an owner page
-           * that reads the session server-side, never a control on this island.
-           */}
         </div>
       )}
     </div>

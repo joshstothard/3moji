@@ -121,7 +121,7 @@ describe("AccountMenu", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
-  it("shows an owner a signed-in indicator that opens onto their own Profile and its edit page", async () => {
+  it("shows an owner a signed-in indicator that opens onto their own Profile, its edit page and their account page", async () => {
     fetchMock.mockImplementation(() => answer(OWNER));
     const user = userEvent.setup();
     render(<AccountMenu />);
@@ -139,7 +139,11 @@ describe("AccountMenu", () => {
     expect(
       screen.getByRole("link", { name: copy.editProfile }),
     ).toHaveAttribute("href", `/${ENCODED}/edit`);
-    expect(hrefs()).toEqual([`/${ENCODED}`, `/${ENCODED}/edit`]);
+    expect(screen.getByRole("link", { name: copy.account })).toHaveAttribute(
+      "href",
+      "/account",
+    );
+    expect(hrefs()).toEqual([`/${ENCODED}`, `/${ENCODED}/edit`, "/account"]);
   });
 
   it("shows the Handle the indicator is signed in as", async () => {

@@ -34,8 +34,8 @@ export interface ReleaseHandleInput {
  * Handle is deleting the Account — and the Profile and Links of Phase 4 go with
  * it, through the cascade `handle.user_id` already declares on `user`. The
  * interface owes the person that sentence plainly rather than hiding it behind
- * the word "release"; that copy belongs with the account surface, which does
- * not exist yet.
+ * the word "release"; that copy lives on the account page, `apps/web`'s
+ * `app/account/page.tsx`, whose `deleteAccountAction` is the caller (#195).
  *
  * [ADR-0009](../../../../docs/adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)
  * shapes the rest of it:

@@ -72,6 +72,48 @@ describe("the claim form", () => {
     expect(field).toBeRequired();
   });
 
+  it("links the privacy notice and the terms next to the email field, before the submit button (#198)", () => {
+    renderForm(answering({ state: "idle" }));
+
+    const privacy = screen.getByRole("link", { name: copy.claimPrivacyLink });
+    const terms = screen.getByRole("link", { name: copy.claimTermsLink });
+    expect(privacy).toHaveAttribute("href", "/privacy");
+    expect(terms).toHaveAttribute("href", "/terms");
+
+    // Next to the email field: after it, and before the password field and
+    // the submit button, in document order and so in reading and tab order.
+    const follows = (earlier: Element, later: Element) =>
+      (earlier.compareDocumentPosition(later) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+      0;
+    for (const link of [privacy, terms]) {
+      expect(follows(emailField(), link)).toBe(true);
+      expect(follows(link, passwordField())).toBe(true);
+      expect(follows(link, submitButton())).toBe(true);
+    }
+  });
+
+  it("opens the legal pages in a new tab, so the Handle being claimed is not lost (#198)", () => {
+    renderForm(answering({ state: "idle" }));
+
+    for (const name of [copy.claimPrivacyLink, copy.claimTermsLink]) {
+      const link = screen.getByRole("link", { name });
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link.getAttribute("rel")).toMatch(/\bnoopener\b/);
+      // The accessible name says so, rather than surprising anybody.
+      expect(name).toMatch(/opens in a new tab/);
+    }
+    const note = copy.claimLegalNote
+      .replace("{privacy}", copy.claimPrivacyLink)
+      .replace("{terms}", copy.claimTermsLink);
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName === "P" && element.textContent === note,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("asks for a new password as a password, never as text", () => {
     renderForm(answering({ state: "idle" }));
 
@@ -228,6 +270,17 @@ describe("the claim form", () => {
     await user.tab();
     expect(emailField()).toHaveFocus();
     await user.keyboard(EMAIL);
+
+    // The privacy notice and the terms are linked beside the email field,
+    // before submission (#198), so they are the next two stops.
+    await user.tab();
+    expect(
+      screen.getByRole("link", { name: copy.claimPrivacyLink }),
+    ).toHaveFocus();
+    await user.tab();
+    expect(
+      screen.getByRole("link", { name: copy.claimTermsLink }),
+    ).toHaveFocus();
 
     await user.tab();
     expect(passwordField()).toHaveFocus();

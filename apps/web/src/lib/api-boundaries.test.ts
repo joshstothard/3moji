@@ -107,11 +107,17 @@ jest.mock("@template/core", () => ({
   claimableHandle: () => ({ ok: true }),
   canonicalise: (segment: string) => realCanonicalise.canonicalise(segment),
   viewerSummary: (input: unknown): unknown => viewerSummary(input),
+  releaseHandle: (input: unknown): unknown => releaseHandle(input),
 }));
+
+const releaseHandle = jest.fn();
 
 const viewerSummary = jest.fn();
 const signInEmail = jest.fn();
-/** Better Auth's sign-out, which `sign-out-action.ts` calls (#194). */
+/**
+ * Better Auth's sign-out, which `sign-out-action.ts` calls (#194) and account
+ * deletion calls to clear the cookie (#195).
+ */
 const signOut = jest.fn();
 /** The session read `lib/session.ts` makes: a signed-in owner, by default. */
 const getSession = jest.fn();
@@ -163,6 +169,7 @@ import * as verifyRoute from "../app/claim/verify/route";
 import * as genericImageRoute from "../app/og-image/route";
 import * as handleImageRoute from "../app/[handle]/og-image/route";
 import * as viewerRoute from "../app/api/viewer/route";
+import * as accountDeleteAction from "../components/account-delete-action";
 import * as availabilityAction from "../components/availability-action";
 import * as claimAction from "../components/claim-action";
 import * as passwordResetAction from "../components/password-reset-action";
@@ -185,6 +192,7 @@ function healthy(): void {
     auth: { api: { signInEmail, getSession, signOut } },
     accounts: { byEmail, handleOf },
     claims: {},
+    releases: {},
     clock: { now: () => new Date(0) },
     dispatches: {},
     claimFinaliser: {},
@@ -211,6 +219,11 @@ function healthy(): void {
   });
   resendVerification.mockResolvedValue({ state: "sent" });
   editProfile.mockResolvedValue({ state: "saved" });
+  releaseHandle.mockResolvedValue({
+    state: "released",
+    key: ICE,
+    releasedAt: new Date(0),
+  });
   handleAvailability.mockResolvedValue({ state: "available" });
   requestPasswordReset.mockResolvedValue({ state: "sent" });
   setNewPassword.mockResolvedValue({ state: "reset" });
@@ -239,6 +252,14 @@ function personalForm(): FormData {
   data.set("link-0-title", TOKEN);
   data.set("link-0-url", `https://example.com/?email=${EMAIL}`);
   data.set("token", TOKEN);
+  return data;
+}
+
+/** {@link personalForm}, confirming an account deletion (#195). */
+function confirmedForm(): FormData {
+  const data = personalForm();
+  data.set("confirmation", "delete");
+  data.set("userId", EMAIL);
   return data;
 }
 
@@ -469,6 +490,21 @@ const CASES: readonly BoundaryCase[] = [
         { state: "idle" },
         personalForm(),
       );
+    },
+    logsFailure: true,
+  },
+  {
+    // Account deletion (#195). The session in `healthy()` names `user-1`, and
+    // the form carries personal data in every field plus the confirmation
+    // word; the answer is a Release and a redirect to `/`.
+    file: "components/account-delete-action.ts",
+    exportName: "deleteAccountAction",
+    boundary: "account.delete",
+    answer: () => accountDeleteAction.deleteAccountAction(confirmedForm()),
+    answered: "redirected",
+    fail: () => {
+      releaseHandle.mockRejectedValue(leakyError());
+      return accountDeleteAction.deleteAccountAction(confirmedForm());
     },
     logsFailure: true,
   },
