@@ -25,6 +25,8 @@ A Turborepo monorepo on npm workspaces. Everything is TypeScript in strict mode.
 
 **Partly built.** Four routes exist: the Handle builder at `/`, Better Auth's whole HTTP surface at `/api/auth/[...all]`, the Handle route at `/[handle]` — the product's canonical URL, `3moji.me/🧊🧊🧊` — and the owner's edit surface at `/[handle]/edit`.
 
+**The privacy notice at `/privacy` and the terms of use at `/terms`** are static pages ([#196](https://github.com/joshstothard/3moji/issues/196)), both rendered by `components/legal-document.tsx` from the `Legal` namespace of `packages/shared/messages/en.json`. They are **drafts pending the owner's review, not legal advice**, and say so in a visible marker (`DraftMarker`, one place to remove it). Anything identifying the operator is a bracketed placeholder for the owner, never a name or address. **The privacy notice restates what is stored and when it is deleted** — from [data-model.md](data-model.md), [auth.md](auth.md) and Better Auth 1.7.4's defaults (sessions: 7 days, renewed at most daily; reset tokens: 1 hour) — so a change to either must change that copy in the same pull request. A static segment takes precedence over `/[handle]`, so neither path is ever read as a Handle or a word alias. Nothing links to them yet ([#198](https://github.com/joshstothard/3moji/issues/198)).
+
 ### The proxy
 
 Every request passes through `apps/web/src/proxy.ts` (Next.js 16 renamed `middleware.ts` to `proxy.ts`) before it is routed. It does one thing: give the request a **correlation id** ([#155](https://github.com/joshstothard/3moji/issues/155)). The id is a well-formed `x-vercel-id` when Vercel sent one, otherwise a random UUID; it is set on the request the application sees and returned on the response as `x-correlation-id`.
