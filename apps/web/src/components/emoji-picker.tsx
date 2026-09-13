@@ -114,7 +114,7 @@ export function EmojiPicker({ onPick, full }: EmojiPickerProps) {
           onChange={(event) => {
             setQuery(event.target.value);
           }}
-          className="w-full max-w-sm rounded-xl bg-white border border-slate-200 shadow-sm px-4 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="w-full max-w-sm rounded-xl bg-white border border-slate-500 shadow-sm px-4 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
         />
       </div>
 
