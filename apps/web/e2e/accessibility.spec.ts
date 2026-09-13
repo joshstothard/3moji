@@ -463,6 +463,30 @@ test("the alias listing never seeds a Handle handle-url.spec.ts needs unclaimed"
   ).toEqual([]);
 });
 
+test("the find page's not-found answer has no WCAG A or AA violations (#200)", async ({
+  page,
+}) => {
+  await page.goto(`/find?q=${encodeURIComponent("three ice cubes")}`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: en.FindPage.notFoundHeading }),
+  ).toBeVisible();
+
+  expectAccessible(await checkPage(page), ["label", "button-name"]);
+  expectLandmarksContained(await checkLandmarks(page));
+});
+
+test("the Handle lookup's field border meets non-text contrast (#200)", async ({
+  page,
+}) => {
+  const field = page.getByRole("searchbox", { name: en.HandleLookup.label });
+
+  await openHome(page);
+  await expectBorderIdentifiesControl(field, "lookup field on /");
+
+  await page.goto(`/find?q=${encodeURIComponent("three ice cubes")}`);
+  await expectBorderIdentifiesControl(field, "lookup field on /find");
+});
+
 test("an alias listing has no WCAG A or AA violations", async ({ page }) => {
   // Picked at random from the domain's own vocabulary, so both Playwright
   // projects and retries spread their seeds across many aliases.

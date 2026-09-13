@@ -72,6 +72,16 @@ describe("Home", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a lookup for a Handle somebody heard (#200)", () => {
+    render(<Home />);
+
+    const lookup = screen.getByRole("search", {
+      name: en.HandleLookup.heading,
+    });
+    expect(lookup).toHaveAttribute("action", "/find");
+    expect(lookup).toHaveAttribute("method", "get");
+  });
+
   it("mentions no OKR concepts", () => {
     const { container } = render(<Home />);
 
