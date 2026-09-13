@@ -77,12 +77,12 @@ test("a browser walking a non-canonical URL lands on the canonical Handle", asyn
   ).toBeVisible();
 
   // Which answer 🧊🧊🧊 gets depends on the environment, and deliberately so:
-  // `lib/services.ts` needs five variables and this job sets one, so the read
-  // degrades to "we could not check" here and would say "available" against a
-  // configured database. What is environment-independent — and what this
-  // asserts — is that the route renders one of the five honest answers rather
-  // than assuming availability. The branch table itself is unit-tested in
-  // `src/app/[handle]/page.test.tsx`.
+  // against CI's migrated database it is "available", and on a clone with no
+  // database the read degrades to "we could not check". What is
+  // environment-independent — and what this asserts — is that the route
+  // renders one of the honest answers rather than assuming availability. That
+  // the database is really reached is `smoke.spec.ts`'s job, and the branch
+  // table itself is unit-tested in `src/app/[handle]/page.test.tsx`.
   const body = await page.textContent("body");
   expect(EVERY_ANSWER.some((answer) => body?.includes(answer))).toBe(true);
 });
@@ -159,9 +159,9 @@ test("the root-level dynamic route does not swallow the auth API", async ({
   // `/api/auth/ok`, fail canonicalisation and answer 404. That 404 is the
   // failure this asserts against.
   //
-  // The status is deliberately not pinned: CI's E2E job sets DATABASE_URL but
-  // not BETTER_AUTH_SECRET or the Resend variables, so `lib/services.ts` throws
-  // and Better Auth's route answers 500. A 500 from the auth handler and a 200
+  // The status is deliberately not pinned: on a clone without the five
+  // variables `lib/services.ts` throws and Better Auth's route answers 500,
+  // while CI's E2E job configures them. A 500 from the auth handler and a 200
   // from a fully configured one are both proof that the auth route, not this
   // one, received the request.
   const response = await request.get("/api/auth/ok", { maxRedirects: 0 });
