@@ -56,7 +56,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | 4     | A claimed Handle shows a real page its owner controls                        | #101       | Done        |
 | 5     | It survives real people                                                      | #149       | Done        |
 | 6     | A Profile can be shared as a link that survives bios and chat apps           | #159       | Done        |
-| 7     | Owners can come back, and it is lawful to launch                             | —          | Not planned |
+| 7     | Owners can come back, and it is lawful to launch                             | #191       | Planned     |
+| 8     | A listener can find a Handle, and the site is polished and operable          | #199       | Planned     |
 
 ### Phase 1 — Foundation and providers
 
@@ -272,10 +273,6 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 1. **Password reset pages.** There is no `/reset-password` route, and the header comment in `apps/web/src/app/sign-in/page.tsx` says reset "has no page of its own". The [MVP map](https://github.com/joshstothard/3moji/issues/8) put reset in scope. **This is a live bug, not only a gap:** the claim-collision email (`packages/core/src/auth/claim-collision.ts`, its URL built in `packages/core/src/composition-root.ts` as `${baseUrl}/reset-password`) already sends existing owners a link that 404s. Better Auth's `sendResetPassword` (`packages/core/src/auth/create-auth.ts`) emails its own URL, which must land on a working page too.
 2. **An account area.** The navbar (`apps/web/src/components/navbar.tsx`) is only the logo, sign-in lands on `/` with no signed-in state, the Profile deliberately does not link to its `/edit` page, and there is no sign-out anywhere. `releaseHandle` exists in `packages/core/src/handle/release-handle.ts` with no UI.
 3. **A privacy notice, terms, and abuse reporting.** None exist: `packages/shared/messages/en.json` has no keys for them, and the footer (`apps/web/src/components/footer.tsx`) shows only a UI version. The owner is UK-based, and the service stores email addresses and each session's IP address and user agent. Whether the Online Safety Act's user-to-user duties apply is to be checked against Ofcom's guidance: a Profile is user-generated content that other people encounter, and the Act's limited-functionality exemption (Schedule 1, paragraph 4) covers only comments and reviews on the provider's own content, so the service is **likely in scope (inference, to be confirmed with Ofcom's Regulation Checker)**. The non-goal "moderation beyond the URL scheme check" stands: reporting is not moderation.
-4. **Finding a Handle you heard.** Profiles already show the canonical word alias with a copy button ([#160](https://github.com/joshstothard/3moji/issues/160)), but a listener has no lookup, and the spoken form (`3moji.me/three-ice-cubes`) 404s.
-5. **A rare three-of-a-kind celebration.** Three-of-a-kind Handles stay claimable rather than reserved (Decision log, 2026-09-13). When a visitor builds an all-same triple that is **available**, the builder plays a short animation marking it as rare.
-6. **Site hygiene.** `apps/web/public/` holds only `.gitkeep`; there is no `not-found.tsx` or `error.tsx`; `apps/web/next.config.ts` sets only `output: "standalone"`; and the layout metadata in `apps/web/src/app/layout.tsx` has no `metadataBase` or `openGraph`. The glyphs in the Open Graph images come from Twemoji 16.0.1 via `apps/web/src/lib/og/`, which is CC-BY 4.0 and is not yet attributed on the site.
-7. **An operations minimum.** Vercel Hobby keeps runtime logs for one hour and Neon Free restores only to within six hours ([hosting and email report](../reports/2026-09-11-hosting-and-email.md)), and `docs/runbooks/` does not exist although `AGENTS.md` requires runbooks. **Error tracking** uses Vercel's own logs (Decision log, 2026-09-13). Log drains and longer log retention are understood to be Vercel Pro features — **to be confirmed against Vercel's current docs, not verified here** — so error tracking waits on the owner's expected move to Pro.
 
 **Acceptance criteria:**
 
@@ -301,6 +298,34 @@ _Privacy, terms and reporting:_
 - [ ] Every Profile offers a way to report it; a `mailto:` to a contact address read from an environment variable is enough.
 - [ ] A written takedown procedure exists in `docs/runbooks/`.
 - [ ] Whether the Online Safety Act's user-to-user duties apply is written down, citing Ofcom's guidance.
+- [ ] The footer links privacy, terms and reporting, and carries the Twemoji CC-BY 4.0 attribution.
+
+**Dependencies:** Phases 3 to 6. Verifying any item on the live site needs [#32](https://github.com/joshstothard/3moji/issues/32), which is blocked on [#19](https://github.com/joshstothard/3moji/issues/19).
+
+**Planned as epic [#191](https://github.com/joshstothard/3moji/issues/191).** Finding a Handle, the rare three-of-a-kind celebration, site hygiene and the operations minimum moved to Phase 8 at planning, keeping this phase to the launch-blocking owner return path and legal work. The footer's Twemoji CC-BY attribution criterion moved here from site hygiene, because [#198](https://github.com/joshstothard/3moji/issues/198) does it.
+
+**Issues:**
+
+- #192 Add the password reset request and set-new-password pages
+- #193 Show a signed-in state with links to the owner's Profile and edit page
+- #194 Add sign-out
+- #195 Let an owner delete their Account and give up their Handle
+- #196 Draft the privacy notice and terms pages
+- #197 Add a report link to every Profile and a takedown runbook
+- #198 Link privacy, terms, reporting and the Twemoji credit from the footer
+
+### Phase 8 — Findable, polished and operable
+
+**Outcome:** A listener who heard a Handle can find it, the site looks and behaves like a finished product, and the operator can see and recover from failure.
+
+**Deliverables:**
+
+1. **Finding a Handle you heard.** Profiles already show the canonical word alias with a copy button ([#160](https://github.com/joshstothard/3moji/issues/160)), but a listener has no lookup, and the spoken form (`3moji.me/three-ice-cubes`) 404s.
+2. **A rare three-of-a-kind celebration.** Three-of-a-kind Handles stay claimable rather than reserved (Decision log, 2026-09-13). When a visitor builds an all-same triple that is **available**, the builder plays a short animation marking it as rare.
+3. **Site hygiene.** `apps/web/public/` holds only `.gitkeep`; there is no `not-found.tsx` or `error.tsx`; `apps/web/next.config.ts` sets only `output: "standalone"`; and the layout metadata in `apps/web/src/app/layout.tsx` has no `metadataBase` or `openGraph`. The glyphs in the Open Graph images come from Twemoji 16.0.1 via `apps/web/src/lib/og/`, which is CC-BY 4.0 and is not yet attributed on the site.
+4. **An operations minimum.** Vercel Hobby keeps runtime logs for one hour and Neon Free restores only to within six hours ([hosting and email report](../reports/2026-09-11-hosting-and-email.md)), and `docs/runbooks/` does not exist although `AGENTS.md` requires runbooks. **Error tracking** uses Vercel's own logs (Decision log, 2026-09-13). Log drains and longer log retention are understood to be Vercel Pro features — **to be confirmed against Vercel's current docs, not verified here** — so error tracking waits on the owner's expected move to Pro.
+
+**Acceptance criteria:**
 
 _Finding a Handle:_
 
@@ -321,7 +346,6 @@ _Site hygiene:_
 - [ ] `robots.txt`, and a sitemap of the static pages (not every Profile).
 - [ ] Home-page Open Graph metadata using the existing generic image.
 - [ ] Responses carry a Content Security Policy, HSTS, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy` and `X-Content-Type-Options`, verified by a test.
-- [ ] The footer links privacy, terms and reporting, and carries the Twemoji CC-BY 4.0 attribution.
 
 _Operations:_
 
@@ -330,11 +354,20 @@ _Operations:_
 - [ ] Runbooks exist in `docs/runbooks/` for "site down", "email not arriving" and "restore from backup".
 - [ ] Error tracking is recorded as waiting on the Vercel Pro upgrade.
 
-**Dependencies:** Phases 3 to 6. The backup and uptime work in deliverable 7, and verifying any item on the live site, need [#32](https://github.com/joshstothard/3moji/issues/32), which is blocked on [#19](https://github.com/joshstothard/3moji/issues/19).
+**Dependencies:** Phase 7 ([#191](https://github.com/joshstothard/3moji/issues/191)). The backup and uptime work needs [#32](https://github.com/joshstothard/3moji/issues/32), which is blocked on [#19](https://github.com/joshstothard/3moji/issues/19).
+
+**Planned as epic [#199](https://github.com/joshstothard/3moji/issues/199)**, split out of Phase 7 at planning.
 
 **Issues:**
 
-_Not planned yet._
+- #200 Add a "find a Handle" lookup to the home page
+- #201 Resolve the spoken form of a Handle in the path
+- #202 Celebrate an available three-of-a-kind Handle as rare
+- #203 Add branded not-found and error pages
+- #204 Add a favicon, robots.txt, sitemap and home-page preview metadata
+- #205 Send security headers on every response
+- #206 Back up the production database nightly
+- #207 Add uptime checks and the operations runbooks
 
 ## Risks & mitigations
 
@@ -351,6 +384,8 @@ _Not planned yet._
 
 ## Open questions
 
+Every decision and action only the repo owner can take, including the questions below, is gathered with a checkbox in [Owner actions and decisions](../owner-actions.md).
+
 - Do the `Symbols/alphanum` and `Symbols/geometric` subgroups stay in the Emoji Set? Excluding both takes it from 1,053 to 994. Decided in issue #23.
 - Which flagged emoji are excluded after the side-by-side render check? Issue #23.
 - Is three resends an hour the right limit? It is a starting value to tune, not a principle. As built (#82) it is one constant, `RESEND_LIMITS` in `packages/core/src/auth/resend-allowance.ts`, with an overridable parameter on the pure decision — so tuning it is a one-line change, and the sign-up link counts towards the three.
@@ -359,7 +394,7 @@ _Not planned yet._
 - Should the **canonical** word alias prefer a shorter unambiguous synonym where one exists? [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3 joins the `displayName` slugs, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` is accepted on input but names eight Handles.
 - Are 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 the right platform-owned Reserved Handles? They were chosen while implementing [#52](https://github.com/joshstothard/3moji/issues/52) and have never been confirmed as a product decision. 🧊🧊🧊 is deliberately not among them, because ADR-0004 decision 2 names it freely claimable.
 - How is launch-day email volume handled? Resend's free plan caps email at 100 a day — one verification email per claim, plus resends and collision notices — so on launch day claimant 101 gets no email and their hold expires. The owner is undecided. **Recommendation:** launch quietly on Free, log the daily send count, and upgrade to Resend Pro ($20/month, 50,000 emails) together with Vercel Pro before any public announcement.
-- Where do nightly database backups live? Phase 7 needs a private, non-public destination, and planning must pick it.
+- Where do nightly database backups live? Phase 8 needs a private, non-public destination, and planning must pick it.
 
 ## Decision log
 
@@ -379,6 +414,7 @@ _Not planned yet._
 - 2026-09-13 — Three-of-a-kind Handles stay claimable, not reserved; an available one is celebrated as rare in the builder. Decided by the repo owner.
 - 2026-09-13 — Error tracking uses Vercel's own logs, not a third-party vendor; the owner expects to move to Vercel Pro, which also lifts Hobby's non-commercial restriction. Decided by the repo owner.
 - 2026-09-13 — The agent drafts the privacy notice and terms; the owner reviews them before launch. Decided by the repo owner.
+- 2026-09-13 — Phase 7 is split: finding a Handle, the rare three-of-a-kind celebration, site hygiene and the operations minimum become Phase 8 — Findable, polished and operable, so Phase 7 holds only the launch-blocking owner return path and legal work. Decided by the repo owner when Phase 7 was planned.
 
 ## Changelog
 
@@ -468,3 +504,5 @@ _Not planned yet._
 - 2026-09-13 — #163 added to Phase 5 (epic #149): the Claim's case-sensitive email lookups disagree with Better Auth's lowercasing, which by the code path breaks non-enumeration and blocks mixed-case sign-ups. Found while landing #148 (PR #162); measured first.
 - 2026-09-13 — Synced from GitHub after #188: **Phase 5 Done** (epic #149 closed, all 16 issues closed — #150–#158 and #163 as planned, plus #169, #177, #180, #182, #185 and #187 added after planning) and **Phase 6 Done** (epic #159 closed, #160 and #161 closed). All four Phase 5 and both Phase 6 acceptance criteria ticked against their closed issues. Not yet met despite the Done status: `3moji.me` is not live, so Phase 5's outcome and Phase 6's unfurl on a real share wait on #32 (blocked on #19); and Phase 5's error tracking was never planned as an issue. Phase 1 (#32) and Phase 2 (#55) remain In progress, so the workstream stays Active.
 - 2026-09-13 — Phase 7 added after an MVP gap review: owner return path (password reset, account area, sign-out, deletion), privacy/terms/reporting, finding a Handle by its spoken form, a rare three-of-a-kind celebration, site hygiene and an operations minimum. The claim-collision email's dead `/reset-password` link recorded as a live bug.
+- 2026-09-13 — Owner actions and decisions gathered into [`docs/owner-actions.md`](../owner-actions.md): setup only the owner can do, decisions due before launch, and decisions that can wait until after launch.
+- 2026-09-13 — Phase 7 planned: epic #191, issues #192–#198. Phase 8 planned: epic #199, issues #200–#207.
