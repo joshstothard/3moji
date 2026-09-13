@@ -56,19 +56,22 @@ const TEXT_CONTRAST = 4.5;
 const NON_TEXT_CONTRAST = 3;
 
 /**
- * A text field's border is the cue that identifies it as a control
- * ([#182](https://github.com/joshstothard/3moji/issues/182)): no field's fill
- * or shadow reaches 3:1 against the page, so the border has to.
+ * A control's border is the cue that identifies it as a control: no text
+ * field's fill or shadow reaches 3:1 against the page
+ * ([#182](https://github.com/joshstothard/3moji/issues/182)), and nor does the
+ * white fill or shadow of a Handle builder button
+ * ([#185](https://github.com/joshstothard/3moji/issues/185)), so the border has
+ * to.
  *
- * Soft, so a single run reports every field on the page rather than the first
- * that fails.
+ * Soft, so a single run reports every control on the page rather than the
+ * first that fails.
  */
-async function expectBorderIdentifiesField(
-  field: Locator,
+async function expectBorderIdentifiesControl(
+  control: Locator,
   subject: string,
 ): Promise<void> {
-  await expect(field).toBeVisible();
-  const measured = await measureBorderContrast(field);
+  await expect(control).toBeVisible();
+  const measured = await measureBorderContrast(control);
   const account = describeBorderContrast(subject, measured);
   console.log(account);
 
@@ -159,10 +162,69 @@ test("the picker's search field border meets non-text contrast", async ({
 }) => {
   await openHome(page);
 
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByRole("searchbox", { name: builderCopy.pickerSearchLabel }),
     "picker search",
   );
+});
+
+test("the Handle builder's slot and swap-suggestion borders meet non-text contrast", async ({
+  page,
+}) => {
+  // The slots and swap suggestions wear a white fill and `shadow-sm` on the
+  // `slate-50` page, neither of which reaches 3:1, so their border is what
+  // identifies them as controls (#185). An empty slot has no glyph at all.
+  // Every slot is measured empty and again filled, since filling one changes
+  // its border style, and the Handle is one somebody has already claimed, so
+  // the swap suggestions appear. Nothing here signs in.
+  const seeded = await seedClaimedHandle();
+
+  await openHome(page);
+  const slots = page
+    .getByRole("group", { name: builderCopy.slotsLabel })
+    .getByRole("button");
+  await expect(slots).toHaveCount(HANDLE_LENGTH);
+  for (let position = 0; position < HANDLE_LENGTH; position += 1) {
+    const slot = slots.nth(position);
+    await expect(slot).toHaveAttribute("aria-disabled", "true");
+    await expectBorderIdentifiesControl(
+      slot,
+      `empty slot ${String(position + 1)}`,
+    );
+  }
+
+  const search = page.getByRole("searchbox", {
+    name: builderCopy.pickerSearchLabel,
+  });
+  for (const entry of seeded.emoji) {
+    await search.fill(entry.displayName);
+    await page
+      .getByRole("button", { name: entry.displayName, exact: true })
+      .click();
+  }
+  await expect(page.getByText(builderCopy.stateClaimed)).toBeVisible();
+
+  for (let position = 0; position < HANDLE_LENGTH; position += 1) {
+    const slot = slots.nth(position);
+    await expect(slot).toHaveAttribute("aria-disabled", "false");
+    await expectBorderIdentifiesControl(
+      slot,
+      `filled slot ${String(position + 1)}`,
+    );
+  }
+
+  const suggestions = page
+    .getByRole("group", { name: builderCopy.swapHeading })
+    .getByRole("button");
+  // Measuring no suggestions would pass for nothing.
+  await expect(suggestions.first()).toBeVisible();
+  const count = await suggestions.count();
+  for (let index = 0; index < count; index += 1) {
+    await expectBorderIdentifiesControl(
+      suggestions.nth(index),
+      `swap suggestion ${String(index + 1)} of ${String(count)}`,
+    );
+  }
 });
 
 test("the claim form's field borders meet non-text contrast", async ({
@@ -170,11 +232,11 @@ test("the claim form's field borders meet non-text contrast", async ({
 }) => {
   await page.goto(unclaimedHandlePath());
 
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByRole("textbox", { name: claimCopy.claimEmailLabel }),
     "claim email",
   );
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(claimCopy.claimPasswordLabel, { exact: true }),
     "claim password",
   );
@@ -185,7 +247,7 @@ test("the hold screen's resend field border meets non-text contrast", async ({
 }) => {
   await page.goto("/claim/held");
 
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(claimCopy.resendEmailLabel, { exact: true }),
     "resend email",
   );
@@ -198,11 +260,11 @@ test("the sign-in form's field borders meet non-text contrast", async ({
   // sign-in rate limit, and nothing here needs a session.
   await page.goto("/sign-in");
 
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(claimCopy.signInEmailLabel, { exact: true }),
     "sign-in email",
   );
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(claimCopy.signInPasswordLabel, { exact: true }),
     "sign-in password",
   );
@@ -225,7 +287,7 @@ test("the share link's manual-copy field border meets non-text contrast", async 
   await page.goto(seeded.path);
   await page.getByRole("button", { name: handleCopy.shareCopy }).click();
 
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(handleCopy.shareManualLabel, { exact: true }),
     "share link manual copy",
   );
@@ -268,21 +330,21 @@ test("the Profile edit form's drag handle and field borders meet contrast", asyn
 
   // Two surfaces: the display name and bio sit on the page, the Link fields
   // inside the white Links fieldset.
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(editCopy.displayNameLabel, { exact: true }),
     "edit display name",
   );
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(editCopy.bioLabel, { exact: true }),
     "edit bio",
   );
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(editCopy.linkTitleLabel.replace("{position}", "1"), {
       exact: true,
     }),
     "edit link 1 title",
   );
-  await expectBorderIdentifiesField(
+  await expectBorderIdentifiesControl(
     page.getByLabel(editCopy.linkUrlLabel.replace("{position}", "1"), {
       exact: true,
     }),
