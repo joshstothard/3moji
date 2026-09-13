@@ -25,7 +25,11 @@ jest.mock("../components/claim-action", () => ({
     claimFormAction(previous, formData),
 }));
 
-import Home from "./page";
+// The page's metadata reads the origin through `lib/share-link.ts`, which
+// imports `@template/core`; the home page uses none of it.
+jest.mock("@template/core", () => ({ canonicalAliasOf: () => undefined }));
+
+import Home, { generateMetadata } from "./page";
 
 describe("claiming from the home page", () => {
   it("offers the claim once three picked emoji are available", async () => {
@@ -92,5 +96,58 @@ describe("Home", () => {
     render(<Home />);
 
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+});
+
+describe("the home page's preview metadata (#204)", () => {
+  const ORIGIN = "https://3moji.example";
+  const savedOrigin = process.env.BETTER_AUTH_URL;
+  afterEach(() => {
+    if (savedOrigin === undefined) {
+      Reflect.deleteProperty(process.env, "BETTER_AUTH_URL");
+    } else {
+      process.env.BETTER_AUTH_URL = savedOrigin;
+    }
+  });
+
+  it("resolves against the configured site origin", () => {
+    process.env.BETTER_AUTH_URL = `${ORIGIN}/api/auth`;
+
+    expect(generateMetadata().metadataBase).toEqual(new URL(ORIGIN));
+  });
+
+  it("unfurls with the site's name, tagline and the generic image at /og-image", () => {
+    process.env.BETTER_AUTH_URL = ORIGIN;
+
+    const metadata = generateMetadata();
+
+    expect(metadata.openGraph).toMatchObject({
+      siteName: en.OpenGraph.siteName,
+      title: en.OpenGraph.genericTitle,
+      description: en.OpenGraph.genericDescription,
+      images: [
+        {
+          url: `${ORIGIN}/og-image`,
+          width: 1200,
+          height: 630,
+          alt: en.OpenGraph.genericImageAlt,
+        },
+      ],
+    });
+    expect(metadata.twitter).toMatchObject({
+      card: "summary_large_image",
+      title: en.OpenGraph.genericTitle,
+      images: [`${ORIGIN}/og-image`],
+    });
+  });
+
+  it("emits no base and no absolute URL when no origin is configured", () => {
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_URL");
+
+    const metadata = generateMetadata();
+
+    expect(metadata).not.toHaveProperty("metadataBase");
+    expect(metadata.openGraph?.title).toBe(en.OpenGraph.genericTitle);
+    expect(JSON.stringify(metadata)).not.toMatch(/https?:|localhost/);
   });
 });

@@ -20,6 +20,8 @@
 | Password reset                      | `packages/core/src/auth/password-reset.ts`, `apps/web/src/app/reset-password/`       |
 | The reset request form's limit      | `packages/core/src/auth/reset-request-rate-limit.ts`                                 |
 | Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app              |
+| The signed-in indicator's answer    | `packages/core/src/auth/viewer-summary.ts`, `apps/web/src/lib/viewer.ts`             |
+| The signed-in indicator             | `apps/web/src/app/api/viewer/route.ts`, `src/components/account-menu.tsx`            |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
 
@@ -155,6 +157,10 @@ A successful password reset does **not** mark the email verified, even though it
 `lib/session.ts` asks Better Auth for the session behind the incoming request's headers, and it is the **only** place an identity enters the application. Everything that authorises anything is decided about the value it returns, never about a user id or a Handle arriving in a request body — the first surface to rely on that is the Profile edit (see [system-overview.md](system-overview.md) § Editing the Profile).
 
 It answers `undefined` rather than throwing when it cannot tell: the services may not be configured and the session lookup is a database read that can be refused. **That direction is not a preference.** Failing open here would be an authorisation bypass; failing closed is a signed-in owner being asked to sign in again.
+
+**What may read it is as much the rule as how it is read** ([#193](https://github.com/joshstothard/3moji/issues/193)). Three things do: the Profile edit page and `saveProfileAction`, through `lib/profile-edit.ts`, and `GET /api/viewer`, through `lib/viewer.ts`. **Shared chrome and the public Profile never do** — not the root layout, not the navbar, not `app/[handle]/page.tsx`. Anything that wraps every page and reads the session makes every page's response differ by visitor, and the Handle page is the most-read page in the product. So the navbar's signed-in indicator is a client island that asks `GET /api/viewer` after hydration, and the Profile's HTML stays the same bytes for everybody. `apps/web/eslint.config.mjs` fails lint if any of those three files, or the island itself, imports `next/headers`, `lib/session`, `lib/profile-edit` or `lib/viewer`, and `app/layout.test.tsx` renders the whole shell and asserts neither `headers()` nor `cookies()` is called. The indicator is described in [system-overview.md](system-overview.md#the-signed-in-indicator).
+
+`GET /api/viewer` answers `viewerSummary`'s decision about **the session's own Account and nobody else's** — `signed-out`, `signed-in`, or `owner` with that Handle's key and encoded path, and nothing more: no user id, no email. It is not Better Auth's `/api/auth/get-session`, which answers the session object itself and would undo the cookie's `HttpOnly` if page JavaScript read it. It is sent `Cache-Control: private, no-store` with `Vary: Cookie`, because a shared cache that stored it would hand one person's links to the next visitor. It fails closed the way `readViewer` does: no readable session is `signed-out`, and an Account read that fails for a viewer the session named is `signed-in` with no Handle — never `signed-out`, which would hide sign-out (#194) from somebody who is signed in — logged through `logFailure` as `viewer_summary_read_failed`. It links; it never authorises.
 
 ## Adjacent behaviour
 

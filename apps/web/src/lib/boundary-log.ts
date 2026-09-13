@@ -76,6 +76,7 @@ export const BOUNDARIES = [
   "password-reset.set",
   "og-image.generic",
   "og-image.handle",
+  "viewer.read",
 ] as const;
 export type Boundary = (typeof BOUNDARIES)[number];
 
