@@ -1,11 +1,13 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ClaimFormState } from "../components/claim-action";
 import en from "../../../../packages/shared/messages/en.json";
 
 /**
  * The home page is the composition point for the builder: it supplies the
- * availability server action, and the builder does the rest. The action is
- * mocked because it reaches `lib/services.ts` and so `@template/core`, which
- * cannot be `require`d under this suite.
+ * availability and claim server actions, and the builder does the rest. Both
+ * actions are mocked because they reach `lib/services.ts` and so
+ * `@template/core`, which cannot be `require`d under this suite.
  */
 const checkAvailability = jest.fn((_segment: string) =>
   Promise.resolve("available" as const),
@@ -14,7 +16,33 @@ jest.mock("../components/availability-action", () => ({
   checkAvailability: (segment: string) => checkAvailability(segment),
 }));
 
+const claimFormAction = jest.fn(
+  (_previous: ClaimFormState, _formData: FormData) =>
+    new Promise<ClaimFormState>(() => undefined),
+);
+jest.mock("../components/claim-action", () => ({
+  claimFormAction: (previous: ClaimFormState, formData: FormData) =>
+    claimFormAction(previous, formData),
+}));
+
 import Home from "./page";
+
+describe("claiming from the home page", () => {
+  it("offers the claim once three picked emoji are available", async () => {
+    // #115: a visitor who has picked three emoji can claim them from here, not
+    // only from the Handle's own URL.
+    const user = userEvent.setup();
+    render(<Home />);
+
+    for (let picked = 0; picked < 3; picked += 1) {
+      await user.click(screen.getByRole("button", { name: "ice cube" }));
+    }
+
+    expect(
+      await screen.findByRole("form", { name: en.Claim.claimHeading }),
+    ).toBeInTheDocument();
+  });
+});
 
 describe("Home", () => {
   it("renders the product name as the page heading", () => {

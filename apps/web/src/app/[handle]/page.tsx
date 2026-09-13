@@ -13,6 +13,7 @@ import { readDisplayNames, readProfile } from "../../lib/profile";
 import { safeLinkHref } from "../../lib/safe-link";
 import { HandleBuilder } from "../../components/handle-builder";
 import { checkAvailability } from "../../components/availability-action";
+import { claimFormAction } from "../../components/claim-action";
 import type { AvailabilityState } from "../../components/availability-state";
 import en from "../../../../../packages/shared/messages/en.json";
 
@@ -427,15 +428,37 @@ function ResolvedHandle({
     return (
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <HandleHeading handle={handle} spoken={spoken} />
-        <p className="text-center text-lg text-slate-500">{copy.unclaimed}</p>
+        <p className="text-center text-lg text-slate-500">
+          <span>{copy.unclaimed}</span>{" "}
+          {/*
+           * The call to action is a real control
+           * ([#115](https://github.com/joshstothard/3moji/issues/115)); #105
+           * left it as copy because there was nowhere to link to. It links
+           * within the page, to the claim form the builder renders — `#claim`
+           * is `claim-form.tsx`'s section id, repeated as a literal because an
+           * export of a client module reaches a server component as a client
+           * reference rather than a string. A link, not a button: it goes
+           * somewhere, and the browser moves the focus starting point with it.
+           */}
+          <a
+            className="font-semibold text-indigo-600 underline hover:text-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            href="#claim"
+          >
+            {copy.unclaimedAction}
+          </a>
+        </p>
         {/*
          * The builder, not a copy of it. `checkAvailability` is the same server
          * action the home page injects, over the same `lib/availability.ts`
          * read this page just made, so the live line under the slots cannot
-         * disagree with the answer that put the builder here.
+         * disagree with the answer that put the builder here. That read is
+         * handed over as `initialAvailability`, so the claim form the link
+         * above points at is on the page from the first paint.
          */}
         <HandleBuilder
           checkAvailability={checkAvailability}
+          claim={claimFormAction}
+          initialAvailability="available"
           initialEmoji={emoji}
         />
       </main>
