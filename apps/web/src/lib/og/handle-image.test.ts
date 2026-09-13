@@ -108,14 +108,24 @@ describe("the image input for a requested segment", () => {
     expect(mockReadProfile).not.toHaveBeenCalled();
   });
 
-  it("is the generic image, with no read, for a non-canonical spelling", async () => {
-    // The metadata only ever links the canonical path, so another spelling is
-    // somebody constructing URLs by hand. It gets no redirect and no Profile.
+  it("draws the claimed Profile for any spelling of the Handle, reading with the canonical segment", async () => {
+    // Observed in CI's E2E job (#161): the route handler is handed its segment
+    // spelled differently from the encoded path the page emitted, so a gate on
+    // `isCanonical` drew the generic image for a claimed Profile. Every
+    // spelling `canonicalise` accepts is the same Handle, and the reads are
+    // made with its canonical `encoded` segment, so another spelling reveals
+    // nothing the canonical one does not.
+    const glyph = glyphDataUriOf(ICE);
     mockCanonicalise.mockReturnValue({ ...RESOLVED, isCanonical: false });
 
-    await expect(ogImageInputForSegment(`${ENCODED}%EF%B8%8F`)).resolves.toBe(
-      GENERIC_IMAGE,
-    );
-    expect(mockReadAvailability).not.toHaveBeenCalled();
+    await expect(
+      ogImageInputForSegment(`${ENCODED}%EF%B8%8F`),
+    ).resolves.toEqual({
+      kind: "handle",
+      glyphs: [glyph, glyph, glyph],
+      displayName: "Zoe Frost",
+    });
+    expect(mockReadAvailability).toHaveBeenCalledWith(ENCODED);
+    expect(mockReadProfile).toHaveBeenCalledWith(ENCODED, "claimed");
   });
 });
