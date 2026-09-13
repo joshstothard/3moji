@@ -27,6 +27,14 @@ describe("RootLayout", () => {
     expect(metadata.title).toBe("3moji");
   });
 
+  it("declares no preview card or base URL for every page to inherit (#204)", () => {
+    // Root layout metadata is merged into every page, Profiles included: a
+    // card here would become a Profile's wherever its own metadata omits one.
+    expect(metadata).not.toHaveProperty("openGraph");
+    expect(metadata).not.toHaveProperty("twitter");
+    expect(metadata).not.toHaveProperty("metadataBase");
+  });
+
   it("carries no OKR branding in its metadata", () => {
     expect(JSON.stringify(metadata)).not.toMatch(/okr|objective|key result/i);
   });
