@@ -55,15 +55,25 @@ test("the page check fails when the page has a violation", async ({ page }) => {
   // WCAG 4.1.2 failure axe reports as `label`. Without this, a helper that
   // silently evaluated nothing would pass every test above and below it.
   await openHome(page);
-  await page.evaluate(() => {
-    const input = document.createElement("input");
-    input.type = "text";
-    document.querySelector("main")?.append(input);
-  });
 
-  const report = await checkPage(page);
+  // Injected afresh on each attempt, because the node is not React's: on a
+  // cold dev server hydration can re-render `<main>` after the heading is
+  // visible and drop it, and axe then rightly reports nothing — which is how
+  // this test flaked in CI on #174. Retrying never weakens it: it only passes
+  // once axe has actually reported `label` for the injected input.
+  await expect(async () => {
+    await page.evaluate(() => {
+      if (document.querySelector("[data-axe-self-test]") !== null) return;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.setAttribute("data-axe-self-test", "");
+      document.querySelector("main")?.append(input);
+    });
 
-  expect(report.violations.map((finding) => finding.rule)).toContain("label");
+    const report = await checkPage(page);
+
+    expect(report.violations.map((finding) => finding.rule)).toContain("label");
+  }).toPass({ timeout: 15_000 });
 });
 
 test("a claimed Profile has no WCAG A or AA violations", async ({ page }) => {
