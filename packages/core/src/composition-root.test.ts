@@ -50,6 +50,14 @@ describe("createCoreServices", () => {
     await close();
   });
 
+  it("wires the Claim's rate limiter, bound so a transport never holds the secret", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(typeof services.claimRateLimiter.admit).toBe("function");
+    expect(Object.keys(services.claimRateLimiter)).toEqual(["admit"]);
+    await close();
+  });
+
   it("wires the Claim's unit of work", async () => {
     const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
 

@@ -199,6 +199,26 @@ The same rows carry the resend rate limit, which is not two responsibilities bol
 
 **Rows are written in exactly one place**: the `sendVerificationEmail` hook in `createAuth`, which is the only point at which Better Auth reveals the token it signed. That is what makes "every link we issue is recorded" structural rather than a convention — a caller that could send without recording would silently revive an invalidated link. On the claim path the hook runs inside the claim transaction, so a rolled-back Claim leaves no dispatch behind, exactly as it leaves no Account.
 
+## Claim rate limit
+
+**Built** — `packages/core/src/db/claim-rate-limit.ts`, migration `0006_claim_rate_limit`.
+
+How many Claim submissions one bucket has made in one fixed window ([#157](https://github.com/joshstothard/3moji/issues/157)). A bucket is a client address or an email address, and **neither is stored**: the rule, and why it is shaped this way, is in [auth.md](auth.md#the-claims-rate-limit). A serverless deployment has no process memory to count in, so the counts are rows.
+
+### How it is stored
+
+| Column         | Type                          | Why                                                                                                                 |
+| -------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `bucket`       | `text`, PK part               | `client:` or `email:` then an HMAC-SHA256 hex digest under a key derived from the auth secret. **Never an address** |
+| `window_start` | `timestamptz`, PK part, index | The start of the fixed window, from the injected `Clock` — no SQL default, so a test can move time                  |
+| `count`        | `integer`, `CHECK (> 0)`      | Submissions in this bucket and window, including the latest                                                         |
+
+**The increment is one statement**: `INSERT … VALUES (…, 1), (…, 1) ON CONFLICT (bucket, window_start) DO UPDATE SET count = claim_rate_limit.count + 1 RETURNING …`. Postgres locks the conflicting row before evaluating the update, so concurrent submissions to one bucket each count once — asserted against a real Postgres with two dozen submissions racing on their own connections. Every submission locks its client bucket before its email bucket, so two submissions cannot deadlock each other.
+
+**No foreign key and no Account.** The counter is about submissions, and a submission naming an address counts whether or not the address is registered; that is what keeps the limit from answering "is this address registered".
+
+**Rows are forgotten** once their window has ended: the same call that counts deletes every window that started before the longest window, on the `window_start` index. The table holds an hour of hashed history, not a log.
+
 ## Profile
 
 The public page a claimed Handle resolves to.

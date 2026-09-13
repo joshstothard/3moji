@@ -3,7 +3,12 @@ import type { EmailSender } from "../auth/ports/email-sender";
 import { realSleep, withResponseFloor } from "../auth/response-floor";
 import type { AccountDirectory } from "../ports/account-directory";
 import type { CanonicalHandle, CanonicalisationFailure } from "./canonicalise";
-import { claimHandle, type ClaimHandleInput } from "./claim-handle";
+import {
+  claimHandle,
+  type ClaimHandleInput,
+  type ClaimResult,
+} from "./claim-handle";
+import type { ClaimRateLimiter } from "./claim-rate-limit";
 import type { Reservation } from "./reserved-handles";
 
 /**
@@ -44,6 +49,19 @@ export type ClaimSubmission =
   | {
       readonly state: "not-a-handle";
       readonly failure: CanonicalisationFailure;
+    }
+  | {
+      /**
+       * Too many submissions from this client address, or naming this email
+       * address, in the window ([#157](https://github.com/joshstothard/3moji/issues/157)).
+       *
+       * **Which of the two is deliberately absent**, and so is any "try again
+       * in": either would tell a caller which limit bound, and the email limit
+       * binding is a fact about an address. It says nothing about whether the
+       * address is registered, because the limit counts submissions and never
+       * Accounts.
+       */
+      readonly state: "rate-limited";
     };
 
 export interface SubmitClaimInput extends ClaimHandleInput {
@@ -55,6 +73,16 @@ export interface SubmitClaimInput extends ClaimHandleInput {
   readonly resetRequestUrl: string;
   /** The verified sender address. */
   readonly from: string;
+  /**
+   * The rate limit, consulted before anything else. Required, so no transport
+   * can reach the Claim without it (#157).
+   */
+  readonly rateLimiter: ClaimRateLimiter;
+  /**
+   * The client's network address as the transport read it from the forwarded
+   * headers, or `undefined`. Validated by the limiter, not trusted.
+   */
+  readonly clientAddress: string | undefined;
   /** Injected so a test proves the timing floor without waiting for it. */
   readonly sleep?: (ms: number) => Promise<void>;
   readonly floorMs?: number;
@@ -83,6 +111,14 @@ export interface SubmitClaimInput extends ClaimHandleInput {
  * remaining signal is small rather than absent, and the honest word for it is
  * mitigated.
  *
+ * **The rate limit comes first, inside the floor** (#157). A submission over
+ * either limit is refused before the Claim's transaction opens, so it creates
+ * nothing and mails nobody — which is what bounds the collision notices one
+ * inbox can receive. Its answer is padded like the answers about an address,
+ * so a refusal cannot be told from an accepted Claim, or one limit from the
+ * other, by how long it took. A limiter that cannot count throws, and the
+ * floor pads that too: the Claim fails closed.
+ *
  * **A rejected Handle is not padded.** `taken`, `not-claimable` and
  * `not-a-handle` are answers about a *Handle*, which is public information — the
  * builder shows availability live, so there is nothing to conceal and no reason
@@ -101,7 +137,15 @@ export async function submitClaim(
 
   const result = await withResponseFloor(
     floor,
-    async () => {
+    async (): Promise<ClaimResult | { readonly state: "rate-limited" }> => {
+      const admission = await input.rateLimiter.admit({
+        clientAddress: input.clientAddress,
+        email: input.email,
+      });
+      if (admission === "rate-limited") {
+        return { state: "rate-limited" };
+      }
+
       const claim = await claimHandle(input);
 
       if (claim.state === "already-registered") {
@@ -118,8 +162,12 @@ export async function submitClaim(
 
       return claim;
     },
-    // Only the two answers that turn on whether the address exists.
-    (claim) => claim.state === "held" || claim.state === "already-registered",
+    // The answers that turn on an address: whether it exists, and whether it
+    // has been named too often.
+    (claim) =>
+      claim.state === "held" ||
+      claim.state === "already-registered" ||
+      claim.state === "rate-limited",
   );
 
   switch (result.state) {
@@ -140,5 +188,7 @@ export async function submitClaim(
       };
     case "not-a-handle":
       return { state: "not-a-handle", failure: result.failure };
+    case "rate-limited":
+      return { state: "rate-limited" };
   }
 }

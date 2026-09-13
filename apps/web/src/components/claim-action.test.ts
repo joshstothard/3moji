@@ -24,13 +24,16 @@ interface SubmitInput {
   readonly emailSender: unknown;
   readonly resetRequestUrl: string;
   readonly from: string;
+  readonly rateLimiter: unknown;
+  readonly clientAddress: string | undefined;
 }
 
 type Submission =
   | { readonly state: "pending"; readonly handle: { readonly encoded: string } }
   | { readonly state: "taken"; readonly because: string }
   | { readonly state: "not-claimable" }
-  | { readonly state: "not-a-handle" };
+  | { readonly state: "not-a-handle" }
+  | { readonly state: "rate-limited" };
 
 const submitClaim = jest.fn((_input: SubmitInput): Promise<Submission> =>
   Promise.resolve({ state: "pending", handle: { encoded: ENCODED } }),
@@ -43,6 +46,7 @@ const CLOCK = { now: () => new Date(0) };
 const CLAIMS = { runInTransaction: jest.fn() };
 const ACCOUNTS = { byEmail: jest.fn(), handleOf: jest.fn() };
 const SENDER = { send: jest.fn() };
+const LIMITER = { admit: jest.fn() };
 
 const getServices = jest.fn(() => ({
   clock: CLOCK,
@@ -51,9 +55,16 @@ const getServices = jest.fn(() => ({
   emailSender: SENDER,
   resetRequestUrl: "http://localhost:3000/reset-password",
   emailFrom: "3moji <no-reply@mail.3moji.me>",
+  claimRateLimiter: LIMITER,
 }));
 jest.mock("../lib/services", () => ({
   getServices: () => getServices(),
+}));
+
+/** The request's headers, as the forwarded-for header Vercel sets them. */
+let requestHeaders = new Headers({ "x-vercel-forwarded-for": "203.0.113.7" });
+jest.mock("next/headers", () => ({
+  headers: () => Promise.resolve(requestHeaders),
 }));
 
 /** Typed, so `redirect.mock.calls` is typed too and no assertion is needed. */
@@ -102,7 +113,29 @@ describe("submitClaimAction", () => {
       emailSender: SENDER,
       resetRequestUrl: "http://localhost:3000/reset-password",
       from: "3moji <no-reply@mail.3moji.me>",
+      rateLimiter: LIMITER,
+      clientAddress: "203.0.113.7",
     });
+  });
+
+  it("supplies the client address from the forwarded headers, and undefined when there is none (#157)", async () => {
+    requestHeaders = new Headers();
+    try {
+      await submitClaimAction(form(FIELDS));
+    } finally {
+      requestHeaders = new Headers({ "x-vercel-forwarded-for": "203.0.113.7" });
+    }
+
+    expect(submitClaim.mock.calls[0]?.[0].clientAddress).toBeUndefined();
+  });
+
+  it("passes a rate-limited answer back to the form, and redirects nowhere (#157)", async () => {
+    submitClaim.mockResolvedValue({ state: "rate-limited" });
+
+    const result = await submitClaimAction(form(FIELDS));
+
+    expect(result).toEqual({ state: "rate-limited" });
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("sends an accepted Claim to the hold screen, percent-encoded", async () => {
