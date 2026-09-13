@@ -308,6 +308,14 @@ Both grammars share the one root route, dispatching on the received segment: `ca
 
 **Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): Vercel on the Hobby plan, which forbids commercial use. Postgres is Neon via the Vercel Marketplace; transactional email is Resend, sending from a subdomain of `3moji.me`.
 
+### Error tracking
+
+**Error tracking uses Vercel's own runtime logs, not a third-party service** (workstream Decision log, 2026-09-13). What reaches them is the structured lines above: one `api_boundary` line per call, and a `logFailure` line on `console.error` for each failure, sharing a `correlationId` that the response also returns as `x-correlation-id`. There is no alerting on them yet.
+
+- **On Hobby, runtime logs are kept for one hour** ([hosting and email report](../reports/2026-09-11-hosting-and-email.md) § 4). An incident has to be investigated, or its lines copied out, within the hour. The [runbooks](../runbooks/README.md) start with that step.
+- **Log drains and longer retention wait on the Vercel Pro upgrade**, an owner decision ([owner actions](../owner-actions.md), "When to move to Vercel Pro"). That Pro provides both is **expected, not verified: confirm it against Vercel's current docs** before relying on it.
+- **Uptime monitoring is not built.** It needs a live site ([#32](https://github.com/joshstothard/3moji/issues/32)) and is the remaining half of [#207](https://github.com/joshstothard/3moji/issues/207).
+
 ## Areas
 
 - [data-model.md](data-model.md) — Account, Handle, Profile, Link, and the Emoji Set
