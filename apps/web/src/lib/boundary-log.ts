@@ -70,6 +70,7 @@ export const BOUNDARIES = [
   "claim.form",
   "sign-in.submit",
   "sign-in.form",
+  "sign-out.form",
   "profile.save",
   "verification.resend",
   "password-reset.request",

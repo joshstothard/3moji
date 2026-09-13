@@ -25,6 +25,16 @@ jest.mock("next/navigation", () => ({
   notFound: jest.fn(),
 }));
 
+/**
+ * The sign-out server action (#194), recorded rather than run: this suite is
+ * about what the island does around it. The action itself is
+ * `sign-out-action.test.ts`.
+ */
+const signOutFormAction = jest.fn((): Promise<void> => Promise.resolve());
+jest.mock("./sign-out-action", () => ({
+  signOutFormAction: (): Promise<void> => signOutFormAction(),
+}));
+
 import type { ViewerSummary } from "@template/core";
 import {
   AccountMenu,
@@ -59,6 +69,8 @@ const OWNER = { state: "owner", key: ICE, encoded: ENCODED };
 
 beforeEach(() => {
   pathname = "/";
+  signOutFormAction.mockReset();
+  signOutFormAction.mockImplementation(() => Promise.resolve());
   fetchMock.mockReset();
   fetchMock.mockImplementation(() => answer({ state: "signed-out" }));
   Object.defineProperty(globalThis, "fetch", {
@@ -237,6 +249,84 @@ describe("AccountMenu", () => {
         "aria-expanded",
         "false",
       );
+    });
+  });
+
+  describe("sign-out (#194)", () => {
+    it.each([
+      ["an owner", OWNER],
+      ["a signed-in Account with no Handle", { state: "signed-in" }],
+    ])(
+      "offers %s a sign-out button that submits a form, below the links and never as a link",
+      async (_who, body) => {
+        fetchMock.mockImplementation(() => answer(body));
+        const user = userEvent.setup();
+        render(<AccountMenu />);
+
+        await user.click(
+          await screen.findByRole("button", { name: copy.toggle }),
+        );
+
+        const signOut = screen.getByRole("button", { name: copy.signOut });
+        expect(signOut).toHaveAttribute("type", "submit");
+        expect(signOut.closest("form")).not.toBeNull();
+        expect(screen.queryByRole("link", { name: copy.signOut })).toBeNull();
+        // Below the Handle links, when there are any.
+        for (const link of screen.queryAllByRole("link")) {
+          expect(
+            link.compareDocumentPosition(signOut) &
+              Node.DOCUMENT_POSITION_FOLLOWING,
+          ).toBeTruthy();
+        }
+      },
+    );
+
+    it("offers a signed-out visitor no sign-out", async () => {
+      render(<AccountMenu />);
+
+      await screen.findByRole("link", { name: copy.signIn });
+      expect(screen.queryByRole("button", { name: copy.signOut })).toBeNull();
+    });
+
+    it("signs out when pressed, then asks who is looking again and shows the sign-in link", async () => {
+      fetchMock.mockImplementation(() => answer(OWNER));
+      const user = userEvent.setup();
+      render(<AccountMenu />);
+      await user.click(
+        await screen.findByRole("button", { name: copy.toggle }),
+      );
+
+      fetchMock.mockImplementation(() => answer({ state: "signed-out" }));
+      await user.click(screen.getByRole("button", { name: copy.signOut }));
+
+      expect(
+        await screen.findByRole("link", { name: copy.signIn }),
+      ).toHaveAttribute("href", "/sign-in");
+      expect(signOutFormAction).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole("button", { name: copy.toggle })).toBeNull();
+    });
+
+    it("still asks again when the sign-out request fails, so the indicator shows what is true", async () => {
+      fetchMock.mockImplementation(() => answer(OWNER));
+      signOutFormAction.mockImplementation(() =>
+        Promise.reject(new Error("offline")),
+      );
+      const user = userEvent.setup();
+      render(<AccountMenu />);
+      await user.click(
+        await screen.findByRole("button", { name: copy.toggle }),
+      );
+
+      await user.click(screen.getByRole("button", { name: copy.signOut }));
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      });
+      // Still signed in, so the indicator still says so.
+      expect(
+        await screen.findByRole("button", { name: copy.toggle }),
+      ).toBeInTheDocument();
     });
   });
 });

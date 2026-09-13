@@ -25,6 +25,17 @@ jest.mock("next/headers", () => ({
   cookies: () => cookies(),
 }));
 
+/**
+ * The sign-out server action (#194), which the navbar's `<noscript>` and the
+ * indicator render as a form. Its module reaches `lib/services` and so
+ * better-auth, which is ESM-only here; the shell only renders the form and
+ * never calls it, so the counts of `headers()` and `cookies()` below still
+ * cover everything the shell does to render.
+ */
+jest.mock("../components/sign-out-action", () => ({
+  signOutFormAction: (): Promise<void> => Promise.resolve(),
+}));
+
 import RootLayout, { metadata } from "./layout";
 
 const shell = () =>

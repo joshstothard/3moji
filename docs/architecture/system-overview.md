@@ -73,6 +73,7 @@ The boundaries, enumerated from the code — `src/lib/api-boundaries.test.ts` wa
 | `components/claim-action.ts`          | `claimFormAction`                | `claim.form`             |
 | `components/sign-in-action.ts`        | `signInAction`                   | `sign-in.submit`         |
 | `components/sign-in-action.ts`        | `signInFormAction`               | `sign-in.form`           |
+| `components/sign-out-action.ts`       | `signOutFormAction`              | `sign-out.form`          |
 | `components/profile-edit-action.ts`   | `saveProfileAction`              | `profile.save`           |
 | `components/resend-action.ts`         | `requestNewVerificationLink`     | `verification.resend`    |
 | `components/password-reset-action.ts` | `requestPasswordResetFormAction` | `password-reset.request` |
@@ -84,6 +85,8 @@ The boundaries, enumerated from the code — `src/lib/api-boundaries.test.ts` wa
 The two image routes ([#161](https://github.com/joshstothard/3moji/issues/161)) log `ok` whenever they answer with an image and `failed` when the render throws. **`og-image.handle` logs `ok` for a claimed Profile and for the generic image alike**, so the log is no more a record of which Handles are held than the image is.
 
 **`viewer.read` logs `ok` whenever it answers** ([#193](https://github.com/joshstothard/3moji/issues/193)) — signed out, signed in or owner alike — so the log is not a record of who was signed in. A failed Account read inside it is answered, not thrown, and gets its own `viewer_summary_read_failed` line.
+
+**`sign-out.form` logs `redirected` when Better Auth answers and `failed` when the call throws** ([#194](https://github.com/joshstothard/3moji/issues/194)). Both land on `/`, so the redirect alone does not say which; a failure also writes its own `sign_out_failed` line. Better Auth swallows a failed session delete itself, so that case logs `redirected` — see [auth.md § Signing out](auth.md#signing-out).
 
 `outcome` is one of six values, chosen to describe what happened rather than who asked:
 
@@ -272,9 +275,9 @@ What the route answers is `viewerSummary`'s decision in `packages/core` (`src/au
 
 It carries that Handle's key and percent-encoded path and nothing else — no user id, no email, no hold expiry. **It decides links, never permission**: the edit page and `saveProfileAction` enforce `profileEditAuthority` themselves, so a wrong answer can show a link that 404s and cannot open a write. The island checks the answer's shape in the browser too, and anything unexpected — a refused request, a server error, a body that is not JSON, a path that is not percent-encoded — shows the sign-in link, which is nobody's.
 
-**It asks again on every navigation**, because the root layout stays mounted across App Router navigations: asking once would still say **Sign in** after the sign-in form's redirect. A change that stays on one page dispatches `VIEWER_CHANGED_EVENT` on `window`, and the island asks again. Without JavaScript the island never runs, so the navbar's `<noscript>` offers the sign-in link, the same for everybody — including a signed-in owner, since nothing lets a page without JavaScript learn who is signed in without reading the session.
+**It asks again on every navigation**, because the root layout stays mounted across App Router navigations: asking once would still say **Sign in** after the sign-in form's redirect. A change that stays on one page dispatches `VIEWER_CHANGED_EVENT` on `window`, and the island asks again. Without JavaScript the island never runs, so the navbar's `<noscript>` offers the sign-in link, the same for everybody — including a signed-in owner, since nothing lets a page without JavaScript learn who is signed in without reading the session. For the same reason the `<noscript>` offers the sign-out form beside it, to everybody ([#194](https://github.com/joshstothard/3moji/issues/194)).
 
-**It is a disclosure, not a menu**: a `<button aria-expanded aria-controls>` over a plain list of links. Tab moves through them and Escape closes the list and returns focus to the button; `role="menu"` would promise arrow-key handling nothing here needs. **Sign-out ([#194](https://github.com/joshstothard/3moji/issues/194)) and account deletion ([#195](https://github.com/joshstothard/3moji/issues/195)) attach inside the open list, below the links**, where the component marks their place: sign-out in both signed-in states, dispatching `VIEWER_CHANGED_EVENT` once done, and deletion as a link to an owner page that reads the session server-side.
+**It is a disclosure, not a menu**: a `<button aria-expanded aria-controls>` over a plain list of links. Tab moves through them and Escape closes the list and returns focus to the button; `role="menu"` would promise arrow-key handling nothing here needs. **Sign-out ([#194](https://github.com/joshstothard/3moji/issues/194)) is inside the open list, below the links**, in both signed-in states: a form's submit button, never a link, that dispatches `VIEWER_CHANGED_EVENT` once the request settles — see [auth.md § Signing out](auth.md#signing-out). **Account deletion ([#195](https://github.com/joshstothard/3moji/issues/195)) attaches there too**, where the component marks its place, as a link to an owner page that reads the session server-side.
 
 ### The word alias
 

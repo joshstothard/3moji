@@ -2,6 +2,11 @@ import { render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import en from "../../../../packages/shared/messages/en.json";
 
+// The sign-out server action (#194): the navbar renders its form, never runs it.
+jest.mock("./sign-out-action", () => ({
+  signOutFormAction: (): Promise<void> => Promise.resolve(),
+}));
+
 jest.mock("./account-menu", () => ({
   AccountMenu: () => <div data-testid="account-menu" />,
 }));
@@ -49,7 +54,7 @@ describe("Navbar", () => {
 
     expect(markup).toMatch(
       new RegExp(
-        `<noscript><a[^>]*href="/sign-in"[^>]*>${en.AccountMenu.signIn}</a></noscript>`,
+        `<noscript><a[^>]*href="/sign-in"[^>]*>${en.AccountMenu.signIn}</a>`,
       ),
     );
   });
@@ -58,5 +63,24 @@ describe("Navbar", () => {
     const markup = renderToStaticMarkup(<Navbar />);
 
     expect(markup).not.toMatch(/%F0%9F|\/edit"/);
+  });
+
+  /**
+   * #194. Without JavaScript the island never runs, so sign-out has to be in
+   * the `<noscript>` too — as a form, the same markup for every visitor, never
+   * a link a third-party page could make a browser follow.
+   */
+  it("offers a visitor without JavaScript a sign-out form, never a sign-out link", () => {
+    const markup = renderToStaticMarkup(<Navbar />);
+    const noscript = /<noscript>([\s\S]*)<\/noscript>/.exec(markup)?.[1] ?? "";
+
+    expect(noscript).toMatch(
+      new RegExp(
+        `<form[^>]*>[\\s\\S]*<button[^>]*type="submit"[^>]*>${en.AccountMenu.signOut}</button>[\\s\\S]*</form>`,
+      ),
+    );
+    expect(noscript).not.toMatch(
+      new RegExp(`<a[^>]*>${en.AccountMenu.signOut}</a>`),
+    );
   });
 });

@@ -358,6 +358,7 @@
     "toggle": "Signed in",
     "yourProfile": "Your Profile",
     "editProfile": "Edit your Profile",
+    "signOut": "Sign out",
     "noHandle": "There is no Profile to show for this account just now."
   }
 }

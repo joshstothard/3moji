@@ -111,6 +111,8 @@ jest.mock("@template/core", () => ({
 
 const viewerSummary = jest.fn();
 const signInEmail = jest.fn();
+/** Better Auth's sign-out, which `sign-out-action.ts` calls (#194). */
+const signOut = jest.fn();
 /** The session read `lib/session.ts` makes: a signed-in owner, by default. */
 const getSession = jest.fn();
 const signInAdmit = jest.fn();
@@ -167,6 +169,7 @@ import * as passwordResetAction from "../components/password-reset-action";
 import * as profileEditAction from "../components/profile-edit-action";
 import * as resendAction from "../components/resend-action";
 import * as signInAction from "../components/sign-in-action";
+import * as signOutAction from "../components/sign-out-action";
 import {
   BOUNDARIES,
   BOUNDARY_EVENT,
@@ -179,7 +182,7 @@ import {
 function healthy(): void {
   ogImage.fails = false;
   getServices.mockImplementation(() => ({
-    auth: { api: { signInEmail, getSession } },
+    auth: { api: { signInEmail, getSession, signOut } },
     accounts: { byEmail, handleOf },
     claims: {},
     clock: { now: () => new Date(0) },
@@ -212,6 +215,7 @@ function healthy(): void {
   requestPasswordReset.mockResolvedValue({ state: "sent" });
   setNewPassword.mockResolvedValue({ state: "reset" });
   signInEmail.mockResolvedValue({});
+  signOut.mockResolvedValue({ success: true });
   getSession.mockResolvedValue({ user: { id: "user-1", email: EMAIL } });
   viewerSummary.mockReturnValue({ state: "owner", key: ICE, encoded: ENCODED });
   signInAdmit.mockResolvedValue({ state: "admitted" });
@@ -434,6 +438,21 @@ const CASES: readonly BoundaryCase[] = [
       });
       byEmail.mockRejectedValue(leakyError());
       return signInAction.signInFormAction(personalForm());
+    },
+    logsFailure: true,
+  },
+  {
+    // Signed out, answered with a redirect to `/` (#194). A failure also lands
+    // on `/`, where the indicator shows what is true, so it records `failed`
+    // before redirecting and writes a `sign_out_failed` line.
+    file: "components/sign-out-action.ts",
+    exportName: "signOutFormAction",
+    boundary: "sign-out.form",
+    answer: () => signOutAction.signOutFormAction(),
+    answered: "redirected",
+    fail: () => {
+      signOut.mockRejectedValue(leakyError());
+      return signOutAction.signOutFormAction();
     },
     logsFailure: true,
   },
