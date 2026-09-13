@@ -133,6 +133,9 @@ jobs:
         with:
           fetch-depth: 0
       - run: bash scripts/check-adr-sync.sh origin/main
+      # A pull request is checked out as its merge with main, so this also
+      # catches an ADR number taken on main after the branch was cut (#36).
+      - run: node scripts/check-adr-numbers.mjs
 
   # ─── Stage 2: Build + Security ───────────────────────────────────────────────
 
