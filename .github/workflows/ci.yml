@@ -213,6 +213,10 @@ jobs:
       # The report link's mailbox (#197): a placeholder on the reserved
       # example.com domain, so the Profile renders its report link under test.
       REPORT_CONTACT_EMAIL: reports@example.com
+      # Switches on app/test-only-error (#203), a page that throws, so the branded
+      # error page renders in a real browser. lib/test-error-route.ts refuses it
+      # on any deployment, where the page is a 404.
+      TEST_ERROR_ROUTE: enabled
     services:
       postgres:
         image: postgres:16

@@ -10,6 +10,7 @@ import {
 import { nextCookies } from "better-auth/next-js";
 
 import { createAfterBackgroundTasks } from "./after-background-tasks";
+import { isDeployed } from "./deployment";
 
 /**
  * The application's composition point.
@@ -50,22 +51,6 @@ function required(name: string): string {
 const RECORDING_SENDER = "recording";
 
 /**
- * Whether this process is a deployment that real people use.
- *
- * `NODE_ENV` is `production` under `next start` and on every Vercel
- * deployment; `VERCEL_ENV` is set on every Vercel deployment, previews
- * included. Either is enough to refuse: refusing a preview costs a failed
- * deploy, and not refusing costs verification email that silently never goes.
- */
-function isDeployed(): boolean {
-  const vercelEnv = process.env.VERCEL_ENV;
-  return (
-    process.env.NODE_ENV === "production" ||
-    (vercelEnv !== undefined && vercelEnv !== "")
-  );
-}
-
-/**
  * The transactional email sender: Resend, unless a test run asks otherwise.
  *
  * **`TEST_EMAIL_SENDER=recording` is a test-only switch, and production
@@ -99,7 +84,7 @@ function emailSender(): EmailSender {
     );
   }
 
-  if (isDeployed()) {
+  if (isDeployed(process.env)) {
     throw new Error(
       "TEST_EMAIL_SENDER is set in a production environment. It selects a test-only sender that delivers no email, so the app refuses to start; unset it.",
     );

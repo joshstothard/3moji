@@ -387,5 +387,18 @@
     "submit": "Delete my account and give up my Handle",
     "errorConfirm": "Nothing was deleted. To delete your account, type the word shown exactly.",
     "errorFailed": "Nothing was deleted. We could not delete your account just now. Try again in a moment."
+  },
+  "NotFoundPage": {
+    "metaTitle": "Page not found · 3moji",
+    "heading": "There is nothing at this address",
+    "body": "Check the web address for a typo, or start again from the home page.",
+    "home": "Go to the home page"
+  },
+  "ErrorPage": {
+    "metaTitle": "Something went wrong · 3moji",
+    "heading": "Something went wrong",
+    "body": "We could not show this page just now. Try again, or start again from the home page.",
+    "retry": "Try again",
+    "home": "Go to the home page"
   }
 }
