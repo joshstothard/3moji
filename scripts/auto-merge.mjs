@@ -7,7 +7,8 @@
 // auto-merge.test.mjs. The rest of this file gathers that data with `gh api` and
 // acts on the answer. It never touches a local git checkout.
 //
-// Usage (GH_TOKEN must be allowed to merge, update branches and dispatch CI):
+// Usage (GH_TOKEN must be allowed to merge, update branches, dispatch CI and
+// close issues):
 //   node scripts/auto-merge.mjs                        # every open PR into main
 //   AUTO_MERGE_SHA=<sha> node scripts/auto-merge.mjs   # the same, the PR whose head is <sha> first
 //   AUTO_MERGE_PR=42 node scripts/auto-merge.mjs       # only this PR
@@ -311,6 +312,95 @@ function merge(repo, pr, method) {
   return true;
 }
 
+// A warning annotation on the run, which does not fail the job. The message is
+// escaped as GitHub's workflow-command syntax requires, so text from an API
+// error cannot start a workflow command of its own on a new line.
+function warn(line) {
+  const escaped = line
+    .replaceAll("%", "%25")
+    .replaceAll("\r", "%0D")
+    .replaceAll("\n", "%0A");
+  console.log(`::warning title=auto-merge::${escaped}`);
+}
+
+const CLOSING_ISSUES_QUERY = `query ($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      closingIssuesReferences(first: 100) {
+        nodes { number state repository { nameWithOwner } }
+      }
+    }
+  }
+}`;
+
+// GitHub's own list of the issues a pull request closes. The REST pull request
+// object does not carry it, so this is the gate's one GraphQL call. Throws on
+// any failure, which closeLinkedIssues() turns into a warning.
+function closingIssues(repo, number) {
+  const [owner, name] = repo.split("/");
+  const result = gh(
+    [
+      "api",
+      "graphql",
+      "-f",
+      `query=${CLOSING_ISSUES_QUERY}`,
+      "-f",
+      `owner=${owner}`,
+      "-f",
+      `name=${name}`,
+      "-F",
+      `number=${number}`,
+    ],
+    { allowFailure: true },
+  );
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || "gh api graphql failed");
+  }
+  const response = JSON.parse(result.stdout);
+  if (response.errors?.length) {
+    throw new Error(response.errors.map((error) => error.message).join("; "));
+  }
+  return response.data.repository.pullRequest.closingIssuesReferences.nodes;
+}
+
+// Close an issue, then say why on it. Closing comes first: a comment claiming a
+// close that then failed would be worse than a closed issue with no comment. A
+// failed close throws; a failed comment only warns, since the issue is closed.
+function closeIssue(repo, issueNumber, prNumber) {
+  const closed = gh(
+    [
+      "api",
+      "-X",
+      "PATCH",
+      `repos/${repo}/issues/${issueNumber}`,
+      "-f",
+      "state=closed",
+      "-f",
+      "state_reason=completed",
+    ],
+    { allowFailure: true },
+  );
+  if (closed.status !== 0) {
+    throw new Error(closed.stderr.trim() || "no error output");
+  }
+  const commented = gh(
+    [
+      "api",
+      "-X",
+      "POST",
+      `repos/${repo}/issues/${issueNumber}/comments`,
+      "-f",
+      `body=Closed by #${prNumber} (merged by the auto-merge gate).`,
+    ],
+    { allowFailure: true },
+  );
+  if (commented.status !== 0) {
+    warn(
+      `#${prNumber}: closed #${issueNumber}, but could not comment on it: ${commented.stderr.trim()}`,
+    );
+  }
+}
+
 function update(repo, pr) {
   const result = gh(
     [
@@ -395,6 +485,50 @@ function waitForDispatchedCi(updated, deps) {
   return false;
 }
 
+// The issues a merged PR should close, out of GitHub's own list of the issues it
+// links as closing (`closingIssuesReferences`): those in this repository that
+// are still open. GitHub builds that list from closing keywords and the
+// sidebar's links, so a `Part of #42` or `Refs #42` is never on it. A closing
+// keyword aimed at another repository is dropped here, because the gate's token
+// has no business there.
+export function issuesToClose(nodes, repo) {
+  return nodes.filter(
+    (issue) =>
+      issue.state === "OPEN" && issue.repository?.nameWithOwner === repo,
+  );
+}
+
+const errorMessage = (error) =>
+  error instanceof Error ? error.message : String(error);
+
+// #42: GitHub's closing-keyword automation does not fire for a merge made with
+// GITHUB_TOKEN, so after a successful merge the gate closes the PR's issues
+// itself. The list is read after the merge, so an issue already closed — by a
+// person, or by GitHub if it ever fires — is skipped and gets no second comment.
+// Nothing here throws: the merge has happened, so a failure is a warning, never
+// a failed run and never a reason to retry the merge.
+function closeLinkedIssues(pr, deps) {
+  let issues;
+  try {
+    issues = issuesToClose(deps.closingIssues(pr.number), deps.repo);
+  } catch (error) {
+    deps.warn(
+      `#${pr.number}: merged, but could not read the issues it closes: ${errorMessage(error)}`,
+    );
+    return;
+  }
+  for (const issue of issues) {
+    try {
+      deps.closeIssue(issue.number, pr.number);
+      deps.log(`#${pr.number}: closed #${issue.number}`);
+    } catch (error) {
+      deps.warn(
+        `#${pr.number}: merged, but could not close #${issue.number}: ${errorMessage(error)}`,
+      );
+    }
+  }
+}
+
 // Evaluate one pull request and act on the decision. Every GitHub call comes in
 // through `deps`, so the whole path is unit-tested with a fake transport.
 //
@@ -423,7 +557,8 @@ export function gatePullRequest(number, deps) {
     deps.log(`#${number} ${pr.title}: ${decision.action} (${decision.reason})`);
     if (deps.dryRun) return decision;
     if (decision.action === "merge") {
-      deps.merge(pr, decision.method);
+      // A failed merge has already been reported on the PR, and closes nothing.
+      if (deps.merge(pr, decision.method)) closeLinkedIssues(pr, deps);
       return decision;
     }
     if (decision.action !== "update") return decision;
@@ -451,6 +586,11 @@ function handle(repo, number, deadline) {
     listCiRuns: (sha) => ciRuns(repo, sha),
     merge: (pr, method) => merge(repo, pr, method),
     update: (pr) => update(repo, pr),
+    repo,
+    closingIssues: (number) => closingIssues(repo, number),
+    closeIssue: (issueNumber, prNumber) =>
+      closeIssue(repo, issueNumber, prNumber),
+    warn,
     sleep,
     now: Date.now,
     deadline,
