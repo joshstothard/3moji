@@ -540,7 +540,7 @@ function Messages({
 }
 
 const CONTROL =
-  "mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+  "mt-1 block w-full rounded-xl border border-slate-500 px-3 py-2 text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
 const PRIMARY_BUTTON =
   "rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
 const SECONDARY_BUTTON =

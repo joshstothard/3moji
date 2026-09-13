@@ -253,7 +253,7 @@ export function HoldScreen({
             </label>
             <input
               autoComplete="email"
-              className="rounded-xl border border-slate-300 px-4 py-3 text-base text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="rounded-xl border border-slate-500 px-4 py-3 text-base text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
               id="resend-email"
               name="email"
               required

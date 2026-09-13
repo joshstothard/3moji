@@ -61,7 +61,7 @@ const HEADING_ID = "claim-heading";
 const MESSAGE_ID = "claim-message";
 
 const FIELD =
-  "rounded-xl border border-slate-300 px-4 py-3 text-base text-slate-900 aria-invalid:border-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+  "rounded-xl border border-slate-500 px-4 py-3 text-base text-slate-900 aria-invalid:border-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
 
 /**
  * The claim form: an email address and a password, for the Handle in the

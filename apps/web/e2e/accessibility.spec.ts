@@ -1,6 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   aliasTermSlugs,
+  canonicalise,
+  curatedEmojiSet,
+  HANDLE_LENGTH,
+  isReservedHandle,
   resolveAlias,
   type AliasCandidate,
   type CuratedEmoji,
@@ -14,7 +18,12 @@ import {
   type PageReport,
 } from "./support/axe";
 import { UNCLAIMED_SEVERAL_ALIAS } from "./support/aliases";
-import { describeContrast, measureContrast } from "./support/contrast";
+import {
+  describeBorderContrast,
+  describeContrast,
+  measureBorderContrast,
+  measureContrast,
+} from "./support/contrast";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -42,6 +51,51 @@ const editCopy = en.ProfileEdit;
 
 /** WCAG 1.4.3 Contrast (Minimum), for text at normal size. */
 const TEXT_CONTRAST = 4.5;
+
+/** WCAG 1.4.11 Non-text Contrast, for what identifies a control. */
+const NON_TEXT_CONTRAST = 3;
+
+/**
+ * A text field's border is the cue that identifies it as a control
+ * ([#182](https://github.com/joshstothard/3moji/issues/182)): no field's fill
+ * or shadow reaches 3:1 against the page, so the border has to.
+ *
+ * Soft, so a single run reports every field on the page rather than the first
+ * that fails.
+ */
+async function expectBorderIdentifiesField(
+  field: Locator,
+  subject: string,
+): Promise<void> {
+  await expect(field).toBeVisible();
+  const measured = await measureBorderContrast(field);
+  const account = describeBorderContrast(subject, measured);
+  console.log(account);
+
+  expect
+    .soft(measured.ratio, account)
+    .toBeGreaterThanOrEqual(NON_TEXT_CONTRAST);
+}
+
+/**
+ * The path to a Handle nobody has claimed, so its page renders the builder and
+ * the claim form. Random, as `seedClaimedHandle` is, so it cannot collide with
+ * a Handle another spec claims in the shared database; a Reserved pick is
+ * simply drawn again.
+ */
+function unclaimedHandlePath(): string {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const segment = Array.from(
+      { length: HANDLE_LENGTH },
+      () => randomOf(curatedEmojiSet).emoji,
+    ).join("");
+    const result = canonicalise(segment);
+    if (result.ok && !isReservedHandle(result.key)) {
+      return `/${result.encoded}`;
+    }
+  }
+  throw new Error("Could not draw an unreserved Handle.");
+}
 
 function expectAccessible(
   report: PageReport,
@@ -100,13 +154,94 @@ test("the picker's search placeholder meets text contrast", async ({
   expect(measured.ratio, account).toBeGreaterThanOrEqual(TEXT_CONTRAST);
 });
 
-test("the Profile edit form's drag handle meets text contrast", async ({
+test("the picker's search field border meets non-text contrast", async ({
+  page,
+}) => {
+  await openHome(page);
+
+  await expectBorderIdentifiesField(
+    page.getByRole("searchbox", { name: builderCopy.pickerSearchLabel }),
+    "picker search",
+  );
+});
+
+test("the claim form's field borders meet non-text contrast", async ({
+  page,
+}) => {
+  await page.goto(unclaimedHandlePath());
+
+  await expectBorderIdentifiesField(
+    page.getByRole("textbox", { name: claimCopy.claimEmailLabel }),
+    "claim email",
+  );
+  await expectBorderIdentifiesField(
+    page.getByLabel(claimCopy.claimPasswordLabel, { exact: true }),
+    "claim password",
+  );
+});
+
+test("the hold screen's resend field border meets non-text contrast", async ({
+  page,
+}) => {
+  await page.goto("/claim/held");
+
+  await expectBorderIdentifiesField(
+    page.getByLabel(claimCopy.resendEmailLabel, { exact: true }),
+    "resend email",
+  );
+});
+
+test("the sign-in form's field borders meet non-text contrast", async ({
+  page,
+}) => {
+  // Measured without submitting: a form sign-in counts against the per-client
+  // sign-in rate limit, and nothing here needs a session.
+  await page.goto("/sign-in");
+
+  await expectBorderIdentifiesField(
+    page.getByLabel(claimCopy.signInEmailLabel, { exact: true }),
+    "sign-in email",
+  );
+  await expectBorderIdentifiesField(
+    page.getByLabel(claimCopy.signInPasswordLabel, { exact: true }),
+    "sign-in password",
+  );
+});
+
+test("the share link's manual-copy field border meets non-text contrast", async ({
+  page,
+}) => {
+  // The field appears only when copying fails, so the clipboard refuses.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: () => Promise.reject(new Error("Refused for the test.")),
+      },
+    });
+  });
+  const seeded = await seedClaimedHandle();
+
+  await page.goto(seeded.path);
+  await page.getByRole("button", { name: handleCopy.shareCopy }).click();
+
+  await expectBorderIdentifiesField(
+    page.getByLabel(handleCopy.shareManualLabel, { exact: true }),
+    "share link manual copy",
+  );
+});
+
+test("the Profile edit form's drag handle and field borders meet contrast", async ({
   page,
 }) => {
   // The handle is a pointer-only duplicate of the move buttons, hidden from
   // assistive technology (#107), which argues for WCAG 1.4.11's 3:1. It is
   // also a rendered character, which argues for 1.4.3's 4.5:1. The stricter
   // threshold is asserted, so the fix does not rest on the contested reading.
+  //
+  // The field borders (#182) are measured in this test rather than their own
+  // so the suite signs in through the form once per project, not twice: the
+  // form is rate limited per client, and every E2E request comes from one.
   const seeded = await seedClaimedHandle();
 
   await page.goto("/sign-in");
@@ -130,6 +265,29 @@ test("the Profile edit form's drag handle meets text contrast", async ({
   console.log(account);
 
   expect(measured.ratio, account).toBeGreaterThanOrEqual(TEXT_CONTRAST);
+
+  // Two surfaces: the display name and bio sit on the page, the Link fields
+  // inside the white Links fieldset.
+  await expectBorderIdentifiesField(
+    page.getByLabel(editCopy.displayNameLabel, { exact: true }),
+    "edit display name",
+  );
+  await expectBorderIdentifiesField(
+    page.getByLabel(editCopy.bioLabel, { exact: true }),
+    "edit bio",
+  );
+  await expectBorderIdentifiesField(
+    page.getByLabel(editCopy.linkTitleLabel.replace("{position}", "1"), {
+      exact: true,
+    }),
+    "edit link 1 title",
+  );
+  await expectBorderIdentifiesField(
+    page.getByLabel(editCopy.linkUrlLabel.replace("{position}", "1"), {
+      exact: true,
+    }),
+    "edit link 1 web address",
+  );
 });
 
 test("the page check fails when the page has a violation", async ({ page }) => {
