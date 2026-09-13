@@ -6,6 +6,7 @@ import {
 } from "@template/core";
 
 import { getServices } from "./services";
+import { logFailure } from "./log-error";
 import { readViewer } from "./session";
 
 /**
@@ -58,12 +59,7 @@ export async function readEditAuthority(
     const owned = await accounts.handleOf(viewer.userId);
     return profileEditAuthority({ viewer, owned, requested });
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "edit_authority_read_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("edit_authority_read_failed", error);
     return { state: "no-handle" };
   }
 }
@@ -111,12 +107,7 @@ export async function readEditableDraft(
       })),
     };
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "editable_profile_read_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("editable_profile_read_failed", error);
     return undefined;
   }
 }

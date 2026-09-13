@@ -215,6 +215,34 @@ describe("requestNewVerificationLink", () => {
     logged.mockRestore();
   });
 
+  it.each([
+    [
+      "an email address",
+      `Key (email)=(someone@example.com) already exists.`,
+      "someone@example.com",
+    ],
+    [
+      "a password",
+      `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+      "hunter2-Tr0ub4dor&3",
+    ],
+  ])(
+    "keeps %s in the error's message out of the log line (#134)",
+    async (_what, message, secret) => {
+      const logged = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      resendVerification.mockRejectedValue(new Error(message));
+      await requestNewVerificationLink(
+        form({ email: "a@b.com", handle: ENCODED }),
+      );
+      const output = JSON.stringify(logged.mock.calls);
+      expect(output).toContain("verification_resend_failed");
+      expect(output).not.toContain(secret);
+      logged.mockRestore();
+    },
+  );
+
   it("keeps the API key out of the log line", async () => {
     // The message reaches logs and error trackers.
     const logged = jest

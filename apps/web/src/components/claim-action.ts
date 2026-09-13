@@ -4,6 +4,7 @@ import { submitClaim } from "@template/core";
 import { redirect } from "next/navigation";
 
 import { getServices } from "../lib/services";
+import { logFailure } from "../lib/log-error";
 
 /**
  * What the claim form is told when the Claim did not go through.
@@ -92,12 +93,7 @@ export async function submitClaimAction(
         return { state: "not-a-handle" };
     }
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "claim_submit_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("claim_submit_failed", error);
     return { state: "failed" };
   }
 

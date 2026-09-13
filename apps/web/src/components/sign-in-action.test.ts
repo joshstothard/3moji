@@ -154,6 +154,33 @@ describe("signInAction", () => {
       expect(redirect.mock.calls[0]?.[0] ?? "").not.toContain("claimant");
     });
 
+    it.each([
+      [
+        "an email address",
+        `Key (email)=(someone@example.com) already exists.`,
+        "someone@example.com",
+      ],
+      [
+        "a password",
+        `password authentication failed: "hunter2-Tr0ub4dor&3"`,
+        "hunter2-Tr0ub4dor&3",
+      ],
+    ])(
+      "keeps %s in the error's message out of the log line (#134)",
+      async (_what, message, secret) => {
+        const logged = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        signInEmail.mockRejectedValue(emailNotVerified());
+        byEmail.mockRejectedValue(new Error(message));
+        await signInAction(form(CREDENTIALS));
+        const output = JSON.stringify(logged.mock.calls);
+        expect(output).toContain("hold_screen_lookup_failed");
+        expect(output).not.toContain(secret);
+        logged.mockRestore();
+      },
+    );
+
     it("reports a failure rather than a wrong guess when the lookup breaks", async () => {
       const logged = jest
         .spyOn(console, "error")

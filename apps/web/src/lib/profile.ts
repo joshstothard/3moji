@@ -6,6 +6,7 @@ import {
   type ProfileState,
 } from "@template/core";
 import { getServices } from "./services";
+import { logFailure } from "./log-error";
 import type { AvailabilityState } from "../components/availability-state";
 
 /**
@@ -62,12 +63,7 @@ export async function readProfile(
     // be silent. The answer is **`none`, never `unedited`** — `unedited` is a
     // statement about the owner, and a failed query says nothing about the
     // owner. `none` leaves the route on its honest "This Handle is taken." line.
-    console.error(
-      JSON.stringify({
-        event: "profile_read_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("profile_read_failed", error);
     return NOTHING_TO_SHOW;
   }
 }
@@ -133,12 +129,7 @@ export async function readDisplayNames(
     // Logged for the reason `readProfile` logs its own: a misconfigured
     // deployment or a refused connection is the failure that would otherwise be
     // silent — and here it is silent by design, because the page still renders.
-    console.error(
-      JSON.stringify({
-        event: "display_names_read_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("display_names_read_failed", error);
     return NO_NAMES;
   }
 }

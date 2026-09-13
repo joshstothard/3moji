@@ -1,5 +1,6 @@
 import { claimableHandle, handleAvailability } from "@template/core";
 import { getServices } from "./services";
+import { logFailure } from "./log-error";
 import type { AvailabilityState } from "../components/availability-state";
 
 /**
@@ -43,12 +44,7 @@ export async function readAvailability(
   } catch (error) {
     // A misconfigured deployment is the one case that would otherwise fail
     // silently, so it is worth a log line rather than a shrug.
-    console.error(
-      JSON.stringify({
-        event: "availability_check_failed",
-        message: error instanceof Error ? error.message : "unknown error",
-      }),
-    );
+    logFailure("availability_check_failed", error);
     return withoutDatabase(segment);
   }
 }
