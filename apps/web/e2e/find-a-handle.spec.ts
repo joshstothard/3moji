@@ -32,7 +32,11 @@ const lookupCopy = en.HandleLookup;
 const findCopy = en.FindPage;
 const handleCopy = en.HandlePage;
 
-const NOT_FOUND_WORDS = "three ice cubes";
+const NOT_FOUND_WORDS = "three wibbles";
+
+/** The spoken form Profiles say for 🧊🧊🧊 (#201). */
+const SPOKEN_WORDS = "three ice cubes";
+const ICE_CUBE_ALIAS = "/ice-cube.ice-cube.ice-cube";
 
 function randomOf<T>(items: readonly T[]): T {
   const item = items[Math.floor(Math.random() * items.length)];
@@ -142,8 +146,24 @@ for (const javaScriptEnabled of [true, false]) {
     }) => {
       await lookUp(page, NOT_FOUND_WORDS);
 
-      await expect(page).toHaveURL(/\/find\?q=three\+ice\+cubes$/);
+      await expect(page).toHaveURL(/\/find\?q=three\+wibbles$/);
       await expectNotFound(page, NOT_FOUND_WORDS);
+    });
+
+    test("the spoken form a Profile says takes a visitor to that Handle (#201)", async ({
+      page,
+    }) => {
+      await lookUp(page, SPOKEN_WORDS);
+
+      await expect(page).toHaveURL(ICE_CUBE_ALIAS);
+      // Claimed or not in the shared database, the alias page names 🧊🧊🧊 as
+      // its canonical emoji path, which is what "that Handle's page" means.
+      const canonical = await page
+        .locator('link[rel="canonical"]')
+        .getAttribute("href");
+      expect(decodeURIComponent(canonical ?? "")).toMatch(
+        /\/\u{1F9CA}\u{1F9CA}\u{1F9CA}$/u,
+      );
     });
   });
 }
@@ -156,7 +176,14 @@ test("the lookup's answers over HTTP: a redirect to the alias, or a page, never 
     { maxRedirects: 0 },
   );
   expect(found.status()).toBe(307);
-  expect(found.headers().location).toBe("/ice-cube.ice-cube.ice-cube");
+  expect(found.headers().location).toBe(ICE_CUBE_ALIAS);
+
+  const spoken = await request.get(
+    `/find?q=${encodeURIComponent(SPOKEN_WORDS)}`,
+    { maxRedirects: 0 },
+  );
+  expect(spoken.status()).toBe(307);
+  expect(spoken.headers().location).toBe(ICE_CUBE_ALIAS);
 
   for (const words of [NOT_FOUND_WORDS, "%", "curry rice wine pizza"]) {
     const answer = await request.get(`/find?q=${encodeURIComponent(words)}`, {
