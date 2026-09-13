@@ -60,6 +60,19 @@ Every request passes through `apps/web/src/proxy.ts` (Next.js 16 renamed `middle
 - **A client cannot choose the id text.** An incoming value is accepted only if it is ASCII letters, digits, `:`, `-` or `_`, at most 128 characters (`lib/correlation-id.ts`); anything else is replaced and never echoed, and an incoming `x-correlation-id` is always overwritten. The rule bounds characters and length rather than a grammar, because Vercel does not document the format of `x-vercel-id`.
 - **Reading it.** A route handler or server action calls `readCorrelationId()` in `lib/request-context.ts`, which goes through `headers()`. `logFailure` is synchronous, so it uses `currentCorrelationId()`, which reads the same per-request store synchronously. That store is a Next.js internal, and a contract test fails the build if an upgrade moves it. Both re-apply the allow-list and return the literal `"none"` when there is no request.
 
+### Security headers
+
+Every response carries four headers that don't change per request ([#205](https://github.com/joshstothard/3moji/issues/205)):
+
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `X-Frame-Options: DENY`
+
+They are listed in `apps/web/src/lib/security-headers.ts` and sent from `next.config.ts` `headers()` on `/:path*`, **not from the proxy**. The proxy's matcher skips `_next/static`, `_next/image` and the metadata files, and HSTS and `nosniff` belong on those as much as on a page, on route handlers and on the Open Graph images. `security-headers.test.ts` pins both the values and the rule's `source`. HSTS leaves out `preload`, which commits the whole domain and is slow to undo; that is the owner's call.
+
+**There is no Content Security Policy yet.** Every strict option has a cost, so the choice is waiting on the owner ([owner actions](../owner-actions.md), Decide before launch). The measurements behind it are in [the #205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123).
+
 ### API boundary logging
 
 Every API boundary writes **exactly one** structured JSON line per call, on success and on failure, to `console.log` ([#156](https://github.com/joshstothard/3moji/issues/156)): `{ event: "api_boundary", boundary, outcome, durationMs, correlationId }`, plus `endpoint` on the auth route. It is written by `atBoundary` in `apps/web/src/lib/boundary-log.ts`, and **nothing free-text reaches it**: every value is a literal from a fixed list in that file, a rounded number, or the allow-listed correlation id. A failure still gets its own `logFailure` line on `console.error`, from the boundary's own catch; the two share `correlationId`.
@@ -310,6 +323,14 @@ Both grammars share the one root route, dispatching on the received segment: `ca
 ## Deployment
 
 **Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): Vercel on the Hobby plan, which forbids commercial use. Postgres is Neon via the Vercel Marketplace; transactional email is Resend, sending from a subdomain of `3moji.me`.
+
+### Error tracking
+
+**Error tracking uses Vercel's own runtime logs, not a third-party service** (workstream Decision log, 2026-09-13). What reaches them is the structured lines above: one `api_boundary` line per call, and a `logFailure` line on `console.error` for each failure, sharing a `correlationId` that the response also returns as `x-correlation-id`. There is no alerting on them yet.
+
+- **On Hobby, runtime logs are kept for one hour** ([hosting and email report](../reports/2026-09-11-hosting-and-email.md) § 4). An incident has to be investigated, or its lines copied out, within the hour. The [runbooks](../runbooks/README.md) start with that step.
+- **Log drains and longer retention wait on the Vercel Pro upgrade**, an owner decision ([owner actions](../owner-actions.md), "When to move to Vercel Pro"). That Pro provides both is **expected, not verified: confirm it against Vercel's current docs** before relying on it.
+- **Uptime monitoring is not built.** It needs a live site ([#32](https://github.com/joshstothard/3moji/issues/32)) and is the remaining half of [#207](https://github.com/joshstothard/3moji/issues/207).
 
 ## Areas
 
