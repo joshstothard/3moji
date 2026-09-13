@@ -441,6 +441,26 @@ test("a claimed Profile has no WCAG A or AA violations", async ({ page }) => {
   expectLandmarksContained(await checkLandmarks(page));
 });
 
+for (const [path, legalCopy] of [
+  ["/privacy", en.Legal.Privacy],
+  ["/terms", en.Legal.Terms],
+] as const) {
+  test(`${path} has no WCAG A or AA violations`, async ({ page }) => {
+    // Contrast is axe's `color-contrast`, in PAGE_RULES: the draft marker's
+    // amber and the related link's indigo are measured from the real CSS
+    // (#196). Nothing here is a placeholder or a hidden glyph, so the direct
+    // measurements above have nothing to add.
+    await page.goto(path);
+    await expect(
+      page.getByRole("heading", { level: 1, name: legalCopy.heading }),
+    ).toBeVisible();
+    await expect(page.getByText(en.Legal.draftMarker)).toBeVisible();
+
+    expectAccessible(await checkPage(page), ["list", "listitem"]);
+    expectLandmarksContained(await checkLandmarks(page));
+  });
+}
+
 test("the alias listing never seeds a Handle handle-url.spec.ts needs unclaimed", () => {
   // Every spec shares one database, and handle-url.spec.ts needs every Handle
   // UNCLAIMED_SEVERAL_ALIAS names to stay unclaimed. Another alias can name the
