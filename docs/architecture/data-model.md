@@ -115,7 +115,7 @@ The read takes a row lock (`SELECT … FOR UPDATE`), so two Releases of the same
 
 ## The Claim
 
-**Built, and not runnable on the production driver.** `claimHandle` in `packages/core/src/handle/claim-handle.ts`, with `submitClaim` over it (`src/handle/submit-claim.ts`) and the `submitClaimAction` server action in `apps/web`. The hold screen, the verification landing and resend are built ([#82](https://github.com/joshstothard/3moji/issues/82)); wiring the builder's submit button to the action is #79-#80's.
+**Built, and not runnable on the production driver.** `claimHandle` in `packages/core/src/handle/claim-handle.ts`, with `submitClaim` over it (`src/handle/submit-claim.ts`) and the `submitClaimAction` server action in `apps/web`. The hold screen, the verification landing and resend are built ([#82](https://github.com/joshstothard/3moji/issues/82)), and so is **the form in front of it** ([#115](https://github.com/joshstothard/3moji/issues/115)): the builder offers `claim-form.tsx` whenever its Handle reads as available, on `/` and on an unclaimed `/[handle]`, and the form posts to the action — see [system-overview.md](system-overview.md) § The claim form.
 
 ADR-0004 decision 4 — _every live Account owns exactly one Handle_ — is an invariant about two rows in two tables, so it holds only if they are written together. Account creation and the hold are therefore **one transaction**, and every rejection rolls all of it back: a Claim that fails for any reason creates nothing, never an Account waiting for a Handle.
 

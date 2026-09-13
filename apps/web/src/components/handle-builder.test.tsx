@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { UserEvent } from "@testing-library/user-event";
 import type { AvailabilityState } from "./availability-state";
+import type { ClaimFormState } from "./claim-action";
 import { HandleBuilder } from "./handle-builder";
 import { findEmojiByCodepoint } from "@template/core/browser";
 import en from "../../../../packages/shared/messages/en.json";
@@ -495,5 +496,131 @@ describe("the Handle builder", () => {
       expect(button).toHaveFocus();
       expect(screen.getByText(copy.pickerFull)).toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * Claiming, from the builder ([#115](https://github.com/joshstothard/3moji/issues/115)).
+ *
+ * The claim is a server action, injected as a prop for the reason the
+ * availability read is. The form itself has its own suite; what belongs here is
+ * **when** the builder offers it and **which Handle** it carries — the one in
+ * the slots now, not the one the page opened on.
+ */
+describe("claiming from the builder", () => {
+  const claimCopy = en.Claim;
+  const PIZZA = "\u{1F355}";
+
+  const claim = jest.fn(
+    (_previous: ClaimFormState, _formData: FormData) =>
+      new Promise<ClaimFormState>(() => undefined),
+  );
+
+  function renderClaimable(
+    checkAvailability: (segment: string) => Promise<AvailabilityState>,
+    initialEmoji?: readonly string[],
+    initialAvailability?: AvailabilityState,
+  ) {
+    const user = userEvent.setup();
+    render(
+      <HandleBuilder
+        checkAvailability={checkAvailability}
+        claim={claim}
+        initialAvailability={initialAvailability}
+        initialEmoji={initialEmoji}
+      />,
+    );
+    return user;
+  }
+
+  const claimForm = () =>
+    screen.queryByRole("form", { name: claimCopy.claimHeading });
+
+  const claimedHandle = () =>
+    document.querySelector<HTMLInputElement>('form input[name="handle"]')
+      ?.value;
+
+  it("offers the claim form once the Handle is available, carrying that Handle", async () => {
+    const user = renderClaimable(() => Promise.resolve("available"));
+
+    await pick(user, "ice cube", "ice cube", "ice cube");
+    await screen.findByText(copy.stateAvailable);
+
+    expect(claimForm()).toBeInTheDocument();
+    expect(claimedHandle()).toBe(ENCODED_ICE_TRIPLE);
+  });
+
+  it("offers no claim before three slots are filled", async () => {
+    const user = renderClaimable(() => Promise.resolve("available"));
+
+    await pick(user, "ice cube", "ice cube");
+
+    expect(claimForm()).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["held", copy.stateHeld],
+    ["claimed", copy.stateClaimed],
+    ["not-claimable", copy.stateNotClaimable],
+    ["not-a-handle", copy.stateNotAHandle],
+    ["unknown", copy.stateUnknown],
+  ] as const)("offers no claim for a %s Handle", async (state, text) => {
+    // Reserved can never be claimed, and unknown means the read failed: an
+    // invitation there would be issued on no evidence (#68).
+    const user = renderClaimable(() => Promise.resolve(state));
+
+    await pick(user, "ice cube", "ice cube", "ice cube");
+    await screen.findByText(text);
+
+    expect(claimForm()).not.toBeInTheDocument();
+  });
+
+  it("offers no claim while the answer is still being checked", async () => {
+    const user = renderClaimable(() => new Promise(() => undefined));
+
+    await pick(user, "ice cube", "ice cube", "ice cube");
+    await screen.findByText(copy.checking);
+
+    expect(claimForm()).not.toBeInTheDocument();
+  });
+
+  it("withdraws the claim the moment the Handle changes", async () => {
+    const user = renderClaimable(
+      () => Promise.resolve("available"),
+      [ICE, ICE, ICE],
+    );
+    await screen.findByText(copy.stateAvailable);
+
+    await user.click(filledSlot(3, "ice cube"));
+
+    expect(claimForm()).not.toBeInTheDocument();
+  });
+
+  it("claims the Handle now in the slots, not the one it opened on", async () => {
+    const user = renderClaimable(
+      () => Promise.resolve("available"),
+      [ICE, ICE, ICE],
+    );
+    await screen.findByText(copy.stateAvailable);
+
+    await user.click(filledSlot(3, "ice cube"));
+    await pick(user, "pizza");
+    await screen.findByText(copy.stateAvailable);
+
+    expect(claimedHandle()).toBe(encodeURIComponent(`${ICE}${ICE}${PIZZA}`));
+  });
+
+  it("offers the claim on first paint when the page has already read the Handle as available", () => {
+    // `/[handle]` has just read the answer that put the builder on the page;
+    // making the visitor wait for the same read again before the call to action
+    // has anything to point at would be a flash of nothing.
+    renderClaimable(
+      () => new Promise(() => undefined),
+      [ICE, ICE, ICE],
+      "available",
+    );
+
+    expect(claimForm()).toBeInTheDocument();
+    expect(claimedHandle()).toBe(ENCODED_ICE_TRIPLE);
   });
 });
