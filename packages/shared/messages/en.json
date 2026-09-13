@@ -155,6 +155,181 @@
     "handleImageAlt": "{spoken}",
     "imageTagline": "A web address you can say out loud."
   },
+  "Legal": {
+    "draftMarker": "Draft — pending owner review",
+    "draftExplainer": "This page is a starting draft. It has not yet been reviewed by the owner or by a lawyer, and it is not legal advice.",
+    "operatorPlaceholder": "[Operator name — the owner adds this before launch]",
+    "contactPlaceholder": "[Contact address — the owner adds this before launch]",
+    "Privacy": {
+      "metaTitle": "Privacy notice · 3moji",
+      "heading": "Privacy notice",
+      "intro": "This notice explains what 3moji stores about you, why, how long we keep it, and what you can do about it. We have tried to keep it short and plain.",
+      "relatedLink": "Read the terms of use",
+      "sections": {
+        "whoWeAre": {
+          "heading": "Who runs 3moji",
+          "paragraphs": [
+            "3moji is run by {operator}, based in the UK. Under UK data protection law we are the controller of the personal data described on this page. You can contact us about it at {contact}."
+          ]
+        },
+        "whatWeStore": {
+          "heading": "What we store, why, and for how long",
+          "paragraphs": [
+            "We only ask for an email address and a password. We never ask for your real name. Here is everything we store:"
+          ],
+          "items": [
+            "Your email address. We use it to verify your account, to let you sign in, and to send you emails about your account, such as verification and password reset emails. It is never shown on your Profile. We keep it until your account is deleted.",
+            "Your password, as a hash. We never store your password itself, only a scrambled version that can check the password you type but cannot be turned back into it. We keep it until your account is deleted, and replace it if you reset your password.",
+            "Your Handle. The three emoji you claim are your public web address, and they are also stored as your account's name. While a Handle is held waiting for you to verify your email, we store when the hold ends; once you verify, we store when your claim became final. We keep it until your account is deleted.",
+            "Your Profile: the display name, bio and Links you choose to add, where each Link is a title and a web address, and when you last saved them. Your Profile is public: anyone who visits your Handle can see it. Saving replaces what was there before, and we do not keep old versions. We keep it until you change it or your account is deleted.",
+            "Sign-in sessions. Each time you sign in, we store a session with your IP address, your browser's user agent (a short description of your browser and device) and when the session expires. This keeps you signed in and helps us keep accounts secure. A session expires after 7 days without use, and using the site renews it at most once a day. It is deleted when you sign out, when you reset your password, when your account is deleted, or when it is next used after it has expired.",
+            "Verification email records. For each verification email we send, we store a fingerprint of the link (never the link itself) and when it was sent, so that only the newest link works and we can limit how many are sent. We keep these until your account is deleted.",
+            "Password reset tokens. When you ask to reset your password, we store a single-use token that works for 1 hour. It is deleted when it is used, and an expired one is cleared the next time the site checks a token.",
+            "Rate-limit counters. To stop abuse, we count recent attempts to claim a Handle, to sign in and to resend emails. The counters for claiming, signing in and resending hold a keyed hash of your IP address or email address, which cannot be turned back into the address without our secret key. The counters used by the sign-in system itself hold your IP address as it is, together with the part of the site it was used on. Both kinds hold about an hour of history, and older counts are cleared as new attempts arrive.",
+            "Released Handles. When an account is deleted, we record which Handle was released and when, and nothing else. That record does not name you or link to your account. We keep it indefinitely."
+          ]
+        },
+        "unverified": {
+          "heading": "If you do not verify your email",
+          "paragraphs": [
+            "A Handle is held for 24 hours while you verify your email address. If you do not verify it in time, the hold ends. Your unverified account, with its email address, password hash and sessions, is deleted the next time anyone tries to claim that Handle. Until that happens it stays stored, even after the 24 hours have passed."
+          ]
+        },
+        "logsAndBackups": {
+          "heading": "Logs and backups",
+          "paragraphs": [
+            "Our application logs record what kind of request was made, whether it worked and a random reference number. They are designed not to contain your email address, your password, your IP address or your Profile. Our hosting and database providers also keep their own records and backups for a limited time, so deleted data can remain in those for a short while before it is gone. [How long each provider keeps logs and backups — the owner confirms this before launch]"
+          ]
+        },
+        "cookies": {
+          "heading": "Cookies",
+          "paragraphs": [
+            "We only use the cookies needed to keep you signed in. We do not use advertising or analytics cookies."
+          ]
+        },
+        "processors": {
+          "heading": "Who else handles your data",
+          "paragraphs": [
+            "We use three providers to run 3moji. They handle your data only to provide their service to us:"
+          ],
+          "items": [
+            "Vercel hosts the website and runs the application, so every request you make, including your IP address, passes through it.",
+            "Neon hosts the database where everything described on this page is stored.",
+            "Resend sends our emails, so it receives your email address and the emails we send you."
+          ],
+          "closing": [
+            "We do not sell your data, and we do not use it for advertising. [Where each provider processes data, and the safeguards for any transfer outside the UK — the owner confirms this before launch]"
+          ]
+        },
+        "lawfulBasis": {
+          "heading": "Why we are allowed to use your data",
+          "paragraphs": [
+            "We use your email address, password hash, Handle, Profile and verification records to provide the service you signed up for. We use sessions, rate-limit counters and logs to keep 3moji and your account secure, which is in our and our users' legitimate interests. [The lawful basis for each purpose — the owner confirms this before launch]"
+          ]
+        },
+        "deletingYourData": {
+          "heading": "Deleting your data",
+          "paragraphs": [
+            "You can clear your display name, bio and Links at any time by removing them from your Profile and saving.",
+            "Deleting your account gives up your Handle and deletes your email address, password hash, sessions, verification records, Profile and Links. The only thing that remains is the released Handle record described above, which does not identify you. Your Handle becomes available for someone else to claim straight away.",
+            "To delete your account, use the option to delete it on the site where it is offered, or contact us at {contact} and we will do it for you."
+          ]
+        },
+        "yourRights": {
+          "heading": "Your rights",
+          "paragraphs": [
+            "Under UK data protection law, you have the right to:"
+          ],
+          "items": [
+            "ask for a copy of the data we hold about you",
+            "ask us to correct data that is wrong",
+            "ask us to delete your data",
+            "ask us to limit how we use your data, or object to how we use it",
+            "ask for your data in a format you can take elsewhere"
+          ],
+          "closing": [
+            "To use any of these rights, contact us at {contact}. We will reply within one month. If you are unhappy with how we handle your data, you can complain to the Information Commissioner's Office (ICO) at ico.org.uk."
+          ]
+        },
+        "changes": {
+          "heading": "Changes to this notice",
+          "paragraphs": [
+            "If we change what we store or why, we will update this page first. [Date this notice was last updated — the owner adds this when it is published]"
+          ]
+        }
+      }
+    },
+    "Terms": {
+      "metaTitle": "Terms of use · 3moji",
+      "heading": "Terms of use",
+      "intro": "These terms are the rules for using 3moji. We have tried to keep them short and plain.",
+      "relatedLink": "Read the privacy notice",
+      "sections": {
+        "aboutTheseTerms": {
+          "heading": "About these terms",
+          "paragraphs": [
+            "3moji is run by {operator}. By claiming a Handle, you agree to these terms. If you do not agree, please do not use 3moji. You can contact us at {contact}."
+          ]
+        },
+        "whoCanUse": {
+          "heading": "Who can use 3moji",
+          "paragraphs": [
+            "You need a working email address to claim a Handle, and each account holds one Handle. You must be at least [minimum age — the owner confirms this before launch] to claim one."
+          ]
+        },
+        "yourHandle": {
+          "heading": "Your Handle",
+          "paragraphs": [
+            "Claiming a Handle is free. A Handle is not property: Handles are not bought or sold, and you cannot sell, rent or transfer yours to someone else. You can keep your Handle for as long as your account exists and follows these terms. Some Handles are reserved and cannot be claimed, and a Handle cannot be changed once claimed."
+          ]
+        },
+        "acceptableUse": {
+          "heading": "What you can put on your Profile",
+          "paragraphs": [
+            "You are responsible for your display name, bio and Links, and for the pages your Links lead to. Do not use your Profile or its Links for:"
+          ],
+          "items": [
+            "phishing: tricking people into giving away passwords, payment details or personal information",
+            "malware: anything designed to harm people's devices or data",
+            "illegal content, or links to it",
+            "impersonation: pretending to be another person, brand or organisation, or misleading people about who you are",
+            "harassing, threatening or abusing anyone, or sharing someone else's private information",
+            "spam"
+          ]
+        },
+        "removal": {
+          "heading": "When we remove Profiles",
+          "paragraphs": [
+            "We can remove a Profile or a Link, or delete an account, if it breaks these terms or the law, or puts people at risk. Where it is safe and practical to do so, we will tell you why. If you see a Profile that breaks these terms, contact us at {contact}."
+          ]
+        },
+        "noWarranty": {
+          "heading": "No warranty",
+          "paragraphs": [
+            "3moji is a free service provided as it is. We do not promise that it will always be available, free of errors or suitable for any particular purpose, and we may change or stop it. Nothing in these terms limits any rights you have that the law does not allow us to limit. [Limitation of liability wording — the owner confirms this with legal advice before launch]"
+          ]
+        },
+        "yourData": {
+          "heading": "Your data",
+          "paragraphs": [
+            "Our privacy notice explains what we store about you, why, and how to delete it."
+          ]
+        },
+        "leaving": {
+          "heading": "Leaving 3moji",
+          "paragraphs": [
+            "You can stop using 3moji at any time. Deleting your account gives up your Handle, and it becomes available for someone else to claim straight away."
+          ]
+        },
+        "changes": {
+          "heading": "Changes to these terms",
+          "paragraphs": [
+            "If we change these terms, we will update this page first. [Which country's law applies, and the date these terms were last updated — the owner confirms these before launch]"
+          ]
+        }
+      }
+    }
+  },
   "PasswordReset": {
     "forgotPasswordLink": "Forgot your password?",
     "resetDone": "Your password has been changed, and every device that was signed in has been signed out. Sign in with your new password.",
