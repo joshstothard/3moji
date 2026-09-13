@@ -173,15 +173,45 @@ function bucketKeyFrom(secret: string): Buffer {
   return createHmac("sha256", secret).update(KEY_LABEL).digest();
 }
 
+/**
+ * What a bucket counts. The kind is both the stored prefix and part of the
+ * hashed input, so two kinds never share a counter for the same value.
+ * `resend-client` is the resend action's per-client limit (#158), which shares
+ * this table rather than adding one.
+ */
+export type RateLimitBucketKind = "client" | "email" | "resend-client";
+
+/**
+ * How long every limiter on `claim_rate_limit` keeps a window before pruning
+ * it. **The table is shared**, and each limiter's call prunes every row older
+ * than this — so it must be at least the longest window of every limiter on the
+ * table, or one limiter deletes another's live counter and that limit fails
+ * open. `resend-rate-limit.test.ts` asserts every shipped window fits.
+ */
+export const RATE_LIMIT_RETENTION_MS = HOUR_MS;
+
 function bucketOf(
   key: Buffer,
-  kind: "client" | "email",
+  kind: RateLimitBucketKind,
   value: string,
 ): string {
   const digest = createHmac("sha256", key)
     .update(`${kind}:${value}`)
     .digest("hex");
   return `${kind}:${digest}`;
+}
+
+/**
+ * One stored bucket name: `kind:` and an HMAC of the value under the key
+ * derived from `secret`. For limiters other than the Claim's that share its
+ * table and its hashing scheme.
+ */
+export function keyedRateLimitBucket(
+  secret: string,
+  kind: RateLimitBucketKind,
+  value: string,
+): string {
+  return bucketOf(bucketKeyFrom(secret), kind, value);
 }
 
 export interface ClaimRateLimitBucketsInput {
@@ -272,9 +302,12 @@ export function createClaimRateLimiter(
     );
   }
   const limits = input.limits ?? CLAIM_RATE_LIMITS;
+  // Never less than the shared retention: other limiters count on this table
+  // (#158), and pruning by a shorter window would delete their live rows.
   const longestWindowMs = Math.max(
     limits.perClientAddress.windowMs,
     limits.perEmailAddress.windowMs,
+    RATE_LIMIT_RETENTION_MS,
   );
 
   return {

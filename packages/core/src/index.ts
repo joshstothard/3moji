@@ -240,6 +240,28 @@ export {
   withResponseFloor,
 } from "./auth/response-floor";
 export type { ResponseFloorInput } from "./auth/response-floor";
+export {
+  AUTH_RATE_LIMITS,
+  AUTH_RATE_LIMIT_MODEL,
+  CLIENT_ADDRESS_HEADERS,
+  authClientAddressOptions,
+  authRateLimitOptions,
+} from "./auth/auth-rate-limit";
+export type {
+  AuthRateLimit,
+  AuthRateLimitOptions,
+  AuthRateLimits,
+} from "./auth/auth-rate-limit";
+export {
+  RESEND_CLIENT_RATE_LIMIT,
+  createResendClientRateLimiter,
+  resendClientBucket,
+} from "./auth/resend-rate-limit";
+export type {
+  ResendClientAdmission,
+  ResendClientRateLimiter,
+  ResendClientRateLimiterInput,
+} from "./auth/resend-rate-limit";
 export { resendVerification } from "./auth/resend-verification";
 export type {
   ResendOutcome,

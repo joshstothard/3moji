@@ -1,4 +1,12 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 /**
  * The tables Better Auth owns.
@@ -75,7 +83,50 @@ export const verification = pgTable("verification", {
 });
 
 /**
+ * Better Auth's rate-limit counters: one row per client and path
+ * ([#158](https://github.com/joshstothard/3moji/issues/158)).
+ *
+ * Better Auth owns this table as it owns the four above, and its shape is
+ * Better Auth's (`getAuthTables` with `rateLimit.storage: "database"`):
+ *
+ * - `key` is `<client address>|<path>`, unique, and the row the limiter reads
+ *   and increments. The address is Better Auth's normalised form — an IPv4
+ *   address, or an IPv6 `/64` written out in full. **Unlike
+ *   `claim_rate_limit`, it is not hashed**: Better Auth builds the key and
+ *   offers no hook to hash it. The same addresses are already in
+ *   `session.ip_address`, and rows are pruned once they are older than the
+ *   longest window, so the table holds about an hour of history.
+ * - `count` is requests in the current rolling window.
+ * - `lastRequest` is epoch **milliseconds**, which Better Auth marks `bigint`:
+ *   an `integer` column would overflow on the first write.
+ * - `id` is not in Better Auth's field list but is required all the same: its
+ *   Drizzle adapter's atomic `incrementOne` updates by id, and answers "no row"
+ *   when there is no id column — which the limiter would read as contention.
+ *
+ * The model name is `AUTH_RATE_LIMIT_MODEL`, and this key must equal it.
+ */
+export const authRateLimit = pgTable(
+  "auth_rate_limit",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull().unique(),
+    count: integer("count").notNull(),
+    lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+  },
+  (table) => [
+    /** What pruning rows older than the longest window scans. */
+    index("auth_rate_limit_last_request_idx").on(table.lastRequest),
+  ],
+);
+
+/**
  * Passed straight to Better Auth's Drizzle adapter. The keys must stay equal to
  * Better Auth's model names; the adapter resolves `schema[modelName]`.
  */
-export const authSchema = { user, session, account, verification };
+export const authSchema = {
+  user,
+  session,
+  account,
+  verification,
+  auth_rate_limit: authRateLimit,
+};

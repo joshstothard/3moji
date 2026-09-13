@@ -2,6 +2,10 @@ import { createBetterAuthVerificationMailer } from "./auth/adapters/better-auth-
 import type { AuthFactory } from "./auth/auth-factory";
 import { createAuth, type CreateAuthInput } from "./auth/create-auth";
 import type { EmailSender } from "./auth/ports/email-sender";
+import {
+  createResendClientRateLimiter,
+  type ResendClientRateLimiter,
+} from "./auth/resend-rate-limit";
 import type { VerificationMailer } from "./auth/resend-verification";
 import { createDrizzleAccountDirectory } from "./adapters/drizzle-account-directory";
 import { createDrizzleClaimFinaliser } from "./adapters/drizzle-claim-finaliser";
@@ -99,6 +103,12 @@ export interface CoreServices {
    */
   readonly claimRateLimiter: ClaimRateLimiter;
   /**
+   * The resend action's per-client-address limit (#158), on the Claim's
+   * counter table under its own bucket kind, bound like
+   * {@link claimRateLimiter} so a transport never holds the secret.
+   */
+  readonly resendClientRateLimiter: ResendClientRateLimiter;
+  /**
    * The Release's unit of work: the tombstone and the account deletion in one
    * transaction ([ADR-0009](../../../docs/adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)).
    *
@@ -162,6 +172,8 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     });
 
   const dispatches = createDrizzleVerificationDispatchStore({ db: deps.db });
+  /** On the pooled client, shared by every limiter on `claim_rate_limit`. */
+  const rateLimitStore = createDrizzleClaimRateLimitStore({ db: deps.db });
 
   /** What both units of work need, and the only difference between them. */
   const transactional = {
@@ -193,7 +205,12 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     // opens no transaction, and a count that rolled back with a failed Claim
     // would stop counting exactly the submissions the limit is for.
     claimRateLimiter: createClaimRateLimiter({
-      store: createDrizzleClaimRateLimitStore({ db: deps.db }),
+      store: rateLimitStore,
+      clock: deps.clock,
+      secret: deps.auth.secret,
+    }),
+    resendClientRateLimiter: createResendClientRateLimiter({
+      store: rateLimitStore,
       clock: deps.clock,
       secret: deps.auth.secret,
     }),

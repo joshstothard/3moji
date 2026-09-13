@@ -13,6 +13,8 @@
 | The verification landing            | `apps/web/src/app/claim/verify/route.ts`                                             |
 | The hold screen and resend          | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`                     |
 | The Claim's rate limit              | `packages/core/src/handle/claim-rate-limit.ts`, `apps/web/src/lib/client-address.ts` |
+| Better Auth's rate limit            | `packages/core/src/auth/auth-rate-limit.ts`, applied in `create-auth.ts`             |
+| Resend's per-client-address limit   | `packages/core/src/auth/resend-rate-limit.ts`                                        |
 | Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app              |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
@@ -41,7 +43,7 @@ Sign-up is not reached on its own: it happens inside the Claim's transaction, be
 
 ### Sign-up is refused over HTTP
 
-**The Claim is the only way an Account is created, and that is enforced, not just true of the UI** ([#150](https://github.com/joshstothard/3moji/issues/150)). Better Auth serves `POST /api/auth/sign-up/email` through the catch-all route, and before #150 a direct request to it — measured against Postgres in `direct-sign-up.integration.test.ts` — created an Account with **no Handle** and sent a verification email, from an endpoint nothing limits. That is the handle-less state ADR-0004 decision 4 forbids.
+**The Claim is the only way an Account is created, and that is enforced, not just true of the UI** ([#150](https://github.com/joshstothard/3moji/issues/150)). Better Auth serves `POST /api/auth/sign-up/email` through the catch-all route, and before #150 a direct request to it — measured against Postgres in `direct-sign-up.integration.test.ts` — created an Account with **no Handle** and sent a verification email, from an endpoint nothing limited then. That is the handle-less state ADR-0004 decision 4 forbids.
 
 `createAuth` now sets Better Auth's `disabledPaths` to `/sign-up/email` and `/sign-in/social`, and both answer a plain `404 Not Found` over HTTP.
 
@@ -94,14 +96,19 @@ It is a **route handler** rather than a page because signing somebody in means s
 
 ### Resend, and its limits
 
-`resendVerification` (`packages/core/src/auth/resend-verification.ts`) is the whole rule; the server action over it decides nothing. Three steps, in this order: resolve the address to an Account (the limit is **per Account**, and an address cannot stand in for one — Better Auth treats `A@x.com` and `a@x.com` as the same person, so the directory compares `lower(email)`), ask the limit, then send. A limit consulted after the send is a log line.
+`resendVerification` (`packages/core/src/auth/resend-verification.ts`) is the whole rule; the server action over it decides nothing but which client address the forwarded headers state. Four steps, in this order: ask the **per-client-address** limit, resolve the address to an Account (the next limit is **per Account**, and an address cannot stand in for one — Better Auth treats `A@x.com` and `a@x.com` as the same person, so the directory compares `lower(email)`), ask the per-Account limit, then send. A limit consulted after the send is a log line.
 
-| Limit            | Value                            |
-| ---------------- | -------------------------------- |
-| Per rolling hour | 3 links, sign-up's link included |
-| Minimum gap      | 60 seconds                       |
+| Limit                              | Value                            | Constant                   |
+| ---------------------------------- | -------------------------------- | -------------------------- |
+| Per Account, per rolling hour      | 3 links, sign-up's link included | `RESEND_LIMITS`            |
+| Per Account, minimum gap           | 60 seconds                       | `RESEND_LIMITS`            |
+| Per client address, per fixed hour | 10 requests                      | `RESEND_CLIENT_RATE_LIMIT` |
 
-Both live in one constant, `RESEND_LIMITS`, with an overridable parameter on the pure decision (`resendAllowance`). **The figures are a starting value to tune, not a principle** — an open question on the workstream.
+`RESEND_LIMITS` has an overridable parameter on the pure decision (`resendAllowance`); `RESEND_CLIENT_RATE_LIMIT` one on `createResendClientRateLimiter`. **The figures are starting values to tune, not principles** — open questions on the workstream, and the per-client one is flagged for the repo owner on [#158](https://github.com/joshstothard/3moji/issues/158)'s pull request.
+
+**The per-client-address limit comes first, before the address is read** ([#158](https://github.com/joshstothard/3moji/issues/158)). The per-Account limit bounds the mail one inbox receives; it does nothing about one client walking a list of addresses, and since an unknown or verified address answers `sent` without reaching it, those requests were unlimited. Counted before the lookup, every request counts, whatever it names — so a registered address is limited exactly as an unregistered one. Its refusal is `too-many` with its own "when", which the hold screen already renders: the "when" comes from the client's window alone and says nothing about the address. It is padded to the same floor.
+
+It **reuses the Claim's counter table and store** (`claim_rate_limit`, `ClaimRateLimitStore`) under its own bucket kind, `resend-client:` and an HMAC of the grouped client address, rather than adding a second table and a second hashing scheme: the question is the same, and so is the one-statement increment that answers it without a race. The address is grouped by `clientAddressBucket`, as the Claim's is, and the limiter fails closed — a store that cannot count makes the action answer `failed`. Every limiter on the shared table prunes by one retention, `RATE_LIMIT_RETENTION_MS` (an hour), never by its own window, so a shorter window on one limiter cannot delete another's live counter; a test asserts every shipped window fits inside it.
 
 **The one-a-minute floor is load-bearing beyond politeness, and it rests on the clock.** Better Auth stamps a token's `iat` from `Date.now()` at one-second resolution and adds no nonce, so two links issued for one address inside the same real second are **byte-identical** — and an older link byte-identical to the newest is not invalidated, because it _is_ the newest. The floor is what puts a minute between them, and it is measured on the injected `Clock`. So invalidation holds only while that clock tracks real time, which `lib/services.ts` guarantees by wiring `createSystemClock()` — asserted in its own test, because a frozen clock would weaken invalidation silently rather than loudly. A test that advanced only the injected clock reached the identical-token case in milliseconds, which is how this was found.
 
@@ -125,7 +132,38 @@ It answers `undefined` rather than throwing when it cannot tell: the services ma
 
 Duplicate sign-ups return a synthetic success, so the API never reveals whether an address is registered. Because every live Account owns exactly one Handle, a duplicate address can never claim a second one; the existing owner is told by email instead — naming the Handle they already own, and linking to the reset **form** rather than carrying a tokenised reset link, because sign-up is unauthenticated and a tokenised link there would let a stranger have live reset tokens mailed to somebody else's inbox. How many of those notices one address can receive is bounded by the Claim's per-email rate limit (below), which refuses the submission before the Claim opens.
 
-Resend is rate limited per Account (above). Better Auth's own sign-in and email endpoints are not yet — that is [#158](https://github.com/joshstothard/3moji/issues/158).
+Resend is rate limited per Account and per client address (above), the Claim per email and per client address (below), and Better Auth's own HTTP endpoints per client address and path ([below](#better-auths-rate-limit)).
+
+### Better Auth's rate limit
+
+**Better Auth's HTTP endpoints are rate limited in every environment, counted in Postgres** ([#158](https://github.com/joshstothard/3moji/issues/158)). `createAuth` passes `authRateLimitOptions()` and `authClientAddressOptions()` from `packages/core/src/auth/auth-rate-limit.ts`.
+
+| Path                            | Limit per client address | Constant (`AUTH_RATE_LIMITS`) |
+| ------------------------------- | ------------------------ | ----------------------------- |
+| `POST /sign-in/email`           | 10 in 15 minutes         | `signInEmail`                 |
+| `POST /request-password-reset`  | 5 an hour                | `requestPasswordReset`        |
+| `POST /send-verification-email` | 5 an hour                | `sendVerificationEmail`       |
+| every other `/api/auth/*` path  | 100 in 10 seconds        | `default`                     |
+
+Windows are **rolling**, in seconds — Better Auth's own semantics and unit. **Starting values to tune**, flagged for the repo owner on the pull request. Sign-in allows somebody who has forgotten which password they used and is far too few to guess one; the two email paths send mail to an address the caller chooses, so they bound how much mail one client can make us send to somebody else.
+
+**What better-auth 1.7.4 does unconfigured, measured from its source rather than assumed:**
+
+- **`enabled` defaults to `NODE_ENV === "production"`.** Every preview and every local run would be unlimited, and nothing would test the limit. It is set to `true` explicitly; `create-auth.test.ts` proves it is on under `NODE_ENV=test`.
+- **`storage` defaults to `memory`**, a `Map` in the process. On Vercel every serverless instance has its own, so it would limit nothing. It is `database`.
+- **Built-in rules apply the moment limiting is on**: `/sign-in*`, `/sign-up*`, `/change-password*`, `/change-email*` at 3 in 10 seconds, and the two email paths at 3 a minute. `customRules` replaces them for our three paths with named, documented values; **none is 3**, so the integration test that finds the Nth request admitted and the (N+1)th refused proves our rule is the one in force, and that its path string matches the path as Better Auth routes it (the pathname with `/api/auth` removed and trailing slashes stripped, compared exactly).
+
+**`/sign-up/email` needs no rule.** #150's `disabledPaths` check runs in the router's `onRequest` before the limiter, so the path answers 404 without ever being counted — asserted: twelve requests, twelve 404s, no counter row. **The limiter is HTTP-only**, for the same reason `disabledPaths` is: it runs in `onRequest`, which `auth.api.*` calls never pass through. So the Claim's server-side `auth.api.signUpEmail` is not counted, and neither is anything else the app calls server-side.
+
+> **A gap this leaves, recorded rather than hidden.** The sign-in **form** does not use `POST /api/auth/sign-in/email`: `signInAction` calls `auth.api.signInEmail` server-side, so Better Auth's limiter does not see it. The public HTTP endpoint is limited; the server action in front of the same credential check is not. Closing it is a per-client-address limit on the action, as the Claim and resend have — a follow-up, not done here.
+
+**Who is one client.** `advanced.ipAddress.ipAddressHeaders` is `CLIENT_ADDRESS_HEADERS` — `x-vercel-forwarded-for`, then `x-forwarded-for` — the same list, in the same order, that `apps/web/src/lib/client-address.ts` reads (its test pins the two together). Both group IPv6 by `/64` and count an IPv4-mapped IPv6 address as its IPv4 address; the integration test proves each against Better Auth's own handler. **One difference is kept on purpose:** with no `trustedProxies`, Better Auth trusts a header only when it holds a single address and falls through to the next header otherwise, and a request with no trustworthy address shares one `no-trusted-ip` counter per path — the analogue of our `unknown` bucket. Our transport takes the first entry of a list instead. On Vercel the edge sets both headers to one address, so the two agree; anywhere else both headers are client-writable anyway (see [the Claim's rate limit](#the-claims-rate-limit)). Setting `trustedProxies` to close the gap would add a spoofing surface to buy nothing. Better Auth falls back to `127.0.0.1` under `NODE_ENV` `test` or `development`, which is why every integration request names its client.
+
+**A refusal cannot enumerate addresses.** The counter is keyed on client address and path; the body is never read before the decision. A refused request answers `429 Too Many Requests`, `{"message":"Too many requests. Please try again later."}` and an `X-Retry-After` header computed from that counter and the clock. `auth-rate-limit.integration.test.ts` compares the whole refused password-reset response — status, status text, body, every header — for a registered address, an unregistered one and a request naming no address, each on an equally spent counter, and again for both addresses on one counter: identical, with `X-Retry-After` agreeing to within the one second two requests can straddle. A refused request sends no email.
+
+**Counters live in Postgres** (`auth_rate_limit`, see [the tables](#the-tables-as-they-exist-today)), keyed `<address>|<path>`. **Unlike the Claim's buckets they are not hashed**: Better Auth builds the key and offers no hook. The same addresses are already stored in `session.ip_address`, and Better Auth prunes rows older than its longest window, so the table holds about an hour of history.
+
+**It fails closed.** A counter that cannot be read rejects inside the router's `onRequest`, which better-call does not catch, so `createAuth` wraps `auth.handler` to answer that `DatabaseQueryFailed` — already stripped of bound values by `safeDatabaseAdapter` (#148) — with a bare 500, as every other database failure on the route is answered. Nothing is admitted; any other error is rethrown untouched.
 
 ### The Claim's rate limit
 
@@ -159,6 +197,7 @@ Defined in `packages/core/src/db/schema.ts`, migrated by `packages/core/migratio
 | `account`               | One row per auth method. For email and password, `provider_id = "credential"` and the hashed password lives in `account.password`. Cascades to `user`                     |
 | `verification`          | Better Auth's own token table. **Password-reset tokens only in practice**: email verification is a stateless JWT it never stores                                          |
 | `verification_dispatch` | One row per verification link _we_ issued — the fingerprint, the Account and the time. Ours, not Better Auth's; see [the data model](data-model.md#verification-dispatch) |
+| `auth_rate_limit`       | Better Auth's rate-limit counters, one per client address and path (#158, migration `0007_auth_rate_limit`); see [the data model](data-model.md#auth-rate-limit)          |
 
 **The Drizzle property keys are load-bearing.** Better Auth's adapter looks a table up by model name and addresses columns by the Drizzle property key, so renaming one breaks authentication at runtime rather than at build time. `schema.test.ts` calls Better Auth's own `getAuthTables()` and asserts our tables against it, so an upstream change that adds a column fails a test instead of production.
 

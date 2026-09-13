@@ -86,6 +86,8 @@ describe("package entry point", () => {
   it("exports the auth schema keyed the way Better Auth expects", () => {
     expect(Object.keys(authSchema).sort()).toEqual([
       "account",
+      // Better Auth's rate-limit model, under the name createAuth gives it (#158).
+      "auth_rate_limit",
       "session",
       "user",
       "verification",

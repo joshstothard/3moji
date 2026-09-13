@@ -1,3 +1,4 @@
+import { createInMemoryClaimRateLimitStore } from "../adapters/in-memory-claim-rate-limit-store";
 import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import type {
   AccountDirectory,
@@ -9,6 +10,10 @@ import {
   resendVerification,
   type VerificationMailer,
 } from "./resend-verification";
+import {
+  createResendClientRateLimiter,
+  type ResendClientRateLimiter,
+} from "./resend-rate-limit";
 import { RESPONSE_FLOOR_MS } from "./response-floor";
 
 const NOW = new Date("2026-09-12T12:00:00.000Z");
@@ -30,6 +35,8 @@ interface Scenario {
   readonly sentAt?: readonly Date[];
   /** Milliseconds the send is pretended to take. */
   readonly costMs?: number;
+  /** The per-client-address limit; admits everything unless a test says so. */
+  readonly clientLimiter?: (clock: Clock) => ResendClientRateLimiter;
 }
 
 const build = (scenario: Scenario = {}) => {
@@ -37,11 +44,24 @@ const build = (scenario: Scenario = {}) => {
   const clock: Clock = { now: () => new Date(now) };
   const slept: number[] = [];
   const calls: string[] = [];
+  /** Every collaborator call, the client-address limit included, in order. */
+  const sequence: string[] = [];
   const dispatches = createInMemoryVerificationDispatchStore();
+
+  const realLimiter = scenario.clientLimiter?.(clock);
+  const clientLimiter: ResendClientRateLimiter = {
+    admit: (clientAddress) => {
+      sequence.push(`admit(${String(clientAddress)})`);
+      return realLimiter === undefined
+        ? Promise.resolve({ state: "admitted" })
+        : realLimiter.admit(clientAddress);
+    },
+  };
 
   const directory: AccountDirectory = {
     byEmail: (email) => {
       calls.push(`byEmail(${email})`);
+      sequence.push(`byEmail(${email})`);
       return Promise.resolve(
         "account" in scenario ? scenario.account : UNVERIFIED,
       );
@@ -57,9 +77,18 @@ const build = (scenario: Scenario = {}) => {
     },
   };
 
-  const resend = (email = "Claimant@Example.com") =>
+  // An object, not a defaulted parameter: a default would replace an explicit
+  // `undefined`, which is exactly the unreadable address a test must pass.
+  const resend = (
+    email = "Claimant@Example.com",
+    { clientAddress }: { readonly clientAddress: string | undefined } = {
+      clientAddress: "203.0.113.7",
+    },
+  ) =>
     resendVerification({
       email,
+      clientAddress,
+      clientLimiter,
       directory,
       dispatches,
       mailer,
@@ -80,7 +109,7 @@ const build = (scenario: Scenario = {}) => {
     }
   };
 
-  return { resend, seed, calls, slept, dispatches };
+  return { resend, seed, calls, sequence, slept, dispatches };
 };
 
 describe("resendVerification", () => {
@@ -193,6 +222,79 @@ describe("resendVerification", () => {
       await resend();
 
       expect(slept).toEqual([]);
+    });
+  });
+
+  describe("the limit, per client address (#158)", () => {
+    /** Refuses everything: the limit is exhausted before the test begins. */
+    const exhausted = (): ResendClientRateLimiter => ({
+      admit: () =>
+        Promise.resolve({ state: "rate-limited", retryAfterMs: 20 * MINUTE }),
+    });
+
+    it("is asked before anything reads the address, and a refusal reads nothing", async () => {
+      const { resend, calls, sequence } = build({ clientLimiter: exhausted });
+
+      expect(await resend()).toEqual({
+        state: "too-many",
+        retryAfterMs: 20 * MINUTE,
+      });
+      // Asked after the directory read, an unknown address would answer `sent`
+      // before the limit was consulted, and unknown addresses would be
+      // unlimited.
+      expect(sequence).toEqual(["admit(203.0.113.7)"]);
+      expect(calls).toEqual([]);
+    });
+
+    it("is handed the address the transport read, unreadable included", async () => {
+      const { resend, sequence } = build();
+
+      await resend("Claimant@Example.com", { clientAddress: undefined });
+
+      expect(sequence[0]).toBe("admit(undefined)");
+    });
+
+    it("counts every request, so an unknown address is limited exactly as a registered one", async () => {
+      const limiter = (clock: Clock) =>
+        createResendClientRateLimiter({
+          store: createInMemoryClaimRateLimitStore(),
+          clock,
+          secret: "s".repeat(32),
+        });
+      const registered = build({ clientLimiter: limiter });
+      const unknown = build({ account: undefined, clientLimiter: limiter });
+
+      const outcomes = async (
+        scenario: ReturnType<typeof build>,
+        email: string,
+      ) => {
+        const seen: string[] = [];
+        for (let request = 0; request < 10; request += 1) {
+          seen.push((await scenario.resend(email)).state);
+        }
+        return { seen, eleventh: await scenario.resend(email) };
+      };
+      const forRegistered = await outcomes(registered, "claimant@example.com");
+      const forUnknown = await outcomes(unknown, "nobody@example.com");
+
+      // The two really took different paths before the limit bound: only the
+      // registered address was ever mailed…
+      const sends = (scenario: ReturnType<typeof build>) =>
+        scenario.calls.filter((call) => call.startsWith("send(")).length;
+      expect({
+        registered: sends(registered),
+        unknown: sends(unknown),
+      }).toEqual({ registered: 10, unknown: 0 });
+      // …and the refusal is the same answer, down to the "when".
+      expect(forUnknown.eleventh).toEqual(forRegistered.eleventh);
+      expect(forRegistered.eleventh.state).toBe("too-many");
+    });
+
+    it("pads a client-address refusal to the same floor as a send", async () => {
+      const refused = build({ clientLimiter: exhausted });
+      await refused.resend();
+
+      expect(refused.slept).toEqual([RESPONSE_FLOOR_MS]);
     });
   });
 

@@ -2,6 +2,7 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { getAuthTables } from "better-auth/db";
 
+import { authRateLimitOptions } from "../auth/auth-rate-limit";
 import { authSchema } from "./schema";
 
 /**
@@ -11,8 +12,15 @@ import { authSchema } from "./schema";
  * production, not a type error at build time. These tests compare our schema
  * against Better Auth's own runtime description of what it needs, so a version
  * bump that adds a column fails here instead of in production.
+ *
+ * The rate-limit options are the ones `createAuth` passes (#158): with
+ * `storage: "database"` Better Auth describes one more model, under the
+ * `modelName` those options choose.
  */
-const required = getAuthTables({ emailAndPassword: { enabled: true } });
+const required = getAuthTables({
+  emailAndPassword: { enabled: true },
+  rateLimit: authRateLimitOptions(),
+});
 const specByModel = new Map(
   Object.values(required).map((table) => [table.modelName, table] as const),
 );
@@ -69,6 +77,19 @@ describe("authSchema satisfies Better Auth", () => {
         .filter((name) => columns[name]?.notNull !== true);
 
       expect(nullable).toEqual([]);
+    });
+
+    it("stores Better Auth's bigint fields in a bigint column", () => {
+      // `auth_rate_limit.lastRequest` is epoch milliseconds, which overflows a
+      // Postgres `integer` today — and a failed write there is a failed sign-in.
+      const columns: Record<string, { columnType: string } | undefined> =
+        getTableColumns(table);
+      const narrow = Object.entries(specFor(modelName).fields)
+        .filter(([, field]) => field.bigint === true)
+        .map(([name]) => name)
+        .filter((name) => columns[name]?.columnType !== "PgBigInt53");
+
+      expect(narrow).toEqual([]);
     });
 
     it("marks Better Auth's unique fields as unique", () => {

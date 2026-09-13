@@ -1,6 +1,10 @@
 import { createInMemoryVerificationDispatchStore } from "../adapters/in-memory-verification-dispatch-store";
 import { createDatabase } from "../db/client";
 import { createRecordingEmailSender } from "./adapters/recording-email-sender";
+import {
+  authClientAddressOptions,
+  authRateLimitOptions,
+} from "./auth-rate-limit";
 import { createAuth } from "./create-auth";
 
 const SECRET = "a".repeat(32);
@@ -151,6 +155,32 @@ describe("createAuth", () => {
       // direct-sign-up.integration.test.ts.
       expect(Object.keys(auth.options.emailAndPassword)).not.toContain(
         "disableSignUp",
+      );
+      await close();
+    });
+  });
+
+  describe("rate limiting (#158)", () => {
+    it("is enabled here, under NODE_ENV=test, where Better Auth's own default is off", async () => {
+      // better-auth 1.7.4 resolves `enabled` to `options.rateLimit?.enabled ??
+      // isProduction`, so without an explicit `true` every non-production
+      // environment — previews included — would run unlimited.
+      const { auth, close } = build();
+      const context = await auth.$context;
+
+      expect({
+        enabled: context.rateLimit.enabled,
+        storage: context.rateLimit.storage,
+      }).toEqual({ enabled: true, storage: "database" });
+      await close();
+    });
+
+    it("configures the rules, the table and the client-address headers from one place", async () => {
+      const { auth, close } = build();
+
+      expect(auth.options.rateLimit).toEqual(authRateLimitOptions());
+      expect(auth.options.advanced.ipAddress).toEqual(
+        authClientAddressOptions(),
       );
       await close();
     });

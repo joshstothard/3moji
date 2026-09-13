@@ -1,8 +1,10 @@
 "use server";
 
 import { canonicalise, resendVerification } from "@template/core";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { clientAddressFrom } from "../lib/client-address";
 import { getServices } from "../lib/services";
 import { logFailure } from "../lib/log-error";
 import { holdReasonFrom, type ResendNotice } from "./claim-state";
@@ -79,9 +81,18 @@ export async function requestNewVerificationLink(
   let retrySeconds: number | undefined;
 
   try {
-    const { accounts, dispatches, verificationMailer, clock } = getServices();
+    const {
+      accounts,
+      dispatches,
+      verificationMailer,
+      clock,
+      resendClientRateLimiter,
+    } = getServices();
     const outcome = await resendVerification({
       email: email.trim(),
+      // Per client address, beside the per-Account limit (#158).
+      clientAddress: clientAddressFrom(await headers()),
+      clientLimiter: resendClientRateLimiter,
       directory: accounts,
       dispatches,
       mailer: verificationMailer,
