@@ -234,16 +234,20 @@ function visit(handle: string): Promise<ReactElement> {
 }
 
 /**
- * Let the builder's own availability read land inside `act`.
+ * Render a page whose builder asks about availability on mount, and let that
+ * read land inside `act`.
  *
  * Since #115 the route hands the builder the answer it has just read, so the
  * availability line is on the page from the first render — which means waiting
- * for that line no longer waits for the builder's re-check, and its answer
- * would otherwise arrive after the test, outside `act`. The fake read resolves
- * immediately, so one turn of the microtask queue is all it needs.
+ * for that line no longer waits for the builder's re-check. Its answer then
+ * lands on whichever `await` comes next, outside both `waitFor` and `act`, and
+ * React warns. Rendering inside an async `act` flushes it there instead, before
+ * any assertion runs; settling afterwards is too late, because the answer may
+ * already have landed during the wait.
  */
-async function settleBuilderRead(): Promise<void> {
+async function renderSettled(page: ReactElement): Promise<void> {
   await act(async () => {
+    render(page);
     await Promise.resolve();
   });
 }
@@ -506,9 +510,8 @@ describe("an unclaimed Handle", () => {
     settled: string = builderCopy.stateAvailable,
   ): Promise<UserEvent> {
     const user = userEvent.setup();
-    render(await visit(ENCODED));
+    await renderSettled(await visit(ENCODED));
     await screen.findByText(settled);
-    await settleBuilderRead();
     return user;
   }
 
@@ -579,7 +582,7 @@ describe("an unclaimed Handle", () => {
   it("asks the builder's own read about the same segment the route asked about", async () => {
     // Both surfaces go through `lib/availability.ts`, so the live line under
     // the slots agrees with the answer that put the builder on the page.
-    render(await visit(ENCODED));
+    await renderSettled(await visit(ENCODED));
 
     await waitFor(() => {
       expect(checkAvailability).toHaveBeenCalledWith(ENCODED);
@@ -864,9 +867,8 @@ describe("a word alias", () => {
   it("renders the claim call to action when nothing is claimed", async () => {
     readAvailability.mockResolvedValue("available");
 
-    render(await visit("ice-cube.ice-cube.ice-cube"));
+    await renderSettled(await visit("ice-cube.ice-cube.ice-cube"));
     await screen.findByText(builderCopy.stateAvailable);
-    await settleBuilderRead();
 
     expect(screen.getByText(copy.unclaimed)).toBeInTheDocument();
     expect(
