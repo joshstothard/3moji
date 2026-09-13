@@ -3,7 +3,9 @@ import type { EmailSender } from "../ports/email-sender";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 /**
- * The error `name`s Resend documents for its REST API, as upper-case codes.
+ * The error `name`s Resend's REST API is known to use, as upper-case codes.
+ * Reconstructed from Resend's error reference rather than generated from it:
+ * a name missing here reads as `UNRECOGNISED`, and the status still lands.
  *
  * An allow-list rather than a pattern because the value is copied out of a
  * third party's response body: only a member of this list is ever admitted,
