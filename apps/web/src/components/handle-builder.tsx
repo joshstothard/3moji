@@ -415,7 +415,7 @@ export function HandleBuilder({
                   onClick={() => {
                     applySwap(suggestion);
                   }}
-                  className="px-3 h-12 text-2xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  className="px-3 h-12 text-2xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm hover:border-indigo-600 focus-visible:outline-none"
                 >
                   <span aria-hidden="true">{suggestion.handle.key}</span>
                 </button>
