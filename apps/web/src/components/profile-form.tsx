@@ -193,7 +193,6 @@ export function ProfileForm({ handle, initial, save }: ProfileFormProps) {
   const [list, setList] = useState<LinkListState>(() =>
     listOf(source, violations),
   );
-  const [nextId, setNextId] = useState(source.links.length);
   /** Which row a drag is carrying, or `undefined` when none is in flight. */
   const [dragging, setDragging] = useState<number | undefined>(undefined);
   /**
@@ -206,7 +205,6 @@ export function ProfileForm({ handle, initial, save }: ProfileFormProps) {
   if (seen !== state) {
     setSeen(state);
     setList(listOf(source, violations));
-    setNextId(source.links.length);
   }
 
   const rows = list.rows;
@@ -253,12 +251,22 @@ export function ProfileForm({ handle, initial, save }: ProfileFormProps) {
     );
   };
 
+  /**
+   * The new row's id is derived from the list **inside the updater**, for the
+   * same reason a move names a Link rather than a slot: a counter held beside
+   * the list is read from this render's closure, so two adds dispatched before
+   * a re-render both claim the same id. Two rows sharing a `key` is not a
+   * cosmetic warning — React reuses one row's DOM node for the other, and what
+   * is typed into one field lands in both.
+   */
   const addRow = () => {
     setList((prev) => ({
       ...prev,
-      rows: [...prev.rows, { id: nextId, title: "", url: "", violations: [] }],
+      rows: [
+        ...prev.rows,
+        { id: nextIdFor(prev.rows), title: "", url: "", violations: [] },
+      ],
     }));
-    setNextId(nextId + 1);
   };
 
   const removeRow = (id: number) => {
@@ -319,7 +327,6 @@ export function ProfileForm({ handle, initial, save }: ProfileFormProps) {
           {rows.map((row, index) => (
             <li
               key={row.id}
-              data-testid={`link-row-${String(index)}`}
               onDragOver={(event: DragEvent<HTMLLIElement>) => {
                 // Without this the browser refuses the drop outright: the
                 // default action of `dragover` is "this is not a drop target".
@@ -411,6 +418,17 @@ function listOf(
     // the most recent thing to have happened.
     announcement: "",
   };
+}
+
+/**
+ * An id no row in this list is using: one past the highest.
+ *
+ * A `reduce` rather than `Math.max(...ids)`, which spreads an array into a call
+ * — fine for ten Links and a habit that stops being fine at a hundred thousand.
+ * The seed of `-1` is what makes the first id of an empty list `0`.
+ */
+function nextIdFor(rows: readonly LinkRow[]): number {
+  return rows.reduce((highest, row) => Math.max(highest, row.id), -1) + 1;
 }
 
 /**
@@ -636,7 +654,6 @@ function LinkFields({
          * with a caveat.
          */}
         <span
-          data-testid={`link-drag-handle-${String(index)}`}
           aria-hidden="true"
           draggable
           onDragStart={onDragStart}

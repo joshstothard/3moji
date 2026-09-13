@@ -326,6 +326,39 @@ describe("reordering after a save was refused", () => {
   });
 });
 
+/**
+ * The row identity the reorder depends on. Two rows sharing one `key` is a
+ * duplicate React key, and React then reuses one row's DOM node for the other —
+ * which is precisely the thing that makes a move rearrange the labels while
+ * leaving the typed values behind.
+ */
+describe("the identity rows are keyed on", () => {
+  it("gives a Link added twice in quick succession two different identities", async () => {
+    const user = userEvent.setup();
+    const action = renderForm();
+
+    const add = screen.getByRole("button", { name: copy.addLink });
+    act(() => {
+      add.click();
+      add.click();
+    });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
+    await user.type(
+      screen.getByLabelText(copy.linkTitleLabel.replace("{position}", "4")),
+      "Fourth",
+    );
+    await user.type(
+      screen.getByLabelText(copy.linkTitleLabel.replace("{position}", "5")),
+      "Fifth",
+    );
+    await submit(user);
+
+    expect(action.posted[0]?.get("link-3-title")).toBe("Fourth");
+    expect(action.posted[0]?.get("link-4-title")).toBe("Fifth");
+  });
+});
+
 /** A `DataTransfer` stub: jsdom fires drag events without one. */
 const dataTransfer = () => ({
   setData: () => undefined,
@@ -335,10 +368,21 @@ const dataTransfer = () => ({
 });
 
 describe("reordering Links by dragging", () => {
+  /**
+   * Queried by what the markup actually says, not by a test-only attribute.
+   * The handle is `aria-hidden`, so it has no role to find it by; its `title`
+   * is what a pointer user sees on hover, and `getByTitle` reads the attribute
+   * rather than the accessibility tree.
+   */
   const handle = (position: number) =>
-    screen.getByTestId(`link-drag-handle-${String(position - 1)}`);
-  const row = (position: number) =>
-    screen.getByTestId(`link-row-${String(position - 1)}`);
+    screen.getByTitle(
+      copy.dragLinkHandle.replace("{position}", String(position)),
+    );
+  const row = (position: number) => {
+    const item = screen.getAllByRole("listitem")[position - 1];
+    if (item === undefined) throw new Error(`no row at ${String(position)}`);
+    return item;
+  };
 
   it("drops a Link onto an earlier row and puts it there", () => {
     renderForm();
@@ -396,5 +440,6 @@ describe("reordering Links by dragging", () => {
     renderForm();
 
     expect(handle(1)).toHaveAttribute("aria-hidden", "true");
+    expect(handle(1)).not.toHaveAttribute("tabindex");
   });
 });
