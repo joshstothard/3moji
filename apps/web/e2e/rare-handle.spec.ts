@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import en from "../../../packages/shared/messages/en.json";
 import { checkPage, PAGE_RULES } from "./support/axe";
 import { describeContrast, measureContrast } from "./support/contrast";
+import { categoryTabs, pickEmojiByName } from "./support/picker";
 
 /**
  * The rare three-of-a-kind celebration, in the real browser
@@ -49,24 +50,17 @@ function announcement(page: Page): Locator {
   return page.locator("[data-rare-announcement]");
 }
 
-async function pickByName(page: Page, name: string): Promise<void> {
-  await page
-    .getByRole("searchbox", { name: copy.pickerSearchLabel })
-    .fill(name);
-  await page.getByRole("button", { name, exact: true }).click();
-}
-
 async function buildTriple(
   page: Page,
   name: string,
   answer: string,
 ): Promise<void> {
   await page.goto("/");
-  await expect(
-    page.getByRole("searchbox", { name: copy.pickerSearchLabel }),
-  ).toBeVisible();
+  await expect(categoryTabs(page).first()).toBeVisible();
+  // The picker has no search box since #253: each pick opens the emoji's
+  // category tab and presses the emoji.
   for (let picked = 0; picked < 3; picked += 1) {
-    await pickByName(page, name);
+    await pickEmojiByName(page, name);
   }
   await expect(page.getByText(answer)).toBeVisible();
 }
@@ -150,7 +144,7 @@ test("the celebration plays again when the visitor changes away and back", async
   await expect(announcement(page)).toHaveText("");
   expect(await animationsIn(builder(page))).toEqual([]);
 
-  await pickByName(page, "ice cube");
+  await pickEmojiByName(page, "ice cube");
   await expect(page.getByText(copy.stateAvailable)).toBeVisible();
   await expect(badge(page)).toBeVisible();
 

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EmojiPicker } from "./emoji-picker";
 import { checkAccessibility } from "../test-support/axe";
@@ -14,7 +14,7 @@ import en from "../../../../packages/shared/messages/en.json";
 const copy = en.HandleBuilder;
 
 describe("the emoji picker, checked by axe", () => {
-  it("reports no violations as it opens, and evaluates its buttons, list and label", async () => {
+  it("reports no violations as it opens, and evaluates its buttons and list", async () => {
     const { container } = render(
       <EmojiPicker onPick={jest.fn()} full={false} />,
     );
@@ -24,7 +24,7 @@ describe("the emoji picker, checked by axe", () => {
     expect(report.violations).toEqual([]);
     expect(report.incomplete).toEqual([]);
     expect(report.passed).toEqual(
-      expect.arrayContaining(["button-name", "label", "list", "listitem"]),
+      expect.arrayContaining(["button-name", "list", "listitem"]),
     );
   });
 
@@ -40,20 +40,25 @@ describe("the emoji picker, checked by axe", () => {
     );
   });
 
-  it("reports no violations when a search finds nothing", async () => {
+  it("reports no violations after another category's tab is picked", async () => {
     const user = userEvent.setup();
     const { container } = render(
       <EmojiPicker onPick={jest.fn()} full={false} />,
     );
 
-    await user.click(screen.getByLabelText(copy.pickerSearchLabel));
-    await user.keyboard("zzzz");
-    await screen.findByText(copy.pickerNoMatches.replace("{query}", "zzzz"));
+    await user.click(
+      within(
+        screen.getByRole("group", { name: copy.pickerCategoriesLabel }),
+      ).getByRole("button", { name: "Activities" }),
+    );
+    await screen.findByRole("button", { name: "soccer ball" });
 
     const report = await checkAccessibility(container);
 
     expect(report.violations).toEqual([]);
     expect(report.incomplete).toEqual([]);
-    expect(report.passed).toEqual(expect.arrayContaining(["label"]));
+    expect(report.passed).toEqual(
+      expect.arrayContaining(["button-name", "aria-allowed-attr", "list"]),
+    );
   });
 });

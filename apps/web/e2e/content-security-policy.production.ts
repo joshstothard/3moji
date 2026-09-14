@@ -8,6 +8,7 @@ import {
   expectNoViolations,
   watchCspViolations,
 } from "./support/csp";
+import { pickEmojiByName } from "./support/picker";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -54,11 +55,9 @@ test("/ is rendered per request, hydrates, runs the builder and passes axe, with
   await expectHydrated(page);
   // 🧊🧊🧊 is available (rare-handle.spec.ts), so the availability server
   // action answers and the celebration sets its inline animation delay.
+  // The picker has no search box since #253: open the tab, press the emoji.
   for (let picked = 0; picked < 3; picked += 1) {
-    await page
-      .getByRole("searchbox", { name: builderCopy.pickerSearchLabel })
-      .fill("ice cube");
-    await page.getByRole("button", { name: "ice cube", exact: true }).click();
+    await pickEmojiByName(page, "ice cube");
   }
   await expect(
     page.getByText(builderCopy.rareBadge, { exact: true }),

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import en from "../../../packages/shared/messages/en.json";
+import { pickEmoji } from "./support/picker";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -30,14 +31,10 @@ test("the builder reads real availability from the database", async ({
   const seeded = await seedClaimedHandle();
 
   await page.goto("/");
-  const search = page.getByRole("searchbox", {
-    name: builderCopy.pickerSearchLabel,
-  });
+  // The picker has no search box since #253: open each emoji's category tab
+  // and press the emoji.
   for (const entry of seeded.emoji) {
-    await search.fill(entry.displayName);
-    await page
-      .getByRole("button", { name: entry.displayName, exact: true })
-      .click();
+    await pickEmoji(page, entry);
   }
 
   await expect(page.getByText(builderCopy.stateClaimed)).toBeVisible();

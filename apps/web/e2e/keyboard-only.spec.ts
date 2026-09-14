@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
+  curatedEmojiSet,
   findCuratedEmoji,
   isReservedHandle,
   resolveAlias,
@@ -10,6 +11,7 @@ import {
 } from "@template/core";
 import en from "../../../packages/shared/messages/en.json";
 import { UNCLAIMED_SEVERAL_ALIAS } from "./support/aliases";
+import { categoryTab, emojiGrid } from "./support/picker";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -41,10 +43,26 @@ const claimCopy = en.Claim;
 
 /**
  * How many key presses a single move may take before the spec concludes focus
- * can never reach its target. Searching keeps the grid to a handful of
- * results, so a real journey needs far fewer.
+ * can never reach its target.
+ *
+ * The picker has no search box since #253, so reaching an emoji means tabbing
+ * through its category's grid, and a swap suggestion above the picker is
+ * reached by Shift+Tab back through it. The bound is the largest released
+ * category plus room for the controls around the grid, derived from the data
+ * so a bigger drop cannot silently outgrow it.
  */
-const MAX_PRESSES = 60;
+const LARGEST_CATEGORY = Math.max(
+  ...[
+    ...curatedEmojiSet
+      .reduce(
+        (counts, entry) =>
+          counts.set(entry.category, (counts.get(entry.category) ?? 0) + 1),
+        new Map<string, number>(),
+      )
+      .values(),
+  ],
+);
+const MAX_PRESSES = LARGEST_CATEGORY + 40;
 
 /**
  * The APIs this spec must never call, spelled as bare names so that this list
@@ -442,6 +460,9 @@ test("a visitor moves through an alias claim listing by keyboard alone (ADR-0011
 test("a visitor fills, swaps and reaches the claim form by keyboard alone", async ({
   page,
 }) => {
+  // Without search (#253), each pick tabs through a category's grid and back,
+  // checking focus at every stop, so the journey takes several times longer.
+  test.slow();
   const seeded = await seedClaimedHandle();
   const picked = seeded.emoji.map((entry) => entry.emoji);
 
@@ -466,18 +487,19 @@ test("a visitor fills, swaps and reaches the claim form by keyboard alone", asyn
 
   await page.goto("/");
 
-  const search = page.getByRole("searchbox", {
-    name: builderCopy.pickerSearchLabel,
-  });
-  const grid = page.getByRole("list");
+  const grid = emojiGrid(page);
 
-  // Fill three slots. The first move starts from the top of the document; the
-  // next two go back up from the emoji just picked.
+  // Fill three slots. The picker has no search box since #253, so each pick
+  // reaches the emoji's category tab, opens it with Enter, and tabs into the
+  // grid. The first move starts from the top of the document; the next two go
+  // back up from the emoji just picked.
   for (const [position, entry] of seeded.emoji.entries()) {
-    await moveFocusTo(page, search, position === 0 ? "Tab" : "Shift+Tab");
-    await page.keyboard.press("ControlOrMeta+A");
-    await page.keyboard.press("Backspace");
-    await page.keyboard.type(entry.displayName);
+    const tab = categoryTab(page, entry.category);
+    await moveFocusTo(page, tab, position === 0 ? "Tab" : "Shift+Tab");
+    await page.keyboard.press("Enter");
+    await expect(tab).toHaveAttribute("aria-pressed", "true");
+    // The tab is a toggle button that stays mounted, so focus stays on it.
+    await expect(tab).toBeFocused();
 
     const result = grid.getByRole("button", {
       name: entry.displayName,

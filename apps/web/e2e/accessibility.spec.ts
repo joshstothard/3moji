@@ -29,6 +29,7 @@ import {
   measureBorderContrast,
   measureContrast,
 } from "./support/contrast";
+import { categoryTabs, pickEmoji } from "./support/picker";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -153,9 +154,7 @@ function expectLandmarksContained(report: PageReport): void {
 
 async function openHome(page: Page): Promise<void> {
   await page.goto("/");
-  await expect(
-    page.getByRole("searchbox", { name: builderCopy.pickerSearchLabel }),
-  ).toBeVisible();
+  await expect(categoryTabs(page).first()).toBeVisible();
 }
 
 test("the home page and its picker have no WCAG A or AA violations", async ({
@@ -163,41 +162,9 @@ test("the home page and its picker have no WCAG A or AA violations", async ({
 }) => {
   await openHome(page);
 
+  // `label` is the header lookup's field; the picker has none since #253.
   expectAccessible(await checkPage(page), ["label", "button-name", "list"]);
   expectLandmarksContained(await checkLandmarks(page));
-});
-
-test("the picker's search placeholder meets text contrast", async ({
-  page,
-}) => {
-  // Placeholder text is text, so WCAG 1.4.3's 4.5:1 applies - and axe does not
-  // reliably evaluate `::placeholder`, so the check above is no evidence.
-  await openHome(page);
-  const field = page.getByRole("searchbox", {
-    name: builderCopy.pickerSearchLabel,
-  });
-  await expect(field).toHaveValue("");
-  await expect(field).toHaveAttribute(
-    "placeholder",
-    builderCopy.pickerSearchPlaceholder,
-  );
-
-  const measured = await measureContrast(field, "::placeholder");
-  const account = describeContrast("search placeholder", measured);
-  console.log(account);
-
-  expect(measured.ratio, account).toBeGreaterThanOrEqual(TEXT_CONTRAST);
-});
-
-test("the picker's search field border meets non-text contrast", async ({
-  page,
-}) => {
-  await openHome(page);
-
-  await expectBorderIdentifiesControl(
-    page.getByRole("searchbox", { name: builderCopy.pickerSearchLabel }),
-    "picker search",
-  );
 });
 
 test("the Handle builder's slot and swap-suggestion borders meet non-text contrast", async ({
@@ -225,14 +192,9 @@ test("the Handle builder's slot and swap-suggestion borders meet non-text contra
     );
   }
 
-  const search = page.getByRole("searchbox", {
-    name: builderCopy.pickerSearchLabel,
-  });
+  // The picker has no search box since #253: open the tab, press the emoji.
   for (const entry of seeded.emoji) {
-    await search.fill(entry.displayName);
-    await page
-      .getByRole("button", { name: entry.displayName, exact: true })
-      .click();
+    await pickEmoji(page, entry);
   }
   await expect(page.getByText(builderCopy.stateClaimed)).toBeVisible();
 
