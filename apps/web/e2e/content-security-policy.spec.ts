@@ -15,6 +15,7 @@ import {
   expectNoViolations,
   watchCspViolations,
 } from "./support/csp";
+import { pickEmojiByName } from "./support/picker";
 import {
   seedClaimedHandle,
   sessionCookieFor,
@@ -59,11 +60,9 @@ async function signIn(
   );
 }
 
+/** The picker has no search box since #253: open the category, press the emoji. */
 async function pick(page: Page, name: string): Promise<void> {
-  await page
-    .getByRole("searchbox", { name: builderCopy.pickerSearchLabel })
-    .fill(name);
-  await page.getByRole("button", { name, exact: true }).click();
+  await pickEmojiByName(page, name);
 }
 
 test("every HTML response carries the policy and the four static security headers", async ({
