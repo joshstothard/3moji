@@ -17,11 +17,15 @@ const copy = en.OpenGraph;
  */
 export const OG_IMAGE_CACHE_CONTROL = "public, max-age=300, s-maxage=300";
 
-/** The page's own tokens: `bg-slate-50`, `slate-900`, `indigo-600`. */
-const SLATE_50 = "#f8fafc";
-const SLATE_900 = "#0f172a";
-const SLATE_500 = "#64748b";
-const INDIGO_600 = "#4f46e5";
+/**
+ * The brand's own tokens (#251), as `app/globals.css` declares them: `paper`,
+ * `ink`, `violet` and `muted`. Satori draws from inline styles, not the
+ * stylesheet, so they are repeated here rather than read (#272).
+ */
+const PAPER = "#fbf8f4";
+const INK = "#1a1523";
+const MUTED = "#736c7e";
+const VIOLET = "#5b3df5";
 
 const GLYPH_SIZE = 220;
 
@@ -59,7 +63,7 @@ function Frame({ children }: { readonly children: React.ReactNode }) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: SLATE_50,
+        backgroundColor: PAPER,
       }}
     >
       {children}
@@ -96,7 +100,7 @@ function HandleCard({
             display: "flex",
             marginTop: 48,
             fontSize: 68,
-            color: SLATE_900,
+            color: INK,
           }}
         >
           {displayName}
@@ -107,7 +111,7 @@ function HandleCard({
           display: "flex",
           marginTop: displayName === undefined ? 56 : 28,
           fontSize: 36,
-          color: INDIGO_600,
+          color: VIOLET,
         }}
       >
         {copy.siteName}
@@ -119,7 +123,7 @@ function HandleCard({
 function GenericCard() {
   return (
     <Frame>
-      <div style={{ display: "flex", fontSize: 160, color: INDIGO_600 }}>
+      <div style={{ display: "flex", fontSize: 160, color: VIOLET }}>
         {copy.siteName}
       </div>
       <div
@@ -127,7 +131,7 @@ function GenericCard() {
           display: "flex",
           marginTop: 24,
           fontSize: 52,
-          color: SLATE_500,
+          color: MUTED,
         }}
       >
         {copy.imageTagline}

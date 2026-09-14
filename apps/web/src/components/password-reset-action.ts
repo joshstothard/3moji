@@ -75,9 +75,12 @@ async function requestReset(formData: FormData): Promise<ResetRequestNotice> {
     });
     return outcome.state;
   } catch (error) {
-    // A misconfigured deployment, a limiter that cannot count, or a send that
-    // failed. Logged without its message (#134), and never answered `sent`: a
-    // person told a link is on its way would wait for one that never comes.
+    // The request failed before any email was handed off: a misconfigured
+    // deployment, or a limiter or database that cannot be reached. A failed
+    // send never lands here, because the email goes out in the background and
+    // its failure is only logged (#216), so the page says "sent" either way.
+    // Logged without its message (#134), and never answered `sent`: a person
+    // told a link is on its way would wait for one that never comes.
     logFailure("password_reset_request_failed", error);
     return "failed";
   }
