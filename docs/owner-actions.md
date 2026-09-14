@@ -114,13 +114,22 @@ Items are grouped by when they have to happen:
 - [ ] **Where nightly database backups are stored**
   - **What:** Neon's free plan can only restore to a point in the last 6 hours or so. A mistake noticed the next day, such as a bad migration or an accidental deletion, would lose every Handle, Account and Profile. A nightly copy kept somewhere else fixes that.
   - **Why it matters:** without it, one bad day could permanently wipe out every claimed Handle.
-  - **Options:**
-    - An encrypted database dump in a private S3-compatible bucket, such as Cloudflare R2's free tier.
-    - A private GitHub repository.
-    - GitHub Actions artifacts on this repo are **ruled out**: on a public repository anyone can download them.
-  - **Recommendation:** an encrypted dump in a private Cloudflare R2 bucket.
-  - **Blocks:** Phase 8's backup job and its "restore from backup" runbook. The job itself also waits on [#32](https://github.com/joshstothard/3moji/issues/32).
-  - **Detail:** [workstream](workstreams/3moji-mvp.md) Open questions and Phase 8, deliverable 4; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 2 (restore window).
+  - **Options:** an encrypted dump in a private S3-compatible bucket such as Cloudflare R2, or a private GitHub repository. GitHub Actions artifacts on this repo were **ruled out**: on a public repository anyone can download them.
+  - **Decided 2026-09-14, by the orchestrator at your request:** an age-encrypted `pg_dump` in a private Cloudflare R2 bucket, kept for 30 days by a lifecycle rule. It is encrypted to an age **public** key, which is not a secret. The **private** key stays only in your password manager and never goes to GitHub. The workflow is `.github/workflows/backup.yml` ([#206](https://github.com/joshstothard/3moji/issues/206)). It does nothing until step 7, so the box stays unticked until step 9 is done.
+  - **Your steps:**
+    1. **Create the bucket.** Create a Cloudflare account if you have none, open **R2 Object Storage**, and create a bucket, e.g. `3moji-backups`. Leave it private: don't connect a custom domain, and don't turn on its public `r2.dev` URL. Note your **Account ID** from the R2 overview page.
+    2. **Keep 30 days.** In the bucket's **Settings → Object lifecycle rules**, add a rule that applies to every object and deletes objects 30 days after they were uploaded.
+    3. **Make an API token.** In **R2 → Manage API tokens → Create API token**, choose **Object Read & Write** and apply it to that one bucket only. Save the **Access Key ID** and **Secret Access Key** in your password manager straight away; they are shown once.
+    4. **Make the age key.** On your Mac, run `brew install age`, then `age-keygen -o 3moji-backup.key`. Put the whole contents of `3moji-backup.key` in your password manager as the 3moji backup private key, then delete the file with `rm 3moji-backup.key`. Copy only the public key: the `age1...` value from its `# public key:` line, which `age-keygen` also prints. If the private key is lost, no backup can ever be read. If it leaks, make a new key and replace the variable in step 6.
+    5. **Copy the connection string.** In Neon, open the production project, choose **Connect**, pick the production branch and database, turn **Connection pooling off**, and copy the connection string. Its host has no `-pooler`; the workflow refuses a pooled one. Paste it straight into GitHub in step 6, not into a note or a file.
+    6. **Add the secrets and variables.** In GitHub, open `joshstothard/3moji` → **Settings → Secrets and variables → Actions**:
+       - On the **Secrets** tab, add three repository secrets: `BACKUP_DATABASE_URL` (step 5), `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (step 3).
+       - On the **Variables** tab, add three repository variables: `R2_ACCOUNT_ID` (step 1), `R2_BUCKET` (the bucket name from step 1) and `BACKUP_AGE_RECIPIENT` (the `age1...` public key from step 4). Variables are **not masked** in the public Actions logs, so nothing secret goes on this tab, and never the private key.
+    7. **Turn it on.** On the same **Variables** tab, add `BACKUPS_ENABLED` with the value `true`.
+    8. **Run it once.** In **Actions → Nightly Database Backup → Run workflow**, run it on `main` and check it goes green. Its last upload step ends `Uploaded and confirmed: N bytes.`, and the object appears in the bucket under `3moji/`. If it fails, the error names the setting to fix and never shows its value.
+    9. **Do one test restore** into a Neon branch, following the [restore runbook](runbooks/restore-from-backup.md#5-restore-from-the-nightly-backup) § 5.1 to § 5.4 and § 5.6, never § 5.5. Record the date, the object key and the § 5.4 counts on #206 (counts, never rows). That closes #206.
+  - **Blocks:** closing [#206](https://github.com/joshstothard/3moji/issues/206), and any recovery of data lost more than six hours ago.
+  - **Detail:** [workstream](workstreams/3moji-mvp.md) Decision log (2026-09-14) and Phase 8; [restore runbook](runbooks/restore-from-backup.md) § 5; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 2 (restore window).
 
 - [ ] **Review the privacy notice and terms, and confirm the legal checks**
   - **What:** In Phase 7 the agent drafts `/privacy` and `/terms` in plain English. You review them before announcing. You also check whether the ICO data protection fee applies to you, and confirm Phase 7's written assessment, citing Ofcom, of whether the Online Safety Act's user-to-user duties apply ([takedown runbook](runbooks/takedown.md) § 6).
@@ -197,6 +206,7 @@ Recorded in the [workstream](workstreams/3moji-mvp.md) Decision log on 2026-09-1
 
 Recorded in the Decision log on 2026-09-14:
 
+- **Nightly database backups go to a private Cloudflare R2 bucket**, as an age-encrypted `pg_dump` kept for 30 days, decided by the orchestrator at your request. The private key stays in your password manager. Setup is under "Where nightly database backups are stored".
 - **The spoken form isn't resolved in the path** ([#201](https://github.com/joshstothard/3moji/issues/201)). `/three-ice-cubes` stays a 404 and ADR-0008 stands. Spoken input works in the Find a Handle lookup, which the home page and the 404 page both offer. Revisit if post-launch logs show 404s on spoken-looking paths.
 - **The Content Security Policy is a per-request nonce on every page** (option 1 of [#205](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)). `/`, `/privacy`, `/terms` and the 404 render per request and lose CDN caching in exchange for a strict policy with no `unsafe-inline` script. See [Security headers](architecture/system-overview.md#security-headers).
 - **Vercel Web Analytics was added at your request** (PR [#238](https://github.com/joshstothard/3moji/pull/238)). It is cookieless, and the privacy notice's processors section was updated to say what it records, from Vercel's own docs. Its URL recording would have included the set-new-password page, whose address holds a reset token, so **every URL is redacted before it is sent**: `/reset-password/<token>` becomes `/reset-password/[token]`, every query string and fragment is dropped, and a URL that cannot be parsed is not sent at all. See `apps/web/src/lib/analytics-redaction.ts`, tested in `apps/web/src/lib/analytics-redaction.test.ts`, and wired in by `SiteAnalytics` (asserted in `apps/web/src/components/site-analytics.test.tsx` and `apps/web/src/app/layout.test.tsx`).
