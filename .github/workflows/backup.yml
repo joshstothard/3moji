@@ -48,9 +48,9 @@ jobs:
     if: github.repository == 'joshstothard/3moji' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      # The encrypted dump, outside the workspace.
-      DUMP_FILE: ${{ runner.temp }}/3moji-backup.dump.age
+    # DUMP_FILE, the encrypted dump outside the workspace, is set on each step
+    # that reads it. A job's `env:` cannot read the `runner` context, and GitHub
+    # rejects the whole file if it tries, so the workflow never runs (#266).
     steps:
       - uses: actions/checkout@v7
         with:
@@ -108,6 +108,7 @@ jobs:
         env:
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          DUMP_FILE: ${{ runner.temp }}/3moji-backup.dump.age
           PGPASSFILE: ${{ runner.temp }}/3moji-backup.pgpass
         run: |
           set -euo pipefail
@@ -135,6 +136,7 @@ jobs:
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
           AWS_EC2_METADATA_DISABLED: "true"
           AWS_PAGER: ""
+          DUMP_FILE: ${{ runner.temp }}/3moji-backup.dump.age
           R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
           R2_BUCKET: ${{ vars.R2_BUCKET }}
         run: |

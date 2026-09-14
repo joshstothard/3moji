@@ -1,0 +1,8 @@
+# actionlint configuration, read by scripts/actionlint.sh (#266).
+# Every ignore needs a reason. See docs/development/ci-cd.md § Workflow lint.
+paths:
+  .github/workflows/ci.yml:
+    ignore:
+      # The image push step is disabled on purpose with `if: false`, so an
+      # adopter can enable it in one line (§ Image push).
+      - 'constant expression "false" in condition'

@@ -20,6 +20,12 @@ npm run verify:agents
 echo "=== Script Tests ==="
 npm run test:scripts
 
+# An invalid workflow file fails on every push and never runs its real
+# triggers (#266). Warns and continues if actionlint is not installed locally;
+# CI's Workflow lint job always runs it.
+echo "=== Workflow Lint ==="
+bash scripts/actionlint.sh
+
 echo "=== Codex Hook Trust ==="
 npm run verify:codex-hooks
 
