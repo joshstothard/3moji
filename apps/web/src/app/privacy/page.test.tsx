@@ -268,6 +268,14 @@ describe("the privacy notice", () => {
     expect(processors).toHaveTextContent(
       /UK Extension to the EU-US Data Privacy Framework/,
     );
+    expect(processors).toHaveTextContent(
+      /under which Vercel and Resend are certified/,
+    );
+    // Neon, LLC is named in Databricks' DPF notice, but whether that is what
+    // covers a Neon Free account was not verified, so the owner confirms it.
+    expect(processors).toHaveTextContent(
+      /The safeguard for transfers to Neon .* the owner/,
+    );
     // Neon's region is chosen when the project is created, so only the owner
     // can say which one it is.
     expect(processors).toHaveTextContent(/Which Neon region .* the owner/);
