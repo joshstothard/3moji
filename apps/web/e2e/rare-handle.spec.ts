@@ -172,6 +172,35 @@ test("the celebration plays again when the visitor changes away and back", async
   expect(replayed.filter((each) => each.name === "rare-hop")).toHaveLength(3);
 });
 
+test("the three slots hop one after another, 120ms apart, from classes rather than an inline style (#267)", async ({
+  page,
+}) => {
+  await buildTriple(page, "ice cube", copy.stateAvailable);
+  await expect(badge(page)).toBeVisible();
+
+  // The bar's own slots: on a phone the sheet was dismissed, so these are the
+  // ones on the page.
+  const glyphs = page.locator("[data-composer-bar] [data-slot-glyph]");
+  await expect(glyphs).toHaveCount(3);
+
+  const measured = await glyphs.evaluateAll((elements) =>
+    elements.map((element) => ({
+      name: getComputedStyle(element).animationName,
+      delay: getComputedStyle(element).animationDelay,
+      inlineStyle: element.getAttribute("style"),
+    })),
+  );
+  console.log(`rare hop per slot: ${JSON.stringify(measured)}`);
+
+  // The stagger is in the stylesheet, so a Content Security Policy that
+  // refuses inline styles cannot drop it: no glyph carries a `style`.
+  expect(measured).toEqual([
+    { name: "rare-hop", delay: "0s", inlineStyle: null },
+    { name: "rare-hop", delay: "0.12s", inlineStyle: null },
+    { name: "rare-hop", delay: "0.24s", inlineStyle: null },
+  ]);
+});
+
 test("under reduced motion there is no animation, only the static rare badge", async ({
   page,
 }) => {
