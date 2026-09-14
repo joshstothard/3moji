@@ -99,11 +99,16 @@ jobs:
       # Custom format, so pg_restore can restore one table on its own. The
       # pipe goes straight into age, so the plaintext dump is never on disk;
       # pipefail makes a failed pg_dump fail the step even though age succeeds.
+      # The password never goes on pg_dump's command line, where any process on
+      # the runner could read it: `pgpass` writes it to a mode-600 libpq
+      # password file under $RUNNER_TEMP, and prints the connection string
+      # without it into $dbname, which is never echoed.
       - name: Dump and encrypt
         if: steps.decide.outputs.proceed == 'true'
         env:
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          PGPASSFILE: ${{ runner.temp }}/3moji-backup.pgpass
         run: |
           set -euo pipefail
           umask 077
@@ -111,8 +116,10 @@ jobs:
             "$RUNNER_TEMP"/*) ;;
             *) exit 1 ;;
           esac
-          /usr/lib/postgresql/18/bin/pg_dump --format=custom --no-owner --no-privileges --dbname="$BACKUP_DATABASE_URL" \
+          dbname="$(node scripts/backup-plan.mjs pgpass "$PGPASSFILE")"
+          /usr/lib/postgresql/18/bin/pg_dump --format=custom --no-owner --no-privileges --dbname="$dbname" \
             | age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" --output "$DUMP_FILE"
+          rm -f "$PGPASSFILE"
           node scripts/backup-plan.mjs check-size "$DUMP_FILE"
 
       # R2's S3-compatible endpoint with the AWS CLI already on the runner.
@@ -141,6 +148,6 @@ jobs:
             --key "$key" --query ContentLength --output text)"
           node scripts/backup-plan.mjs check-upload "$size" "$remote"
 
-      - name: Remove the encrypted dump
+      - name: Remove the encrypted dump and the password file
         if: always()
-        run: rm -f "$RUNNER_TEMP/3moji-backup.dump.age"
+        run: rm -f "$RUNNER_TEMP/3moji-backup.dump.age" "$RUNNER_TEMP/3moji-backup.pgpass"

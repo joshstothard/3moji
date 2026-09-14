@@ -8,6 +8,9 @@
 //   run before setup is green and quiet. Once enabled, fail naming every
 //   missing or malformed secret or variable. Writes `proceed=true|false` to
 //   $GITHUB_OUTPUT.
+// - `pgpass <file>`: write BACKUP_DATABASE_URL's password to a mode-600 libpq
+//   password file, and print the connection string without it, so the
+//   password never goes on pg_dump's command line.
 // - `key`: the R2 object key for a dump taken now.
 // - `check-size <file>`: fail an empty or truncated dump; print its size.
 // - `check-upload <local> <remote>`: fail unless the uploaded object is the
@@ -17,7 +20,7 @@
 // value: a message names a setting, never what it holds. The workflow never
 // echoes these names itself, which is why the names are printed from here.
 
-import { appendFileSync, statSync } from "node:fs";
+import { appendFileSync, chmodSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,6 +75,56 @@ export function valuesToMask(env) {
     // An undecodable user name cannot be what pg_dump prints; nothing to add.
   }
   return candidates.filter((v) => v !== "" && !/[\r\n]/.test(v));
+}
+
+/** BACKUP_DATABASE_URL, parsed, or undefined. */
+function databaseUrlOf(env) {
+  const value = valueOf(env, "BACKUP_DATABASE_URL");
+  if (value === undefined) return undefined;
+  try {
+    return new URL(value.trim());
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The libpq password file line for BACKUP_DATABASE_URL's password, or
+ * undefined if it has none. `*` matches any host, port, database and user,
+ * which is safe in a file made for one pg_dump and deleted after it. libpq
+ * requires `:` and `\` in a field to be escaped with `\`.
+ *
+ * The password goes in this file, not on pg_dump's command line, where any
+ * process on the runner can read it.
+ *
+ * @param {Readonly<Record<string, string | undefined>>} env
+ * @returns {string | undefined}
+ */
+export function pgpassLine(env) {
+  const url = databaseUrlOf(env);
+  if (url === undefined || url.password === "") return undefined;
+  let password;
+  try {
+    password = decodeURIComponent(url.password);
+  } catch {
+    return undefined;
+  }
+  if (/[\r\n]/.test(password)) return undefined;
+  return `*:*:*:*:${password.replace(/[\\:]/g, (c) => `\\${c}`)}`;
+}
+
+/**
+ * BACKUP_DATABASE_URL with its password removed, and nothing else changed, or
+ * undefined if it cannot be parsed.
+ *
+ * @param {Readonly<Record<string, string | undefined>>} env
+ * @returns {string | undefined}
+ */
+export function connectionWithoutPassword(env) {
+  const url = databaseUrlOf(env);
+  if (url === undefined) return undefined;
+  url.password = "";
+  return url.toString();
 }
 
 const OBJECT_PREFIX = "3moji";
@@ -277,6 +330,27 @@ function main(argv) {
     case "key":
       console.log(objectKey(new Date()));
       return 0;
+    case "pgpass": {
+      // Prints the password-free connection string for `$(...)` to capture.
+      // Errors go to stderr, which the runner still reads for `::error`, so
+      // they are not swallowed by the capture.
+      const file = args[0];
+      const line = pgpassLine(process.env);
+      const connection = connectionWithoutPassword(process.env);
+      if (!file || line === undefined || connection === undefined) {
+        console.error(
+          annotate(
+            "error",
+            "BACKUP_DATABASE_URL has no password libpq can use, or no password file path was given. Nothing was dumped.",
+          ),
+        );
+        return 1;
+      }
+      writeFileSync(file, `${line}\n`, { mode: 0o600 });
+      chmodSync(file, 0o600);
+      console.log(connection);
+      return 0;
+    }
     case "check-size": {
       let bytes = Number.NaN;
       try {

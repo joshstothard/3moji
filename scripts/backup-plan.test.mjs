@@ -16,7 +16,13 @@
 // assert that none of them is ever printed.
 
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -28,8 +34,10 @@ import {
   MIN_DUMP_BYTES,
   checkDumpSize,
   checkUploadedSize,
+  connectionWithoutPassword,
   decideBackup,
   objectKey,
+  pgpassLine,
   valuesToMask,
 } from "./backup-plan.mjs";
 
@@ -79,6 +87,66 @@ function assertNoValues(text, env = enabled()) {
     "the database host was printed",
   );
 }
+
+// The password never goes on pg_dump's command line, where any process on the
+// runner can read it: it goes in a libpq password file (mode 600, under
+// $RUNNER_TEMP), and pg_dump gets the connection string without it.
+describe("the libpq password file", () => {
+  it("holds the decoded password, matching any host, port, database and user", () => {
+    assert.equal(pgpassLine(enabled()), `*:*:*:*:${SECRET_PASSWORD}`);
+  });
+
+  it("escapes colons and backslashes, as libpq requires", () => {
+    const env = {
+      BACKUP_DATABASE_URL: `postgresql://u:${"p%3Aa%5Css"}@h.example.com/app`,
+    };
+    assert.equal(pgpassLine(env), "*:*:*:*:p\\:a\\\\ss");
+  });
+
+  it("has no line for a connection string with no password, or none at all", () => {
+    assert.equal(
+      pgpassLine({ BACKUP_DATABASE_URL: "postgresql://u@h.example.com/app" }),
+      undefined,
+    );
+    assert.equal(pgpassLine({ BACKUP_DATABASE_URL: "not a url" }), undefined);
+    assert.equal(pgpassLine({}), undefined);
+  });
+
+  it("removes only the password from the connection string", () => {
+    assert.equal(
+      connectionWithoutPassword(enabled()),
+      "postgresql://backup@ep-prod-123.db.example.com/app?sslmode=require",
+    );
+  });
+
+  it("pgpass: writes a mode-600 file and prints only the password-free connection string", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "backup-plan-pgpass-206-"));
+    try {
+      const file = path.join(dir, "pgpass");
+      const result = spawnSync(process.execPath, [script, "pgpass", file], {
+        encoding: "utf8",
+        env: { PATH: process.env.PATH, ...enabled() },
+      });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      assert.equal(
+        result.stdout.trim(),
+        "postgresql://backup@ep-prod-123.db.example.com/app?sslmode=require",
+      );
+      assert.ok(!(result.stdout + result.stderr).includes(SECRET_PASSWORD));
+      assert.equal(readFileSync(file, "utf8"), `*:*:*:*:${SECRET_PASSWORD}\n`);
+      assert.equal(statSync(file).mode & 0o777, 0o600);
+
+      const none = spawnSync(process.execPath, [script, "pgpass", file], {
+        encoding: "utf8",
+        env: { PATH: process.env.PATH },
+      });
+      assert.equal(none.status, 1);
+      assert.match(none.stdout + none.stderr, /BACKUP_DATABASE_URL/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 // pg_dump's connection errors quote the host and the user, and GitHub masks a
 // secret only where the whole value appears, so a failed dump would print part

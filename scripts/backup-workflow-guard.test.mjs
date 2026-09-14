@@ -103,6 +103,18 @@ export function problems(text) {
     for (const flag of ["--format=custom", "--no-owner", "--no-privileges"]) {
       if (!pipe.includes(flag)) found.push(`pg_dump is missing ${flag}`);
     }
+    // Any process on the runner can read a command line, so the password goes
+    // in a libpq password file and pg_dump gets the string without it.
+    if (/BACKUP_DATABASE_URL/.test(pipe)) {
+      found.push(
+        "pg_dump is given the connection string, password included, on its command line",
+      );
+    }
+    if (!/PGPASSFILE/.test(step) || !/backup-plan\.mjs pgpass\b/.test(script)) {
+      found.push(
+        "pg_dump does not read its password from a libpq password file",
+      );
+    }
     if (!/(--recipient|-r)\s+"\$BACKUP_AGE_RECIPIENT"/.test(pipe)) {
       found.push("age does not encrypt to BACKUP_AGE_RECIPIENT");
     }
@@ -211,8 +223,9 @@ jobs:
           BACKUP_DATABASE_URL: \${{ secrets.BACKUP_DATABASE_URL }}
         run: |
           set -euo pipefail
-          /usr/lib/postgresql/18/bin/pg_dump --format=custom --no-owner --no-privileges \\
-            --dbname="$BACKUP_DATABASE_URL" \\
+          dbname="$(node scripts/backup-plan.mjs pgpass "$RUNNER_TEMP/x.pgpass")"
+          PGPASSFILE="$RUNNER_TEMP/x.pgpass" /usr/lib/postgresql/18/bin/pg_dump --format=custom --no-owner --no-privileges \\
+            --dbname="$dbname" \\
             | age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" --output "$RUNNER_TEMP/x.dump.age"
           node scripts/backup-plan.mjs check-size "$RUNNER_TEMP/x.dump.age"
       - name: Upload
@@ -253,6 +266,27 @@ describe("the backup workflow guard, against known-bad workflows", () => {
     );
   });
 
+  it("fails a connection string with its password on pg_dump's command line", () => {
+    const onCommandLine = GOOD.replace(
+      '--dbname="$dbname"',
+      '--dbname="$BACKUP_DATABASE_URL"',
+    );
+    assert.notEqual(onCommandLine, GOOD, "the fixture did not change");
+    assert.ok(
+      problems(onCommandLine).some((p) => /password/.test(p)),
+      JSON.stringify(problems(onCommandLine)),
+    );
+  });
+
+  it("fails a dump that does not read its password from a libpq password file", () => {
+    const noPassfile = GOOD.replace('PGPASSFILE="$RUNNER_TEMP/x.pgpass" ', "");
+    assert.notEqual(noPassfile, GOOD, "the fixture did not change");
+    assert.ok(
+      problems(noPassfile).some((p) => /password file/.test(p)),
+      JSON.stringify(problems(noPassfile)),
+    );
+  });
+
   it("fails permissions: write-all", () => {
     const writeAll = GOOD.replace(
       "    runs-on: ubuntu-latest\n",
@@ -276,8 +310,8 @@ describe("the backup workflow guard, against known-bad workflows", () => {
     [
       "set -x",
       GOOD.replace(
-        "set -euo pipefail\n          /usr",
-        "set -euxo pipefail\n          /usr",
+        "set -euo pipefail\n          dbname=",
+        "set -euxo pipefail\n          dbname=",
       ),
       /tracing/,
     ],
@@ -298,10 +332,7 @@ describe("the backup workflow guard, against known-bad workflows", () => {
     ],
     [
       "an expression pasted into a script",
-      GOOD.replace(
-        '"$BACKUP_DATABASE_URL" \\',
-        '"${{ secrets.BACKUP_DATABASE_URL }}" \\',
-      ),
+      GOOD.replace('"$dbname" \\', '"${{ secrets.BACKUP_DATABASE_URL }}" \\'),
       /expression/,
     ],
     [
@@ -317,8 +348,8 @@ describe("the backup workflow guard, against known-bad workflows", () => {
     [
       "no pipefail",
       GOOD.replace(
-        "set -euo pipefail\n          /usr",
-        "set -eu\n          /usr",
+        "set -euo pipefail\n          dbname=",
+        "set -eu\n          dbname=",
       ),
       /pipefail/,
     ],
