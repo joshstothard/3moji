@@ -224,14 +224,6 @@ Items are grouped by when they have to happen:
   - **Blocks:** nothing.
   - **Detail:** [Authentication](architecture/auth.md#what-an-operator-sees-when-a-send-fails).
 
-- [ ] **Decide whether the Handle-path spoken form needs a new ADR ([#201](https://github.com/joshstothard/3moji/issues/201))**
-  - **What:** Typing `3moji.me/three-ice-cubes` still 404s. The spoken form already works in the `/find` lookup (PR [#217](https://github.com/joshstothard/3moji/pull/217)), which needed no ADR.
-  - **Why it matters:** accepting the spoken form in the path reverses ADR-0008 decision 2, which rejected a hyphen-joined address as ambiguous. Phase 8's acceptance criterion asks for the path form, so the criterion and the ADR disagree until you pick one.
-  - **Options:** reword the Phase 8 criterion to the `/find` lookup only; authorise a short ADR where the spoken path redirects to a dotted alias and never renders; authorise a fuller ADR where the spoken path is a real address; or drop the path form.
-  - **Recommendation:** keep `/find` only, and write the redirect-only ADR (run `/adr`) only if the typed path must also work.
-  - **Blocks:** #201 and one Phase 8 acceptance criterion.
-  - **Detail:** [the #201 comment](https://github.com/joshstothard/3moji/issues/201#issuecomment-5656238125), [ADR-0008](adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md).
-
 - [ ] **Review: how axe checks the open account menu ([#225](https://github.com/joshstothard/3moji/pull/225))**
   - **What:** The orchestrator took this call overnight. When an open dropdown covers page text, axe checks only the open menu panel, and the whole page is still checked with the menu closed. It uses a new optional `include` on `checkPage` in `apps/web/e2e/support/axe.ts`, and every other caller is unchanged.
   - **Why it matters:** on Mobile Chrome the four-row account menu covers the Profile's own text, so axe can't judge that text's contrast while the menu is open. The scoped check still fails on violations and on anything axe can't decide.
@@ -285,3 +277,7 @@ Recorded in the [workstream](workstreams/3moji-mvp.md) Decision log on 2026-09-1
 - **Three-of-a-kind Handles stay claimable**, and an available one gets a short "rare" animation in the builder.
 - **Error tracking uses Vercel's own logs**, not a third-party service. The fuller version waits on Vercel Pro.
 - **The agent drafts the privacy notice and terms, and you review them** before launch.
+
+Recorded in the Decision log on 2026-09-14:
+
+- **The spoken form isn't resolved in the path** ([#201](https://github.com/joshstothard/3moji/issues/201)). `/three-ice-cubes` stays a 404 and ADR-0008 stands. Spoken input works in the Find a Handle lookup, which the home page and the 404 page both offer. Revisit if post-launch logs show 404s on spoken-looking paths.

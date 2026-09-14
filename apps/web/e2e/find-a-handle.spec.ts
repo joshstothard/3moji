@@ -37,6 +37,15 @@ const NOT_FOUND_WORDS = "three wibbles";
 /** The spoken form Profiles say for 🧊🧊🧊 (#201). */
 const SPOKEN_WORDS = "three ice cubes";
 const ICE_CUBE_ALIAS = "/ice-cube.ice-cube.ice-cube";
+/** The spoken form typed as a path: a 404 under ADR-0008, offering the lookup. */
+const SPOKEN_PATH = "/three-ice-cubes";
+/**
+ * A 404 no route matches. A `notFound()` from `[handle]` (`SPOKEN_PATH`) is
+ * served as Next's `__next_error__` shell with no markup until hydration, so
+ * without JavaScript its lookup is not in the page: #233 tracks that. The
+ * JavaScript-off journey starts here until it is fixed.
+ */
+const UNMATCHED_PATH = "/no/such/page";
 
 function randomOf<T>(items: readonly T[]): T {
   const item = items[Math.floor(Math.random() * items.length)];
@@ -75,6 +84,10 @@ function pathOf(words: string): string {
 
 async function lookUp(page: Page, words: string): Promise<void> {
   await page.goto("/");
+  await submitLookup(page, words);
+}
+
+async function submitLookup(page: Page, words: string): Promise<void> {
   const field = page.getByRole("searchbox", { name: lookupCopy.label });
   await field.fill(words);
   await field.press("Enter");
@@ -155,17 +168,35 @@ for (const javaScriptEnabled of [true, false]) {
     }) => {
       await lookUp(page, SPOKEN_WORDS);
 
-      await expect(page).toHaveURL(ICE_CUBE_ALIAS);
-      // Claimed or not in the shared database, the alias page names 🧊🧊🧊 as
-      // its canonical emoji path, which is what "that Handle's page" means.
-      const canonical = await page
-        .locator('link[rel="canonical"]')
-        .getAttribute("href");
-      expect(decodeURIComponent(canonical ?? "")).toMatch(
-        /\/\u{1F9CA}\u{1F9CA}\u{1F9CA}$/u,
-      );
+      await expectIceCubeHandlePage(page);
+    });
+
+    test("a 404 offers the lookup, and the spoken words typed there find the Handle (#201)", async ({
+      page,
+    }) => {
+      // With JavaScript, from the spoken path itself; without it, from an
+      // unmatched path, because the `[handle]` 404 is blank until #233.
+      const from = javaScriptEnabled ? SPOKEN_PATH : UNMATCHED_PATH;
+      const response = await page.goto(from);
+      expect(response?.status(), from).toBe(404);
+
+      await submitLookup(page, SPOKEN_WORDS);
+
+      await expectIceCubeHandlePage(page);
     });
   });
+}
+
+async function expectIceCubeHandlePage(page: Page): Promise<void> {
+  await expect(page).toHaveURL(ICE_CUBE_ALIAS);
+  // Claimed or not in the shared database, the alias page names 🧊🧊🧊 as its
+  // canonical emoji path, which is what "that Handle's page" means.
+  const canonical = await page
+    .locator('link[rel="canonical"]')
+    .getAttribute("href");
+  expect(decodeURIComponent(canonical ?? "")).toMatch(
+    /\/\u{1F9CA}\u{1F9CA}\u{1F9CA}$/u,
+  );
 }
 
 test("the lookup's answers over HTTP: a redirect to the alias, or a page, never an error", async ({
