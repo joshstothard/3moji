@@ -23,6 +23,7 @@ const RED_APPLE = "\u{1F34E}";
 const GREEN_APPLE = "\u{1F34F}";
 const AUBERGINE = "\u{1F346}";
 const PIZZA = "\u{1F355}";
+const BAT = "\u{1F987}";
 
 /**
  * The test's own slugger, deliberately a second implementation of the rule
@@ -72,6 +73,101 @@ describe("canonicalAliasOf", () => {
 
   it("has no alias for something that is not a claimable emoji", () => {
     expect(canonicalAliasOf(["a", "b", "c"])).toBeUndefined();
+  });
+
+  it("uses the curated alias name where the display name also names another emoji", () => {
+    // ADR-0011 decision 1: `bat` names both 🦇 and 🏓, so `bat.bat.bat` names
+    // eight Handles and a share link built from it would turn into a listing
+    // the moment one of the other seven was claimed.
+    expect(canonicalAliasOf([BAT, BAT, BAT])).toBe("bats.bats.bats");
+  });
+
+  it.each([
+    ["🦇", "bats"],
+    ["🐋", "whales"],
+    ["🦗", "grasshopper"],
+    ["🌼", "flower"],
+    ["🍨", "sundae"],
+  ])("gives %s the alias term %s", (emoji, term) => {
+    expect(canonicalAliasOf([emoji, emoji, emoji])).toBe(
+      [term, term, term].join(ALIAS_SEPARATOR),
+    );
+  });
+
+  it("keeps the display-name slug wherever it names only that emoji", () => {
+    // ADR-0011 decision 4: no shorter word is preferred anywhere else. `apple`
+    // names 🍎 and 🍏, but `red-apple` names only 🍎, so it stays.
+    expect(canonicalAliasOf([RED_APPLE, RED_APPLE, RED_APPLE])).toBe(
+      "red-apple.red-apple.red-apple",
+    );
+    expect(canonicalAliasOf([BAT, PIZZA, ICE])).toBe("bats.pizza.ice-cube");
+  });
+});
+
+/**
+ * The curation rule that keeps every share link meaning one Handle
+ * ([ADR-0011](../../../../docs/adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md)
+ * decision 3).
+ *
+ * Checked against this file's own `slug` and `emojiNamedBy` rather than the
+ * resolver's index, so the rule is asserted by a second implementation. A
+ * category release that brings a new clash turns this red until it is curated.
+ *
+ * Homogeneous triples are enough for the first condition: a Handle's candidate
+ * set is the product of what each position names, so a mixed triple names one
+ * Handle exactly when each of its positions does, and every position is some
+ * emoji's canonical term.
+ */
+describe("the canonical alias curation", () => {
+  const withAliasName = curatedEmojiSet.filter(
+    (entry) => entry.aliasName !== undefined,
+  );
+
+  it("names exactly one Handle for every released emoji", () => {
+    const notOne = curatedEmojiSet.flatMap((entry) => {
+      const alias = canonicalAliasOf([entry.emoji, entry.emoji, entry.emoji]);
+      const count = alias === undefined ? 0 : keysOf(alias).length;
+      return count === 1
+        ? []
+        : [`${entry.emoji} ${String(alias)} (${String(count)})`];
+    });
+
+    expect(notOne).toEqual([]);
+  });
+
+  it("never sets an alias name that names more than one emoji", () => {
+    const shared = withAliasName.flatMap((entry) => {
+      const named = emojiNamedBy(slug(entry.aliasName ?? ""));
+      return named.length === 1 ? [] : [`${entry.emoji} ${named.join("")}`];
+    });
+
+    expect(shared).toEqual([]);
+  });
+
+  it("only sets an alias name that is one of the emoji's own terms", () => {
+    const foreign = withAliasName.flatMap((entry) => {
+      const own = [
+        entry.displayName,
+        entry.spokenName,
+        entry.plural,
+        ...entry.synonyms,
+      ].map(slug);
+      return own.includes(slug(entry.aliasName ?? ""))
+        ? []
+        : [`${entry.emoji} ${String(entry.aliasName)}`];
+    });
+
+    expect(foreign).toEqual([]);
+  });
+
+  it("never sets an alias name where the display name is already unique", () => {
+    const needless = withAliasName.flatMap((entry) =>
+      emojiNamedBy(slug(entry.displayName)).length === 1
+        ? [`${entry.emoji} ${entry.displayName}`]
+        : [],
+    );
+
+    expect(needless).toEqual([]);
   });
 });
 
