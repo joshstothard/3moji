@@ -558,6 +558,9 @@ test("the Handle lookup's field border meets non-text contrast (#200)", async ({
 
   await page.goto(`/find?q=${encodeURIComponent("three wibbles")}`);
   await expectBorderIdentifiesControl(field, "lookup field on /find");
+
+  await page.goto("/three-ice-cubes");
+  await expectBorderIdentifiesControl(field, "lookup field on the 404 (#201)");
 });
 
 test("an alias listing has no WCAG A or AA violations", async ({ page }) => {
@@ -589,15 +592,20 @@ test("the branded 404 has no WCAG A or AA violations (#203)", async ({
   page,
 }) => {
   // Contrast is axe's `color-contrast`, in PAGE_RULES, measured from the real
-  // CSS: the heading, the body text and the white-on-indigo home link.
-  const response = await page.goto("/no/such/page");
-  expect(response?.status()).toBe(404);
-  await expect(
-    page.getByRole("heading", { level: 1, name: en.NotFoundPage.heading }),
-  ).toBeVisible();
+  // CSS: the heading, the body text, the white-on-indigo home link and the
+  // Find a Handle lookup (#201). The spoken path is one of the 404s it is on.
+  for (const path of ["/no/such/page", "/three-ice-cubes"]) {
+    const response = await page.goto(path);
+    expect(response?.status(), path).toBe(404);
+    await expect(
+      page.getByRole("heading", { level: 1, name: en.NotFoundPage.heading }),
+    ).toBeVisible();
+    // One search landmark: the lookup's, and nothing else claims the role.
+    await expect(page.getByRole("search")).toHaveCount(1);
 
-  expectAccessible(await checkPage(page), []);
-  expectLandmarksContained(await checkLandmarks(page));
+    expectAccessible(await checkPage(page), ["label", "button-name"]);
+    expectLandmarksContained(await checkLandmarks(page));
+  }
 });
 
 test("the branded error page has no WCAG A or AA violations (#203)", async ({
