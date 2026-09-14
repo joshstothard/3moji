@@ -194,20 +194,20 @@ export function HoldScreen({
           </p>
         )}
 
-        <h1 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">
+        <h1 className="text-3xl font-bold text-ink mb-3 tracking-tight">
           {wording.heading}
         </h1>
 
         {spoken !== undefined && (
-          <p className="text-lg text-slate-500 mb-2">
+          <p className="text-lg text-muted mb-2">
             {format(copy.spoken, { spoken })}
           </p>
         )}
 
-        <p className="text-lg text-slate-500">{wording.body}</p>
+        <p className="text-lg text-muted">{wording.body}</p>
 
         {wording.stillHeld && (
-          <p className="mt-4 inline-block rounded-xl bg-indigo-50 px-4 py-2 text-base font-medium text-indigo-700">
+          <p className="mt-4 inline-block rounded-2xl bg-violet-tint px-4 py-2 text-base font-medium text-violet">
             {copy.holdNotice}
           </p>
         )}
@@ -215,7 +215,7 @@ export function HoldScreen({
         {wording.offersPick && (
           <p className="mt-8">
             <Link
-              className="inline-block rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="inline-block rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
               href="/"
             >
               {copy.holdExpiredAction}
@@ -227,10 +227,10 @@ export function HoldScreen({
       {wording.offersResend && (
         <section
           aria-labelledby="resend-heading"
-          className="mt-12 rounded-xl bg-white p-6 shadow-sm"
+          className="mt-12 rounded-card bg-card p-6 shadow-card border border-line"
         >
           <h2
-            className="text-xl font-semibold text-slate-900 mb-4"
+            className="text-xl font-semibold text-ink mb-4"
             id="resend-heading"
           >
             {copy.resendHeading}
@@ -246,21 +246,21 @@ export function HoldScreen({
                 resetting to "check your email" after a resend. */}
             <input name="reason" type="hidden" value={reason} />
             <label
-              className="text-base font-medium text-slate-700"
+              className="text-base font-medium text-body"
               htmlFor="resend-email"
             >
               {copy.resendEmailLabel}
             </label>
             <input
               autoComplete="email"
-              className="rounded-xl border border-slate-500 px-4 py-3 text-base text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="rounded-2xl border border-control px-4 py-3 text-base text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
               id="resend-email"
               name="email"
               required
               type="email"
             />
             <button
-              className="self-start rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="self-start rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
               type="submit"
             >
               {copy.resendSubmit}
@@ -270,7 +270,7 @@ export function HoldScreen({
           {/* Announced when it appears, because the answer arrives as a fresh
               render and a sighted user sees it while a screen-reader user would
               otherwise be told nothing at all. */}
-          <p className="mt-4 text-base text-slate-600" role="status">
+          <p className="mt-4 text-base text-body" role="status">
             {notice === undefined ? "" : noticeText(notice, retrySeconds)}
           </p>
         </section>

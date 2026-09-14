@@ -1,12 +1,25 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { Navbar } from "../components/navbar";
 import { Footer } from "../components/footer";
 import { SiteAnalytics } from "../components/site-analytics";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+/**
+ * The brand's three typefaces (#251), downloaded by `next/font` at build time
+ * and served from this origin, so a page makes no request to Google and the
+ * policy's `font-src 'self'` holds. Each is exposed as a CSS variable that the
+ * `@theme inline` block in `globals.css` reads: `font-display`, `font-sans`
+ * (the default) and `font-mono`.
+ */
+const display = Bricolage_Grotesque({
+  subsets: ["latin"],
+  axes: ["opsz"],
+  variable: "--font-bricolage",
+});
+const sans = Geist({ subsets: ["latin"], variable: "--font-geist" });
+const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
   title: "3moji",
@@ -28,13 +41,14 @@ export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="h-full">
+    <html
+      lang="en"
+      className={`${display.variable} ${sans.variable} ${mono.variable} h-full`}
+    >
       {/* `min-h-full`, not `h-full`: a fixed-height body stops painting its
           background at one viewport, and axe cannot decide the contrast of
           text that straddles that edge on a page taller than the screen (#196). */}
-      <body
-        className={`${inter.className} min-h-full flex flex-col bg-slate-50 antialiased`}
-      >
+      <body className="min-h-full flex flex-col bg-paper font-sans text-ink antialiased">
         <div className="flex flex-1 flex-col">
           <Navbar />
           <div className="flex-1">{children}</div>

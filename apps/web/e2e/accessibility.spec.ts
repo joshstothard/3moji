@@ -29,6 +29,7 @@ import {
   measureBorderContrast,
   measureContrast,
 } from "./support/contrast";
+import { categoryTabs, pickEmoji } from "./support/picker";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -88,8 +89,8 @@ async function expectBorderIdentifiesControl(
 
 /**
  * A control whose **fill** is the cue: the selected picker category, whose
- * `indigo-600` fill stands out from the page on its own. No border colour can
- * reach 3:1 against both that fill and the `slate-50` page, so its border takes
+ * `violet` fill stands out from the page on its own. No border colour can
+ * reach 3:1 against both that fill and the paper page, so its border takes
  * the fill's colour and both are measured against the surface around it
  * ([#243](https://github.com/joshstothard/3moji/issues/243)). The border still
  * has to be drawn, which `measureBorderContrast` checks.
@@ -153,9 +154,7 @@ function expectLandmarksContained(report: PageReport): void {
 
 async function openHome(page: Page): Promise<void> {
   await page.goto("/");
-  await expect(
-    page.getByRole("searchbox", { name: builderCopy.pickerSearchLabel }),
-  ).toBeVisible();
+  await expect(categoryTabs(page).first()).toBeVisible();
 }
 
 test("the home page and its picker have no WCAG A or AA violations", async ({
@@ -163,48 +162,16 @@ test("the home page and its picker have no WCAG A or AA violations", async ({
 }) => {
   await openHome(page);
 
+  // `label` is the header lookup's field; the picker has none since #253.
   expectAccessible(await checkPage(page), ["label", "button-name", "list"]);
   expectLandmarksContained(await checkLandmarks(page));
-});
-
-test("the picker's search placeholder meets text contrast", async ({
-  page,
-}) => {
-  // Placeholder text is text, so WCAG 1.4.3's 4.5:1 applies - and axe does not
-  // reliably evaluate `::placeholder`, so the check above is no evidence.
-  await openHome(page);
-  const field = page.getByRole("searchbox", {
-    name: builderCopy.pickerSearchLabel,
-  });
-  await expect(field).toHaveValue("");
-  await expect(field).toHaveAttribute(
-    "placeholder",
-    builderCopy.pickerSearchPlaceholder,
-  );
-
-  const measured = await measureContrast(field, "::placeholder");
-  const account = describeContrast("search placeholder", measured);
-  console.log(account);
-
-  expect(measured.ratio, account).toBeGreaterThanOrEqual(TEXT_CONTRAST);
-});
-
-test("the picker's search field border meets non-text contrast", async ({
-  page,
-}) => {
-  await openHome(page);
-
-  await expectBorderIdentifiesControl(
-    page.getByRole("searchbox", { name: builderCopy.pickerSearchLabel }),
-    "picker search",
-  );
 });
 
 test("the Handle builder's slot and swap-suggestion borders meet non-text contrast", async ({
   page,
 }) => {
-  // The slots and swap suggestions wear a white fill and `shadow-sm` on the
-  // `slate-50` page, neither of which reaches 3:1, so their border is what
+  // The slots wear a paper fill inside a white card, and the swap suggestions
+  // a white fill, neither of which reaches 3:1, so their border is what
   // identifies them as controls (#185). An empty slot has no glyph at all.
   // Every slot is measured empty and again filled, since filling one changes
   // its border style, and the Handle is one somebody has already claimed, so
@@ -225,14 +192,9 @@ test("the Handle builder's slot and swap-suggestion borders meet non-text contra
     );
   }
 
-  const search = page.getByRole("searchbox", {
-    name: builderCopy.pickerSearchLabel,
-  });
+  // The picker has no search box since #253: open the tab, press the emoji.
   for (const entry of seeded.emoji) {
-    await search.fill(entry.displayName);
-    await page
-      .getByRole("button", { name: entry.displayName, exact: true })
-      .click();
+    await pickEmoji(page, entry);
   }
   await expect(page.getByText(builderCopy.stateClaimed)).toBeVisible();
 
@@ -262,8 +224,8 @@ test("the Handle builder's slot and swap-suggestion borders meet non-text contra
 test("the picker's category and emoji button borders meet non-text contrast", async ({
   page,
 }) => {
-  // Like the builder's buttons (#185), the picker's wear a white fill and
-  // `shadow-sm` on `slate-50`, about 1.05:1, so the border identifies them
+  // Like the builder's buttons (#185), the picker's fills are about 1.04:1
+  // against the surface behind them, so the border identifies them
   // (#243). Each state that changes the border or the fill is measured:
   // default, hover, selected, and disabled once the Handle is full. Nothing
   // here signs in or seeds a Handle.
@@ -278,7 +240,7 @@ test("the picker's category and emoji button borders meet non-text contrast", as
   for (let index = 0; index < categoryCount; index += 1) {
     const category = categories.nth(index);
     const name = (await category.textContent()) ?? "";
-    // The selected state's fill is `indigo-600`, and no border colour is 3:1
+    // The selected state's fill is `violet`, and no border colour is 3:1
     // against both that and the page, so the border takes the fill's colour
     // and the button's edge is measured against the page instead.
     await category.click();

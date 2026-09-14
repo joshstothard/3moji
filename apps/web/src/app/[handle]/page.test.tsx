@@ -371,6 +371,19 @@ describe("the Handle route", () => {
     expect(permanentRedirect).not.toHaveBeenCalled();
   });
 
+  /**
+   * #251. The brand shows a Handle as three tiles, one emoji in each. The
+   * tiles sit inside the one `role="img"`, so the heading still announces the
+   * Spoken Name once rather than three code points.
+   */
+  it("sets the Handle's emoji in three tiles inside the one named image", async () => {
+    render(await visit(ENCODED));
+
+    const image = screen.getByRole("img", { name: SPOKEN });
+    const tiles = Array.from(image.children);
+    expect(tiles.map((tile) => tile.textContent)).toEqual([ICE, ICE, ICE]);
+  });
+
   it("asks about the canonical segment, the same one the builder asks about", async () => {
     await visit(ENCODED);
 

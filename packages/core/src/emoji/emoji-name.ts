@@ -121,8 +121,9 @@ function matches(entry: CuratedEmoji, query: string): boolean {
  * "aubergines" found nothing at all before it was added.
  *
  * Case-insensitive substring matching, in candidate-list order. A blank query
- * matches nothing rather than everything, so a picker's empty search box does
- * not read as a request for all 307.
+ * matches nothing rather than everything, so an empty search box does not read
+ * as a request for all 307. The emoji picker no longer searches (#253); the
+ * header search (#254) is the consumer this is kept for.
  */
 export function searchEmoji(query: string): readonly CuratedEmoji[] {
   const needle = query.trim().toLowerCase();

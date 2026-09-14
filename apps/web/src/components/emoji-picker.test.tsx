@@ -1,6 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { UserEvent } from "@testing-library/user-event";
 import { curatedEmojiSet, RELEASED_CATEGORIES } from "@template/core/browser";
 import { EmojiPicker } from "./emoji-picker";
 import en from "../../../../packages/shared/messages/en.json";
@@ -15,6 +14,7 @@ import en from "../../../../packages/shared/messages/en.json";
  */
 const ICE = "\u{1F9CA}";
 const PIZZA = "\u{1F355}";
+const GORILLA = "\u{1F98D}";
 const copy = en.HandleBuilder;
 
 /**
@@ -34,20 +34,6 @@ const UNRELEASED_CATEGORIES = [
   "Symbols",
   "Travel & Places",
 ] as const;
-
-/**
- * A search term that can only be satisfied by an emoji in an unreleased
- * category — verified against the curated data, which carries none of these
- * words: 😀 is "grinning face", 💼 "briefcase", 🚕 "taxi", ♻️ "recycling
- * symbol", 🤝 "handshake".
- */
-const UNRELEASED_NEEDLES: Readonly<Record<string, string>> = {
-  "Smileys & Emotion": "grinning",
-  Objects: "briefcase",
-  "Travel & Places": "taxi",
-  Symbols: "recycling",
-  "People & Body": "handshake",
-};
 
 function categoryGroup(): HTMLElement {
   return screen.getByRole("group", { name: copy.pickerCategoriesLabel });
@@ -70,9 +56,9 @@ function namesIn(category: string): readonly string[] {
     .map((entry) => entry.displayName);
 }
 
-async function search(user: UserEvent, query: string) {
-  await user.click(screen.getByLabelText(copy.pickerSearchLabel));
-  await user.keyboard(query);
+/** A class list as tokens, so `border` cannot be satisfied by `border-control`. */
+function tokens(element: HTMLElement): readonly string[] {
+  return element.className.split(/\s+/);
 }
 
 function renderPicker(full = false) {
@@ -131,6 +117,23 @@ describe("the emoji picker's category tabs", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
+  it("always has exactly one tab pressed, the one whose emoji are listed", async () => {
+    const { user } = renderPicker();
+
+    for (const category of RELEASED_CATEGORIES) {
+      await user.click(
+        within(categoryGroup()).getByRole("button", { name: category }),
+      );
+
+      const pressed = within(categoryGroup())
+        .getAllByRole("button")
+        .filter((tab) => tab.getAttribute("aria-pressed") === "true")
+        .map((tab) => tab.textContent);
+      expect(pressed).toEqual([category]);
+      expect(shownNames()).toEqual(namesIn(category));
+    }
+  });
+
   it("leaves every released emoji reachable across the tabs, and nothing else", async () => {
     const { user } = renderPicker();
     const reachable = new Set<string>();
@@ -148,123 +151,95 @@ describe("the emoji picker's category tabs", () => {
   });
 });
 
-describe("the emoji picker's search", () => {
-  it("finds an emoji by a synonym it does not display", async () => {
-    const { user } = renderPicker();
-
-    // 🍆 displays as "aubergine"; "eggplant" is the CLDR name kept as a
-    // synonym, so this can only match through the synonym path.
-    await search(user, "eggplant");
-
-    expect(
-      screen.getByRole("button", { name: "aubergine" }),
-    ).toBeInTheDocument();
-    expect(shownNames()).toEqual(["aubergine"]);
-  });
-
-  it("finds an emoji by its stored plural", async () => {
-    const { user } = renderPicker();
-
-    await search(user, "aubergines");
-
-    expect(shownNames()).toEqual(["aubergine"]);
-  });
-
-  it("matches case-insensitively", async () => {
-    const { user } = renderPicker();
-
-    await search(user, "ICE CUBE");
-
-    expect(shownNames()).toContain("ice cube");
-  });
-
-  it("searches every category, not just the one whose tab is open", async () => {
-    const { user } = renderPicker();
-
-    // Food & Drink is open; a gorilla is Animals & Nature.
-    await search(user, "gorilla");
-
-    expect(shownNames()).toEqual(["gorilla"]);
-  });
-
-  it("returns every emoji an ambiguous term names, which is correct rather than a bug", async () => {
-    const { user } = renderPicker();
-
-    // 30 of the 937 search terms are ambiguous: "apple" is both 🍎 and 🍏.
-    await search(user, "apple");
-
-    expect(shownNames()).toEqual(
-      expect.arrayContaining(["red apple", "green apple"]),
-    );
-  });
-
-  it("says when nothing matches, rather than rendering an empty grid", async () => {
-    const { user } = renderPicker();
-
-    await search(user, "zzzz");
-
-    expect(
-      screen.getByText(copy.pickerNoMatches.replace("{query}", "zzzz")),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("list")).toBeNull();
-  });
-
-  it("says nothing about no matches before anything is typed", () => {
+/**
+ * The owner asked for the search box to go (#253): the category tabs are the
+ * only way to change what is listed. `searchEmoji` stays in `packages/core`
+ * for the header search (#254); only the picker's UI is removed.
+ */
+describe("the emoji picker has no search", () => {
+  it("renders no search box or any other text field", () => {
     renderPicker();
 
-    expect(
-      screen.queryByText(copy.pickerNoMatches.replace("{query}", "")),
-    ).toBeNull();
-    expect(shownNames()).not.toEqual([]);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(document.querySelector("input")).toBeNull();
   });
 
-  it.each(Object.entries(UNRELEASED_NEEDLES))(
-    "reaches no %s emoji, searching the word only that category carries",
-    async (category, needle) => {
-      expect(UNRELEASED_CATEGORIES).toContain(category);
-      const { user } = renderPicker();
-
-      await search(user, needle);
-
-      expect(shownNames()).toEqual([]);
-      expect(
-        screen.getByText(copy.pickerNoMatches.replace("{query}", needle)),
-      ).toBeInTheDocument();
-    },
-  );
-
-  it("returns to the open category's emoji when the search is cleared", async () => {
-    const { user } = renderPicker();
-
-    await search(user, "gorilla");
-    await user.clear(screen.getByLabelText(copy.pickerSearchLabel));
-
-    expect(shownNames()).toEqual(namesIn("Food & Drink"));
-  });
-
-  it("abandons the search when a category tab is picked", async () => {
-    const { user } = renderPicker();
-
-    await search(user, "gorilla");
-    await user.click(
-      within(categoryGroup()).getByRole("button", { name: "Activities" }),
+  it("says nothing about searching", () => {
+    const { container } = render(
+      <EmojiPicker onPick={jest.fn()} full={false} />,
     );
 
-    expect(shownNames()).toEqual(namesIn("Activities"));
-    expect(screen.getByLabelText(copy.pickerSearchLabel)).toHaveValue("");
+    expect(container).not.toHaveTextContent(/search/i);
+  });
+});
+
+describe("the emoji picker's grid", () => {
+  /**
+   * jsdom evaluates no CSS, so this pins the classes that size the grid;
+   * `emoji-picker.spec.ts` measures the rendered cells in both projects.
+   *
+   * Five equal columns on a phone, and from `sm` as many columns of at least
+   * 4rem as fit, sharing the leftover width — so the grid fills the card
+   * evenly at every width rather than leaving a gap on the right.
+   */
+  it("fills the card evenly: five columns on a phone, 4rem-minimum columns above", () => {
+    renderPicker();
+
+    expect(tokens(screen.getByRole("list"))).toEqual(
+      expect.arrayContaining([
+        "grid",
+        "grid-cols-5",
+        "sm:grid-cols-[repeat(auto-fill,minmax(4rem,1fr))]",
+      ]),
+    );
+  });
+
+  it("draws every emoji as a square cell with its glyph centred, 36px on a phone and 44px above", () => {
+    renderPicker();
+
+    const buttons = within(screen.getByRole("list")).getAllByRole("button");
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) {
+      expect(tokens(button)).toEqual(
+        expect.arrayContaining([
+          "aspect-square",
+          "w-full",
+          "flex",
+          "items-center",
+          "justify-center",
+          "text-[36px]",
+          "sm:text-[44px]",
+        ]),
+      );
+    }
+  });
+
+  /**
+   * An iPhone draws a grey box over a tapped button and offers a callout on a
+   * long-pressed glyph (#253). Neither is a focus indicator, which stays
+   * `focus-visible` only, so a keyboard user still sees where they are.
+   */
+  it("draws no tap highlight, selection or callout on an emoji, and shows focus only when it is visible", () => {
+    renderPicker();
+
+    const button = screen.getByRole("button", { name: "ice cube" });
+
+    expect(tokens(button)).toEqual(
+      expect.arrayContaining([
+        "select-none",
+        "[-webkit-tap-highlight-color:transparent]",
+        "[-webkit-touch-callout:none]",
+        "focus-visible:outline-violet",
+      ]),
+    );
+    expect(tokens(button).some((token) => token.startsWith("focus:"))).toBe(
+      false,
+    );
   });
 });
 
 describe("the emoji picker's accessibility and picking", () => {
-  it("labels the search field with a real label, not a placeholder alone", () => {
-    renderPicker();
-
-    const field = screen.getByLabelText(copy.pickerSearchLabel);
-
-    expect(field.tagName).toBe("INPUT");
-    expect(field).toHaveAccessibleName(copy.pickerSearchLabel);
-  });
-
   it("names each button by its curated display name, not by its code point", () => {
     renderPicker();
 
@@ -283,51 +258,58 @@ describe("the emoji picker's accessibility and picking", () => {
     expect(button.querySelector("[aria-hidden='true']")).toHaveTextContent(ICE);
   });
 
-  it("keeps every control in the tab order, tabs and results alike", async () => {
+  it("keeps every control in the tab order, tabs first and then the emoji", async () => {
     const { user } = renderPicker();
-
-    await user.tab();
-    expect(screen.getByLabelText(copy.pickerSearchLabel)).toHaveFocus();
 
     await user.tab();
     expect(
       within(categoryGroup()).getByRole("button", { name: "Food & Drink" }),
     ).toHaveFocus();
+
+    for (let tab = 1; tab < RELEASED_CATEGORIES.length; tab += 1) {
+      await user.tab();
+    }
+    await user.tab();
+    expect(
+      within(screen.getByRole("list")).getAllByRole("button")[0],
+    ).toHaveFocus();
   });
 
-  it("gives every control a visible focus ring", () => {
+  it("gives every control a visible focus ring, on focus-visible only", () => {
     renderPicker();
 
     const tab = within(categoryGroup()).getByRole("button", {
       name: "Food & Drink",
     });
+    const emoji = screen.getByRole("button", { name: "ice cube" });
 
-    expect(tab.className).toContain("focus-visible:outline-indigo-600");
-    expect(
-      screen.getByRole("button", { name: "ice cube" }).className,
-    ).toContain("focus-visible:outline-indigo-600");
+    for (const control of [tab, emoji]) {
+      expect(tokens(control)).toContain("focus-visible:outline-violet");
+      expect(tokens(control).some((token) => token.startsWith("focus:"))).toBe(
+        false,
+      );
+    }
   });
 
   /**
    * The border is what identifies each button as a control
    * ([#243](https://github.com/joshstothard/3moji/issues/243)): the white fill
-   * and `shadow-sm` are about 1.05:1 on the `slate-50` page. jsdom evaluates no
+   * is about 1.04:1 on the paper page (#251). jsdom evaluates no
    * CSS, so this pins the classes, one token at a time so `border` cannot be
-   * satisfied by `border-slate-500`; `accessibility.spec.ts` measures them.
+   * satisfied by `border-control`; `accessibility.spec.ts` measures them.
    */
   it("gives every category and emoji button the builder's border", () => {
     renderPicker();
-    const tokens = (element: HTMLElement) => element.className.split(/\s+/);
 
     for (const tab of within(categoryGroup()).getAllByRole("button")) {
       expect(tokens(tab)).toEqual(
         expect.arrayContaining([
           "border",
-          "border-slate-500",
-          "hover:border-indigo-600",
+          "border-control",
+          "hover:border-violet",
           // Selected, the border takes the fill's colour: nothing is 3:1
-          // against both `indigo-600` and the page, so the fill is the cue.
-          "aria-pressed:border-indigo-600",
+          // against both `violet` and the page, so the fill is the cue.
+          "aria-pressed:border-violet",
         ]),
       );
     }
@@ -339,10 +321,10 @@ describe("the emoji picker's accessibility and picking", () => {
       expect(tokens(button)).toEqual(
         expect.arrayContaining([
           "border",
-          "border-slate-500",
-          "hover:border-indigo-600",
+          "border-control",
+          "hover:border-violet",
           // A full Handle takes the hover affordance away, border included.
-          "aria-disabled:hover:border-slate-500",
+          "aria-disabled:hover:border-control",
         ]),
       );
     }
@@ -356,13 +338,17 @@ describe("the emoji picker's accessibility and picking", () => {
     expect(onPick).toHaveBeenCalledWith(PIZZA);
   });
 
-  it("reports a pick made from the search results too", async () => {
+  it("reports a pick made from another category's tab", async () => {
     const { onPick, user } = renderPicker();
 
-    await search(user, "eggplant");
-    await user.click(screen.getByRole("button", { name: "aubergine" }));
+    await user.click(
+      within(categoryGroup()).getByRole("button", {
+        name: "Animals & Nature",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "gorilla" }));
 
-    expect(onPick).toHaveBeenCalledWith("\u{1F346}");
+    expect(onPick).toHaveBeenCalledWith(GORILLA);
   });
 
   it("marks its buttons aria-disabled when the Handle is full, and stays picky about nothing else", () => {

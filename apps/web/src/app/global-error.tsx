@@ -20,7 +20,7 @@ export default function GlobalError({
 }) {
   return (
     <html lang="en" className="h-full">
-      <body className="min-h-full bg-slate-50 antialiased">
+      <body className="min-h-full bg-paper antialiased">
         <title>{en.ErrorPage.metaTitle}</title>
         <ErrorNotice retry={retry} />
       </body>

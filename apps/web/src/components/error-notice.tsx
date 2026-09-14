@@ -19,21 +19,21 @@ const copy = en.ErrorPage;
 export function ErrorNotice({ retry }: { readonly retry: () => void }) {
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
-      <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
+      <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
         {copy.heading}
       </h1>
-      <p className="mt-4 text-lg text-slate-600">{copy.body}</p>
+      <p className="mt-4 text-lg text-body">{copy.body}</p>
       <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
         <button
           type="button"
           onClick={retry}
-          className="rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="rounded-full bg-violet px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
         >
           {copy.retry}
         </button>
         <Link
           href="/"
-          className="rounded-xl px-5 py-3 text-base font-semibold text-indigo-600 underline underline-offset-4 hover:text-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="rounded-2xl px-5 py-3 text-base font-semibold text-violet underline underline-offset-4 hover:text-violet focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
         >
           {copy.home}
         </Link>
