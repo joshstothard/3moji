@@ -248,4 +248,47 @@ describe("the Handle page's Profile and listing, checked by axe", () => {
       expect.arrayContaining(["link-name", "list", "listitem", "role-img-alt"]),
     );
   });
+
+  it("reports no violations for the claim listing of an alias nobody holds (ADR-0011)", async () => {
+    const RED = "\u{1F34E}";
+    const GREEN = "\u{1F34F}";
+    canonicalise.mockReturnValue({ ok: false, reason: "unknown-codepoint" });
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [candidateOf(RED), candidateOf(GREEN)],
+    });
+    spokenHandle.mockImplementation((codepoints: readonly string[]) =>
+      codepoints.at(0) === RED ? "three red apples" : "three green apples",
+    );
+    readAvailability.mockResolvedValue("available");
+    const { container } = render(await visit("apple.apple.apple"));
+    expect(container.querySelectorAll("li")).toHaveLength(2);
+
+    const report = await checkAccessibility(container);
+
+    expect(report.violations).toEqual([]);
+    expect(report.incomplete).toEqual([]);
+    expect(report.passed).toEqual(
+      expect.arrayContaining(["link-name", "list", "listitem", "role-img-alt"]),
+    );
+  });
+
+  it("reports no violations when an alias names nothing that can be claimed", async () => {
+    canonicalise.mockReturnValue({ ok: false, reason: "unknown-codepoint" });
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [candidateOf("\u{1F34E}"), candidateOf("\u{1F34F}")],
+    });
+    readAvailability.mockResolvedValue("held");
+    const { container } = render(await visit("apple.apple.apple"));
+    expect(container.querySelector('form[role="search"]')).not.toBeNull();
+
+    const report = await checkAccessibility(container);
+
+    expect(report.violations).toEqual([]);
+    expect(report.incomplete).toEqual([]);
+    expect(report.passed).toEqual(
+      expect.arrayContaining(["label", "button-name"]),
+    );
+  });
 });

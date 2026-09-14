@@ -3,10 +3,13 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   findCuratedEmoji,
+  isReservedHandle,
+  resolveAlias,
   spokenHandle,
   swapSuggestions,
 } from "@template/core";
 import en from "../../../packages/shared/messages/en.json";
+import { UNCLAIMED_SEVERAL_ALIAS } from "./support/aliases";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -371,6 +374,65 @@ test("a visitor looks up a Handle by keyboard alone (#200)", async ({
   await page.keyboard.press("Enter");
 
   await expect(page).toHaveURL("/ice-cube.ice-cube.ice-cube");
+
+  expect(
+    await page.evaluate(() => window.keyboardOnlyPointerEvents ?? null),
+  ).toEqual([]);
+});
+
+test("a visitor moves through an alias claim listing by keyboard alone (ADR-0011)", async ({
+  page,
+}) => {
+  await page.addInitScript((events: readonly string[]) => {
+    window.keyboardOnlyPointerEvents = [];
+    const record = (event: Event) => {
+      window.keyboardOnlyPointerEvents?.push(event.type);
+    };
+    for (const type of events) {
+      window.addEventListener(type, record, { capture: true });
+    }
+    window.addEventListener(
+      "click",
+      (event) => {
+        if (event.detail > 0) record(event);
+      },
+      { capture: true },
+    );
+  }, POINTER_EVENTS);
+
+  // The alias no spec may claim under, so every candidate but the Reserved
+  // 🍎🍎🍎 is a row, in the resolver's order.
+  const resolution = resolveAlias(UNCLAIMED_SEVERAL_ALIAS);
+  if (!resolution.ok)
+    throw new Error("The unclaimed alias no longer resolves.");
+  const [first, second] = resolution.candidates.filter(
+    (candidate) => !isReservedHandle(candidate.key),
+  );
+  if (first === undefined || second === undefined) {
+    throw new Error(
+      "The unclaimed alias no longer names two claimable Handles.",
+    );
+  }
+
+  await page.goto(`/${UNCLAIMED_SEVERAL_ALIAS}`);
+  const listing = page.getByRole("list", {
+    name: en.HandlePage.aliasClaimListingLabel,
+  });
+  const firstRow = listing.locator(`a[href="/${first.encoded}"]`);
+  const secondRow = listing.locator(`a[href="/${second.encoded}"]`);
+
+  await moveFocusTo(page, firstRow, "Tab");
+  // One tab stop per row: a single Tab moves to the next row, and shows it.
+  await page.keyboard.press("Tab");
+  await expect(secondRow).toBeFocused();
+  await expectFocusShown(page);
+
+  // Enter follows the row to that Handle's own page and its call to action.
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(`/${second.encoded}`);
+  await expect(
+    page.getByRole("link", { name: en.HandlePage.unclaimedAction }),
+  ).toBeVisible();
 
   expect(
     await page.evaluate(() => window.keyboardOnlyPointerEvents ?? null),

@@ -6,6 +6,7 @@ import {
   curatedEmojiSet,
   HANDLE_LENGTH,
   isReservedHandle,
+  resolveAlias,
   type CuratedEmoji,
 } from "@template/core";
 import en from "../../../packages/shared/messages/en.json";
@@ -685,6 +686,40 @@ test("an alias listing has no WCAG A or AA violations", async ({ page }) => {
   }
 
   expectAccessible(await checkPage(page), ["list", "listitem", "role-img-alt"]);
+  expectLandmarksContained(await checkLandmarks(page));
+});
+
+test("an alias claim listing has no WCAG A or AA violations (ADR-0011)", async ({
+  page,
+}) => {
+  // Seeds nothing: UNCLAIMED_SEVERAL_ALIAS is the alias no spec may claim a
+  // Handle under, which is exactly the claim listing's precondition. 🍎🍎🍎 is
+  // Reserved, so seven of its eight candidates are rows.
+  const resolution = resolveAlias(UNCLAIMED_SEVERAL_ALIAS);
+  if (!resolution.ok)
+    throw new Error("The unclaimed alias no longer resolves.");
+  const claimable = resolution.candidates.filter(
+    (candidate) => !isReservedHandle(candidate.key),
+  );
+
+  await page.goto(`/${UNCLAIMED_SEVERAL_ALIAS}`);
+  const listing = page.getByRole("list", {
+    name: handleCopy.aliasClaimListingLabel,
+  });
+  await expect(listing).toBeVisible();
+  await expect(listing.getByRole("link")).toHaveCount(claimable.length);
+  for (const candidate of resolution.candidates) {
+    await expect(
+      listing.locator(`a[href="/${candidate.encoded}"]`),
+    ).toHaveCount(isReservedHandle(candidate.key) ? 0 : 1);
+  }
+
+  expectAccessible(await checkPage(page), [
+    "link-name",
+    "list",
+    "listitem",
+    "role-img-alt",
+  ]);
   expectLandmarksContained(await checkLandmarks(page));
 });
 

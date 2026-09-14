@@ -68,6 +68,18 @@ export interface EmojiCuration {
    * plural or a mass noun and takes no article.
    */
   readonly article?: EmojiArticle;
+  /**
+   * The word this emoji's position takes in its canonical word alias, set only
+   * where the `displayName` slug also names another emoji
+   * ([ADR-0011](../../../../docs/adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md)).
+   *
+   * It must already be one of this row's own terms and name no other emoji, so
+   * the canonical alias names exactly one Handle. `alias.test.ts` enforces both
+   * over the released set, and also that it is absent wherever the display name
+   * is already unique. Changing it for a released emoji changes a published
+   * URL, exactly as renaming `displayName` does.
+   */
+  readonly aliasName?: string;
 }
 
 /**
@@ -478,6 +490,8 @@ const FOOD_AND_DRINK: CurationTable = {
     spokenName: "ice cream",
     plural: "ice creams",
     synonyms: ["sundae"],
+    // `ice cream` also names 🍦 (ADR-0011).
+    aliasName: "sundae",
   },
   "🍩": {
     spokenName: "doughnut",
@@ -868,6 +882,8 @@ const ANIMALS_AND_NATURE: CurationTable = {
   "🦇": {
     spokenName: "bat",
     plural: "bats",
+    // `bat` also names 🏓 (ADR-0011).
+    aliasName: "bats",
   },
   "🐻": {
     spokenName: "bear",
@@ -1022,6 +1038,8 @@ const ANIMALS_AND_NATURE: CurationTable = {
   "🐋": {
     spokenName: "whale",
     plural: "whales",
+    // `whale` also names 🐳 (ADR-0011).
+    aliasName: "whales",
   },
   "🐬": {
     spokenName: "dolphin",
@@ -1107,6 +1125,8 @@ const ANIMALS_AND_NATURE: CurationTable = {
     spokenName: "cricket",
     plural: "crickets",
     synonyms: ["grasshopper", "insect"],
+    // `cricket` also names 🏏 (ADR-0011).
+    aliasName: "grasshopper",
   },
   "🦂": {
     spokenName: "scorpion",
@@ -1156,6 +1176,8 @@ const ANIMALS_AND_NATURE: CurationTable = {
     spokenName: "blossom",
     plural: "blossoms",
     synonyms: ["flower"],
+    // `blossom` also names 🌸 (ADR-0011).
+    aliasName: "flower",
   },
   "🌷": {
     spokenName: "tulip",

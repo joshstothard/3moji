@@ -874,10 +874,10 @@ describe("a word alias", () => {
     expect(readProfile).toHaveBeenCalledWith(GREEN_ENCODED, "claimed");
   });
 
-  it("reads no Profile at all when the alias names no page to show", async () => {
-    // Nothing is shown, so there is nothing to fetch a Profile for — and a
-    // read issued anyway would be a Profile fetched for a Handle the visitor
-    // is deliberately not being shown.
+  it("reads no Profile and no display names when nothing it names is claimed", async () => {
+    // A claim listing shows Handles nobody has, so there is no Profile and no
+    // owner to fetch — and a read issued anyway would be work done for rows
+    // that can never show its answer.
     resolveAlias.mockReturnValue({
       ok: true,
       candidates: [redCandidate, greenCandidate],
@@ -888,7 +888,9 @@ describe("a word alias", () => {
 
     expect(readProfile).not.toHaveBeenCalled();
     expect(readDisplayNames).not.toHaveBeenCalled();
-    expect(screen.getByText(copy.aliasSeveral)).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: copy.aliasClaimListingLabel }),
+    ).toBeInTheDocument();
   });
 
   it("points rel=canonical at the emoji path, never at the alias", async () => {
@@ -960,35 +962,6 @@ describe("a word alias", () => {
     expect(
       form.querySelector<HTMLInputElement>('input[name="handle"]')?.value,
     ).toBe(iceCandidate.encoded);
-  });
-
-  it("says so and shows no listing when several match and none is claimed", async () => {
-    // **Still #108's answer, and deliberately left alone.** ADR-0008 omits
-    // unclaimed Handles from a listing, and the claim call to action is a page
-    // for one specific Handle — which `apple.apple.apple` with nothing claimed
-    // does not name. That gap is
-    // [#121](https://github.com/joshstothard/3moji/issues/121) and needs an ADR
-    // of its own; #109 resolves the *claimed* row of decision 4 and nothing
-    // else. Counted in controls and in emoji rather than in copy: an
-    // accidental listing is buttons and Handles however it is worded.
-    resolveAlias.mockReturnValue({
-      ok: true,
-      candidates: [redCandidate, greenCandidate],
-    });
-    readAvailability.mockResolvedValue("available");
-
-    render(await visit("apple.apple.apple"));
-
-    expect(screen.getByText(copy.aliasSeveral)).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 1, name: copy.aliasSeveralHeading }),
-    ).toBeInTheDocument();
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
-    expect(document.body.textContent).not.toMatch(
-      new RegExp(`${RED}|${GREEN}`, "u"),
-    );
-    expect(notFound).not.toHaveBeenCalled();
   });
 
   it("declares no canonical URL when it is showing no Handle", async () => {
@@ -1255,6 +1228,263 @@ describe("a listing of the claimed Handles an alias names", () => {
     render(await visit("apple.apple.apple"));
 
     expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+});
+
+/**
+ * The claim listing: an alias with more than one candidate, **none of them
+ * claimed** ([ADR-0011](../../../../../docs/adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md)
+ * decision 5, [#121](https://github.com/joshstothard/3moji/issues/121)).
+ *
+ * `apple.apple.apple` with nothing claimed names no one Handle to offer a claim
+ * for, so the visitor is shown the candidates that can be claimed and picks the
+ * one they meant. Each row goes to that Handle's own emoji path, where the
+ * existing claim call to action is.
+ */
+describe("a claim listing of the unclaimed Handles an alias names", () => {
+  const RED = "\u{1F34E}";
+  const GREEN = "\u{1F34F}";
+  const BLUE = "\u{1F7E6}";
+  const PEAR = "\u{1F350}";
+  const SPOKEN_BY_EMOJI: Readonly<Record<string, string>> = {
+    [RED]: "three red apples",
+    [GREEN]: "three green apples",
+    [BLUE]: "three blue squares",
+    [PEAR]: "three pears",
+  };
+
+  function candidateOf(emoji: string): StubCandidate {
+    const key = `${emoji}${emoji}${emoji}`;
+    return {
+      key,
+      encoded: encodeURIComponent(key),
+      emoji: [{ emoji }, { emoji }, { emoji }],
+    };
+  }
+
+  const red = candidateOf(RED);
+  const green = candidateOf(GREEN);
+  const blue = candidateOf(BLUE);
+  const pear = candidateOf(PEAR);
+
+  function canonicalLink(): HTMLLinkElement | null {
+    return document.head.querySelector('link[rel="canonical"]');
+  }
+
+  /** The listing, by its accessible name rather than by a class or a test id. */
+  function claimListing(): HTMLElement {
+    return screen.getByRole("list", { name: copy.aliasClaimListingLabel });
+  }
+
+  /** Answers `states[encoded]` for each candidate, `available` otherwise. */
+  function availabilityBy(
+    states: Readonly<Record<string, AvailabilityState>>,
+  ): void {
+    readAvailability.mockImplementation((segment: string) =>
+      Promise.resolve(states[segment] ?? "available"),
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    canonicalise.mockReturnValue({ ok: false, reason: "unknown-codepoint" });
+    resolveAlias.mockReturnValue({
+      ok: true,
+      candidates: [red, green, blue, pear],
+    });
+    // Distinct per Handle, so a row that announced another row's name would
+    // fail rather than pass.
+    spokenHandle.mockImplementation(
+      (codepoints: readonly string[]) =>
+        SPOKEN_BY_EMOJI[codepoints.at(0) ?? ""],
+    );
+    readAvailability.mockResolvedValue("available");
+    checkAvailability.mockResolvedValue("available");
+    readProfile.mockResolvedValue({ state: "none" });
+    readDisplayNames.mockResolvedValue(new Map());
+  });
+
+  it("lists every candidate that can be claimed, in the resolver's order", async () => {
+    render(await visit("apple.apple.apple"));
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: copy.aliasSeveralHeading }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(copy.aliasClaimListing)).toBeInTheDocument();
+    const rows = within(claimListing()).getAllByRole("listitem");
+    expect(rows.map((row) => row.textContent)).toEqual([
+      red.key,
+      green.key,
+      blue.key,
+      pear.key,
+    ]);
+  });
+
+  it("omits held, Reserved and unreadable candidates, keeping the order of the rest", async () => {
+    // Decision 5: a row is a Handle the visitor can go and claim. A held one
+    // is somebody's for now, a Reserved one never can be, and one whose read
+    // failed cannot be known to be free — the reason `unknown` never renders
+    // the builder on its own page either.
+    availabilityBy({
+      [red.encoded]: "held",
+      [green.encoded]: "available",
+      [blue.encoded]: "not-claimable",
+      [pear.encoded]: "available",
+    });
+
+    render(await visit("apple.apple.apple"));
+
+    const links = within(claimListing()).getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      `/${green.encoded}`,
+      `/${pear.encoded}`,
+    ]);
+    expect(document.body.textContent).not.toMatch(
+      new RegExp(`${RED}|${BLUE}`, "u"),
+    );
+  });
+
+  it("omits a candidate whose availability could not be read", async () => {
+    availabilityBy({ [green.encoded]: "unknown" });
+
+    render(await visit("apple.apple.apple"));
+
+    expect(within(claimListing()).getAllByRole("listitem")).toHaveLength(3);
+    expect(document.body.textContent).not.toMatch(new RegExp(GREEN, "u"));
+  });
+
+  it("shows each row's emoji with its Spoken Name, as one link to its emoji path", async () => {
+    render(await visit("apple.apple.apple"));
+
+    const rows = within(claimListing()).getAllByRole("listitem");
+    rows.forEach((row, index) => {
+      const candidate = [red, green, blue, pear][index];
+      const links = within(row).getAllByRole("link");
+      expect(links).toHaveLength(1);
+      expect(links[0]).toHaveAttribute("href", `/${candidate?.encoded ?? ""}`);
+    });
+    expect(
+      screen.getByRole("link", { name: "three red apples" }),
+    ).toHaveAttribute("href", `/${red.encoded}`);
+    expect(
+      screen.getByRole("img", { name: "three green apples" }),
+    ).toHaveTextContent(green.key);
+  });
+
+  it("falls back to the Handle itself when there is no way to say it", async () => {
+    spokenHandle.mockReturnValue(undefined);
+
+    render(await visit("apple.apple.apple"));
+
+    expect(screen.getByRole("img", { name: red.key })).toBeInTheDocument();
+  });
+
+  it("is keyboard operable, one tab stop per row, with visible focus", async () => {
+    const user: UserEvent = userEvent.setup();
+    render(await visit("apple.apple.apple"));
+
+    const links = within(claimListing()).getAllByRole("link");
+    for (const link of links) {
+      await user.tab();
+      expect(link).toHaveFocus();
+      expect(link).toHaveClass("focus-visible:outline-2");
+    }
+  });
+
+  it("offers no builder, no claim form and no controls of its own", async () => {
+    // The claim call to action lives on each row's own emoji path. Offering it
+    // here would be guessing which Handle the visitor meant.
+    render(await visit("apple.apple.apple"));
+
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(
+      screen.queryByRole("heading", { name: builderCopy.builderHeading }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(copy.unclaimed)).not.toBeInTheDocument();
+  });
+
+  it("declares no canonical URL, because it is showing no single Handle", async () => {
+    const metadata = await metadataOf("apple.apple.apple");
+
+    expect(metadata.alternates).toBeUndefined();
+    expect(metadata.openGraph?.url).toBeUndefined();
+    render(await visit("apple.apple.apple"));
+    expect(canonicalLink()).toBeNull();
+  });
+
+  it("neither redirects nor 404s", async () => {
+    render(await visit("apple.apple.apple"));
+
+    expect(permanentRedirect).not.toHaveBeenCalled();
+    expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it("still renders the claimed listing, not this one, when two candidates are claimed", async () => {
+    // ADR-0011 decision 6: the claimed listing is unchanged, and it still
+    // omits the unclaimed candidates.
+    availabilityBy({
+      [red.encoded]: "claimed",
+      [pear.encoded]: "claimed",
+    });
+
+    render(await visit("apple.apple.apple"));
+
+    expect(
+      screen.queryByRole("list", { name: copy.aliasClaimListingLabel }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("list", { name: copy.aliasListingLabel }),
+      ).getAllByRole("listitem"),
+    ).toHaveLength(2);
+  });
+
+  describe("when no candidate can be claimed", () => {
+    beforeEach(() => {
+      availabilityBy({
+        [red.encoded]: "held",
+        [green.encoded]: "not-claimable",
+        [blue.encoded]: "unknown",
+        [pear.encoded]: "held",
+      });
+    });
+
+    it("says so, and lists nothing", async () => {
+      render(await visit("apple.apple.apple"));
+
+      expect(
+        screen.getByRole("heading", {
+          level: 1,
+          name: copy.aliasSeveralHeading,
+        }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(copy.aliasNoneClaimable)).toBeInTheDocument();
+      expect(screen.queryAllByRole("list")).toHaveLength(0);
+      expect(document.body.textContent).not.toMatch(
+        new RegExp(`${RED}|${GREEN}|${BLUE}|${PEAR}`, "u"),
+      );
+    });
+
+    it("offers the Find a Handle lookup, empty", async () => {
+      render(await visit("apple.apple.apple"));
+
+      const search = screen.getByRole("search", {
+        name: en.HandleLookup.heading,
+      });
+      expect(search).toHaveAttribute("action", "/find");
+      expect(
+        within(search).getByRole("searchbox", { name: en.HandleLookup.label }),
+      ).toHaveValue("");
+    });
+
+    it("is still a page, not a 404, and declares no canonical URL", async () => {
+      render(await visit("apple.apple.apple"));
+
+      expect(notFound).not.toHaveBeenCalled();
+      expect(
+        (await metadataOf("apple.apple.apple")).alternates,
+      ).toBeUndefined();
+    });
   });
 });
 

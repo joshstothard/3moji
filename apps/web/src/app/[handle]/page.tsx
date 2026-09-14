@@ -17,6 +17,7 @@ import { safeLinkHref } from "../../lib/safe-link";
 import { shareLinkOf, siteOrigin } from "../../lib/share-link";
 import { genericMetadataOf, handleMetadataOf } from "../../lib/og/metadata";
 import { HandleBuilder } from "../../components/handle-builder";
+import { HandleLookup } from "../../components/handle-lookup";
 import { checkAvailability } from "../../components/availability-action";
 import { claimFormAction } from "../../components/claim-action";
 import { ShareLinkControl } from "../../components/share-link";
@@ -194,13 +195,13 @@ type ReportableHandle = RenderedHandle & { readonly encoded: string };
  * is worse than asking which they meant. Unclaimed and Reserved candidates are
  * omitted from it — a row exists because the Handle is somebody's.
  *
- * **Several candidates of which none is claimed is still the one honest line**,
- * and deliberately so. Decision 4's `none` row is the claim call to action,
- * which is a page for one specific Handle; `apple.apple.apple` with nothing
- * claimed does not name one, and a listing cannot cover it either because the
- * ADR omits unclaimed Handles from listings. That gap is
- * [#121](https://github.com/joshstothard/3moji/issues/121) and needs an ADR of
- * its own — an accepted ADR cannot be edited, so it is not resolved here.
+ * **Several candidates of which none is claimed is a claim listing**
+ * ([ADR-0011](../../../../../docs/adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md)
+ * decision 5, [#121](https://github.com/joshstothard/3moji/issues/121)). The
+ * claim call to action is a page for one specific Handle, and
+ * `apple.apple.apple` with nothing claimed does not name one, so the visitor
+ * picks: each row goes to that Handle's own emoji path, where the call to
+ * action already is.
  */
 async function AliasedHandle({ segment }: { readonly segment: string }) {
   const choice = await aliasChoiceOf(segment);
@@ -227,8 +228,10 @@ async function AliasedHandle({ segment }: { readonly segment: string }) {
     );
   }
 
-  if (choice.kind === "ambiguous") {
-    return <AmbiguousAlias />;
+  if (choice.kind === "claimable") {
+    // No read here at all: nobody holds these Handles, so there is no Profile
+    // and no owner's name for a row to show.
+    return <ClaimListing candidates={choice.listed} />;
   }
 
   /*
@@ -255,7 +258,7 @@ async function AliasedHandle({ segment }: { readonly segment: string }) {
 type AliasChoice =
   | { readonly kind: "unresolved" }
   | { readonly kind: "listing"; readonly listed: readonly AliasCandidate[] }
-  | { readonly kind: "ambiguous" }
+  | { readonly kind: "claimable"; readonly listed: readonly AliasCandidate[] }
   | {
       readonly kind: "one";
       readonly candidate: AliasCandidate;
@@ -275,6 +278,12 @@ type AliasChoice =
  * names exactly one Handle still has a page — unclaimed, held, reserved or
  * unknown, whatever the read says — and it is the same page the emoji path
  * renders. `at` rather than `[0]`, so nothing here asserts non-null.
+ *
+ * Several candidates and none claimed is the claim listing (ADR-0011 decision
+ * 5): the candidates whose answer is `available`, in the resolver's order. Held
+ * and Reserved ones are omitted, and so is `unknown` — a failed read cannot
+ * know a Handle is free, which is why `unknown` never renders the builder on
+ * its own page either. The list may be empty, and then the page says so.
  */
 const aliasChoiceOf = cache(async (segment: string): Promise<AliasChoice> => {
   const alias = resolveAlias(segment);
@@ -299,7 +308,14 @@ const aliasChoiceOf = cache(async (segment: string): Promise<AliasChoice> => {
         ? matches.at(0)
         : undefined;
 
-  if (shown === undefined) return { kind: "ambiguous" };
+  if (shown === undefined) {
+    return {
+      kind: "claimable",
+      listed: matches
+        .filter((match) => match.state === "available")
+        .map((match) => match.candidate),
+    };
+  }
   return { kind: "one", candidate: shown.candidate, state: shown.state };
 });
 
@@ -406,27 +422,61 @@ function AliasListingRow({
 }
 
 /**
- * An alias that could be more than one Handle, **none of which anybody has**.
+ * The claim listing: an alias naming more than one Handle, **none of which
+ * anybody has**
+ * ([ADR-0011](../../../../../docs/adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md)
+ * decision 5, [#121](https://github.com/joshstothard/3moji/issues/121)).
  *
- * It says so and stops. No emoji, no Handles, no controls — and that is the
- * only branch left saying it, now that more than one claimed match renders
- * {@link AliasListing}. ADR-0008 omits unclaimed Handles from a listing, so
- * there is nothing here a listing may show; and the claim call to action is a
- * page for one specific Handle, which an alias naming eight does not give it.
- * Choosing between them is
- * [#121](https://github.com/joshstothard/3moji/issues/121), which needs its own
- * ADR — decision 4's `none` row assumes a single candidate, and an accepted ADR
- * cannot be edited.
+ * **The same list as {@link AliasListing}, for the same reasons**: a `<ul>`
+ * with an accessible name, one real `<a>` per row so there is one tab stop
+ * each, and the resolver's order. Its rows are {@link AliasListingRow} with no
+ * owner to name, so each announces its Spoken Name alone. No
+ * `rel="canonical"`, because there are several emoji paths and none is *the*
+ * one.
+ *
+ * **It offers no claim of its own.** Each row goes to that Handle's emoji path,
+ * whose page already holds the claim call to action; a builder here would be
+ * guessing which Handle the visitor meant.
+ *
+ * **When nothing can be claimed, it says so and offers the Find a Handle
+ * lookup**, empty, so the visitor can try other words from where they are.
  */
-function AmbiguousAlias() {
+function ClaimListing({
+  candidates,
+}: {
+  readonly candidates: readonly ListedHandle[];
+}) {
+  if (candidates.length === 0) {
+    return (
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="text-center">
+          <h1 className="text-3xl sm:text-4xl mb-4 tracking-tight text-ink">
+            {copy.aliasSeveralHeading}
+          </h1>
+          <p className="text-lg text-muted">{copy.aliasNoneClaimable}</p>
+        </div>
+        <div className="mx-auto max-w-md">
+          <HandleLookup />
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div className="text-center">
-        <h1 className="text-3xl sm:text-4xl mb-8 tracking-tight text-ink">
+        <h1 className="text-3xl sm:text-4xl mb-4 tracking-tight text-ink">
           {copy.aliasSeveralHeading}
         </h1>
-        <p className="text-lg text-muted">{copy.aliasSeveral}</p>
+        <p className="text-lg text-muted">{copy.aliasClaimListing}</p>
       </div>
+      <ul aria-label={copy.aliasClaimListingLabel} className="mt-10 space-y-3">
+        {candidates.map((candidate) => (
+          <li key={candidate.key}>
+            <AliasListingRow candidate={candidate} displayName={undefined} />
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }
