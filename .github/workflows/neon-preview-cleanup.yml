@@ -8,18 +8,22 @@ name: Neon Preview Cleanup
 #
 # - A pull request closing deletes the branch named exactly
 #   `preview/<head branch>`.
-# - A manual run (Run workflow) sweeps: it deletes every `preview/` branch
-#   whose git branch has no open pull request.
+# - Every hour, and on a manual run (Run workflow), it sweeps: it deletes
+#   every `preview/` branch whose name is neither an open pull request's head
+#   branch nor the start of one. Neon may shorten a long name, so a branch
+#   that could be a shortened open head branch is kept.
 # - Nothing deletes `main`, the default branch, a protected branch, or a
 #   branch without the `preview/` prefix. scripts/neon-preview-cleanup.mjs
 #   makes every one of those decisions, and is the only thing here that calls
 #   an API.
 #
-# A MERGE BY THE AUTO-MERGE GATE DOES NOT RUN THIS. The gate merges with
-# GITHUB_TOKEN, and GitHub raises no `pull_request` event for that
+# A MERGE BY THE AUTO-MERGE GATE DOES NOT RAISE THE CLOSE EVENT. The gate
+# merges with GITHUB_TOKEN, and GitHub raises no `pull_request` event for that
 # (docs/development/ci-cd.md, Auto-merge). So the close trigger covers pull
-# requests merged by hand or closed without merging, and the manual sweep is
-# what cleans up after everything else. docs/owner-actions.md has the setup.
+# requests merged by hand or closed without merging, and the hourly sweep
+# cleans up after everything else, forks and Dependabot included (decided
+# 2026-09-14). The repository is public, so the minutes are free.
+# docs/owner-actions.md has the setup.
 #
 # THIS REPOSITORY AND ITS ACTIONS LOGS ARE PUBLIC. So:
 #
@@ -42,6 +46,10 @@ on:
   pull_request:
     types: [closed]
   workflow_dispatch:
+  schedule:
+    # Minute 23 of every hour, off the hour, when GitHub's scheduler is least
+    # congested. Scheduled runs are on the default branch.
+    - cron: "23 * * * *"
 
 permissions:
   contents: read

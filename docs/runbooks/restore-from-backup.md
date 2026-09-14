@@ -57,7 +57,7 @@ So, before any diagnosis:
 **Restore into a new branch first, check it, and only then touch production.** Overwriting the live branch on a guess can lose the evidence of what went wrong and every good write since.
 
 1. **Create a branch from a point in time** just before the damage, in the Neon console **(verify on deploy)** for where branching from a timestamp lives. Name it for the incident, e.g. `restore-<yyyymmdd-hhmm>`.
-   - Neon Free allows **10 branches per project**, and preview deployments each create one (report § 2). If the limit is reached, delete stale `preview/*` branches first: run the Neon Preview Cleanup workflow's sweep (`gh workflow run neon-preview-cleanup.yml`, see [CI/CD § Neon preview cleanup](../development/ci-cd.md#neon-preview-cleanup)), or delete them in the Neon console if it isn't set up. Never delete the production branch.
+   - Neon Free allows **10 branches per project**, and preview deployments each create one (report § 2). If the limit is reached, delete stale `preview/*` branches first. The Neon Preview Cleanup workflow sweeps them every hour; to sweep now, run `gh workflow run neon-preview-cleanup.yml` (see [CI/CD § Neon preview cleanup](../development/ci-cd.md#neon-preview-cleanup)), or delete them in the Neon console if it isn't set up. Never delete the production branch.
 2. **Check the restored branch**, with the same read-only counts as § 3, using that branch's own connection string. Confirm the damaged rows are back, and look at `max(claimed_at)` to see how recent it is.
 3. **Choose how to bring it back**:
 

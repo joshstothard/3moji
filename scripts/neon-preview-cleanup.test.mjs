@@ -11,9 +11,10 @@
 // - once enabled, a missing NEON_API_KEY or NEON_PROJECT_ID fails the run and
 //   is named, and no value is ever printed;
 // - on close, only the branch named exactly `preview/<head ref>` is deleted;
-// - the sweep deletes every `preview/` branch whose git branch has no open
-//   pull request, and never `main`, the default branch or a branch without the
-//   prefix;
+// - the sweep, hourly or manual, deletes every `preview/` branch whose name is
+//   neither an open pull request's head branch nor the start of one (Neon may
+//   shorten long names), and never `main`, the default branch or a branch
+//   without the prefix;
 // - a branch that is already gone is a success; a refused delete is not.
 //
 // Every value below is a placeholder, and the output tests assert that the API
@@ -183,6 +184,24 @@ describe("decideCleanup", () => {
     assert.equal(decision.mode, "close");
   });
 
+  it("runs a sweep for the hourly schedule", () => {
+    const decision = decideCleanup(sweepEnv({ EVENT_NAME: "schedule" }));
+    assert.equal(decision.action, "run");
+    assert.equal(decision.mode, "sweep");
+  });
+
+  it("holds the hourly schedule to the same switch and settings as a manual run", () => {
+    const off = decideCleanup(
+      sweepEnv({ EVENT_NAME: "schedule", NEON_CLEANUP_ENABLED: "" }),
+    );
+    assert.equal(off.action, "skip");
+    const missing = decideCleanup(
+      sweepEnv({ EVENT_NAME: "schedule", NEON_API_KEY: "" }),
+    );
+    assert.equal(missing.action, "fail");
+    assert.deepEqual(missing.missing, ["NEON_API_KEY"]);
+  });
+
   it("runs a sweep for a manual run, with no head ref", () => {
     const decision = decideCleanup(sweepEnv());
     assert.equal(decision.action, "run");
@@ -267,6 +286,15 @@ describe("selectBranchesForClose", () => {
     );
   });
 
+  // The prefix rule is the sweep's alone: on close, a branch whose name is only
+  // the start of the head ref may belong to another git branch.
+  it("matches exactly, never on a prefix of the head ref", () => {
+    assert.deepEqual(
+      selectBranchesForClose(FIXTURE, "240-multipart-html-email-and-more", []),
+      [],
+    );
+  });
+
   it("selects a branch whose head ref has a slash", () => {
     const selected = selectBranchesForClose(
       FIXTURE,
@@ -312,6 +340,32 @@ describe("selectBranchesToSweep", () => {
   it("keeps a branch whose git branch has an open pull request, matching exactly", () => {
     const selected = selectBranchesToSweep(FIXTURE, [
       "240-multipart",
+      "feature/still-open",
+    ]);
+    assert.deepEqual(selected.map((b) => b.id).sort(), [
+      "br-240-html",
+      "br-chore",
+    ]);
+  });
+
+  // Neon may shorten a long branch name. A preview branch whose name is the
+  // start of an open pull request's head branch could be that branch, so it
+  // stays.
+  it("keeps a preview branch whose name is a prefix of an open pull request's head ref", () => {
+    const selected = selectBranchesToSweep(FIXTURE, [
+      "chore/adr-0011-canonical-aliases-and-the-claim-listing",
+      "feature/still-open",
+    ]);
+    assert.deepEqual(selected.map((b) => b.id).sort(), [
+      "br-240",
+      "br-240-html",
+    ]);
+  });
+
+  it("keeps only on a prefix from the start, and still sweeps a name longer than an open head ref", () => {
+    const selected = selectBranchesToSweep(FIXTURE, [
+      "240-multipart-html",
+      "other/240-multipart-html-email",
       "feature/still-open",
     ]);
     assert.deepEqual(selected.map((b) => b.id).sort(), [
@@ -506,6 +560,23 @@ describe("clean", () => {
       "br-240-html",
       "br-chore",
     ]);
+    assertNothingSecretPrinted(out.text());
+  });
+
+  it("on the hourly schedule, sweeps like a manual run and keeps a branch Neon may have shortened", async () => {
+    const apis = fakeApis({
+      openPulls: [
+        "chore/adr-0011-canonical-aliases-and-the-claim-listing",
+        "feature/still-open",
+      ],
+    });
+    const out = captureLog();
+    const code = await clean(sweepEnv({ EVENT_NAME: "schedule" }), {
+      fetch: apis.fetch,
+      log: out.log,
+    });
+    assert.equal(code, 0, out.text());
+    assert.deepEqual(deleted(apis.requests).sort(), ["br-240", "br-240-html"]);
     assertNothingSecretPrinted(out.text());
   });
 

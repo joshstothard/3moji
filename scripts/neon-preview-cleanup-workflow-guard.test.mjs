@@ -16,6 +16,8 @@
 //   no third-party action): every delete goes through
 //   scripts/neon-preview-cleanup.mjs, whose tests prove it deletes only
 //   `preview/` branches;
+// - it sweeps on a schedule, because the auto-merge gate's merges raise no
+//   pull_request event;
 // - it runs only on this repository, a manual run only from main, with
 //   read-only permissions, and the delete step is gated on the decide step.
 //
@@ -97,6 +99,11 @@ export function problems(raw) {
     !/^\s*workflow_dispatch:\s*$/m.test(text)
   ) {
     found.push("does not run on pull_request closed and workflow_dispatch");
+  }
+  // The auto-merge gate's merges raise no pull_request event, so only a
+  // scheduled sweep cleans up after them.
+  if (!/^\s*schedule:\s*\n\s*-\s*cron:\s*["'][^"'\n]+["']\s*$/m.test(text)) {
+    found.push("does not sweep on a schedule");
   }
   if (/\bset\s+-[a-z]*x|\bset\s+-o\s+xtrace|\bbash\s+-[a-z]*x\b/.test(text)) {
     found.push("turns on shell tracing");
@@ -214,6 +221,8 @@ on:
   pull_request:
     types: [closed]
   workflow_dispatch:
+  schedule:
+    - cron: "23 * * * *"
 permissions:
   contents: read
   pull-requests: read
@@ -264,6 +273,7 @@ describe("the Neon preview cleanup workflow guard, against known-bad workflows",
       GOOD.replace("    types: [closed]\n", ""),
       /pull_request closed/,
     ],
+    ["no schedule", GOOD.replace(/  schedule:\n.*\n/, ""), /schedule/],
     [
       "no manual run",
       GOOD.replace("  workflow_dispatch:\n", ""),

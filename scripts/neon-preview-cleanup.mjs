@@ -16,9 +16,11 @@
 //   request from a fork or a run Dependabot triggered, which get no secrets.
 //   Otherwise fail naming every missing setting. Writes `proceed=true|false`.
 // - `clean`: on `pull_request` closed, delete the branch named exactly
-//   `preview/<head ref>`; on `workflow_dispatch`, sweep every `preview/` branch
-//   whose git branch has no open pull request. Never `main`, the default
-//   branch, a protected branch, or anything without the prefix.
+//   `preview/<head ref>`; on the hourly `schedule` or `workflow_dispatch`,
+//   sweep every `preview/` branch whose name is neither an open pull
+//   request's head branch nor the start of one (Neon may shorten long names).
+//   Never `main`, the default branch, a protected branch, or anything without
+//   the prefix.
 //
 // This repository and its Actions logs are public. Nothing here prints a
 // secret, the project ID, or any API response body: a message names a setting
@@ -131,19 +133,23 @@ export function selectBranchesForClose(branches, headRef, openHeadRefs) {
 }
 
 /**
- * The branches a sweep deletes: every deletable preview branch whose git
- * branch has no open pull request.
+ * The branches a sweep deletes: every deletable preview branch whose name,
+ * after `preview/`, is neither an open pull request's head branch nor the
+ * start of one. Neon may shorten a long branch name, so a name that is the
+ * start of an open head branch could be that branch, and it stays. The close
+ * path does not use this rule: it deletes on an exact match only.
  *
  * @param {readonly unknown[]} branches
  * @param {readonly string[]} openHeadRefs
  */
 export function selectBranchesToSweep(branches, openHeadRefs) {
-  const open = new Set(openHeadRefs);
-  return branches.filter(
-    (branch) =>
-      isDeletablePreview(branch) &&
-      !open.has(gitBranchOf(/** @type {{ name: string }} */ (branch).name)),
-  );
+  return branches.filter((branch) => {
+    if (!isDeletablePreview(branch)) return false;
+    const gitBranch = gitBranchOf(
+      /** @type {{ name: string }} */ (branch).name,
+    );
+    return !openHeadRefs.some((ref) => ref.startsWith(gitBranch));
+  });
 }
 
 /**
@@ -168,13 +174,13 @@ export function decideCleanup(env) {
   let mode;
   if (event === "pull_request") {
     mode = "close";
-  } else if (event === "workflow_dispatch") {
+  } else if (event === "workflow_dispatch" || event === "schedule") {
     mode = "sweep";
   } else {
     return {
       action: "fail",
       reason:
-        "This cleanup runs only for a closed pull request or a manual run.",
+        "This cleanup runs only for a closed pull request, a manual run or the hourly schedule.",
       missing: [],
     };
   }
@@ -188,7 +194,7 @@ export function decideCleanup(env) {
     return {
       action: "skip",
       reason:
-        "The pull request came from a fork, so this run has no secrets. The next manual sweep deletes its preview branch, if it has one.",
+        "The pull request came from a fork, so this run has no secrets. The hourly sweep deletes its preview branch, if it has one.",
       missing: [],
     };
   }
@@ -196,7 +202,7 @@ export function decideCleanup(env) {
     return {
       action: "skip",
       reason:
-        "Dependabot triggered this run, so it has no secrets. The next manual sweep deletes the preview branch, if there is one.",
+        "Dependabot triggered this run, so it has no secrets. The hourly sweep deletes the preview branch, if there is one.",
       missing: [],
     };
   }
