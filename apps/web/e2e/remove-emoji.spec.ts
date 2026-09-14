@@ -7,6 +7,7 @@ import {
   measureBorderContrast,
   measureContrast,
 } from "./support/contrast";
+import { categoryTabs, pickEmojiByName } from "./support/picker";
 
 /**
  * Removing an emoji from a slot, in the real browser
@@ -77,11 +78,11 @@ async function openBuilder(
   ...names: readonly string[]
 ): Promise<void> {
   await page.goto("/");
-  const search = page.getByRole("searchbox", { name: copy.pickerSearchLabel });
-  await expect(search).toBeVisible();
+  await expect(categoryTabs(page).first()).toBeVisible();
+  // The picker has no search box since #253: each pick opens the emoji's
+  // category tab and presses the emoji.
   for (const name of names) {
-    await search.fill(name);
-    await page.getByRole("button", { name, exact: true }).click();
+    await pickEmojiByName(page, name);
   }
 }
 
@@ -178,8 +179,9 @@ test.describe("with a pointer that can hover", () => {
     const slot = slots(page).nth(1);
     await expect(slot).toHaveAccessibleName(filledName(2, "pizza"));
 
-    // Back up from the search field, so the focus is a keyboard's.
-    await page.getByRole("searchbox", { name: copy.pickerSearchLabel }).focus();
+    // Back up from the picker's first category tab, which follows the slots,
+    // so the focus that lands on the slot is a keyboard's.
+    await categoryTabs(page).first().focus();
     await moveFocusTo(page, slot, "Shift+Tab");
 
     await expect(removeMark(slot)).toBeVisible();
