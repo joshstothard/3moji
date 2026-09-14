@@ -427,6 +427,7 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — The production CSP smoke test runs in Chromium only. Decided by the repo owner.
 - 2026-09-14 — The production smoke test runs `next start`, not the Docker image's standalone server, because the site deploys to Vercel. Decided by the orchestrator.
 - 2026-09-14 — #233 (server-rendered Handle-route 404 without JavaScript) deferred as a Next.js limitation. Decided by the orchestrator, for owner review.
+- 2026-09-14 — The terms set a minimum age of 16 to claim a Handle, because Profiles are public, carry arbitrary outbound links and have no moderation team. The owner had no view; decided by the orchestrator, and the owner can change it ([#242](https://github.com/joshstothard/3moji/issues/242)).
 
 ## Changelog
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 
 import en from "../../../../packages/shared/messages/en.json";
 
@@ -11,9 +12,16 @@ import en from "../../../../packages/shared/messages/en.json";
  * to {@link DraftMarker}, not one per page.
  *
  * All copy is in the `Legal` namespace of `packages/shared/messages/en.json`.
- * Anything that would identify the operator is a bracketed placeholder there,
- * substituted for the `{operator}` and `{contact}` tokens; nothing personal is
- * written in this file.
+ * The copy names the operator through the `{operator}` token, filled from
+ * `Legal.operatorName`, and the contact through the `{contact}` token
+ * ([#242](https://github.com/joshstothard/3moji/issues/242)).
+ *
+ * **The contact address is never in the copy or in this file.** Each page
+ * passes the address `reportContactAddress()` accepts from
+ * `REPORT_CONTACT_EMAIL`, read when the page renders, and it is shown as a
+ * `mailto:` link. With no usable address, the bracketed
+ * `Legal.contactPlaceholder` is shown instead, so a deployment without one
+ * still looks unfinished rather than offering a guessed mailbox.
  */
 const legal = en.Legal;
 
@@ -29,13 +37,8 @@ export interface LegalDocumentProps {
   readonly intro: string;
   readonly sections: Readonly<Record<string, LegalSection>>;
   readonly related: { readonly href: string; readonly label: string };
-}
-
-/** Replaces the operator tokens with the owner's placeholders. */
-export function fillPlaceholders(text: string): string {
-  return text
-    .replaceAll("{operator}", legal.operatorPlaceholder)
-    .replaceAll("{contact}", legal.contactPlaceholder);
+  /** A plain address from `reportContactAddress()`, or `undefined` for none. */
+  readonly contact: string | undefined;
 }
 
 /** "Draft — pending owner review", until the owner removes it. */
@@ -50,12 +53,61 @@ export function DraftMarker() {
   );
 }
 
-function Paragraphs({ texts }: { readonly texts: readonly string[] }) {
+/** The contact address as a `mailto:` link, or the placeholder without one. */
+function Contact({ address }: { readonly address: string | undefined }) {
+  if (address === undefined) return <>{legal.contactPlaceholder}</>;
+
+  return (
+    <a
+      className="font-semibold break-words text-indigo-700 underline hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      href={`mailto:${address}`}
+    >
+      {address}
+    </a>
+  );
+}
+
+/**
+ * One string of copy with its tokens filled: the operator's name as text, and
+ * each `{contact}` as {@link Contact}. The copy is split, never parsed as
+ * markup, so nothing in it can become an element.
+ */
+function FilledText({
+  text,
+  contact,
+}: {
+  readonly text: string;
+  readonly contact: string | undefined;
+}) {
+  const pieces = text
+    .replaceAll("{operator}", legal.operatorName)
+    .split("{contact}");
+
+  return (
+    <>
+      {pieces.map((piece, position) => (
+        // The pieces of one fixed string never reorder, so position is stable.
+        <Fragment key={position}>
+          {position > 0 && <Contact address={contact} />}
+          {piece}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+function Paragraphs({
+  texts,
+  contact,
+}: {
+  readonly texts: readonly string[];
+  readonly contact: string | undefined;
+}) {
   return (
     <>
       {texts.map((text) => (
         <p className="mt-3 text-base leading-7 text-slate-700" key={text}>
-          {fillPlaceholders(text)}
+          <FilledText contact={contact} text={text} />
         </p>
       ))}
     </>
@@ -67,6 +119,7 @@ export function LegalDocument({
   intro,
   sections,
   related,
+  contact,
 }: LegalDocumentProps) {
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -86,16 +139,18 @@ export function LegalDocument({
           >
             {section.heading}
           </h2>
-          <Paragraphs texts={section.paragraphs} />
+          <Paragraphs contact={contact} texts={section.paragraphs} />
           {section.items !== undefined && (
             <ul className="mt-3 list-disc space-y-2 pl-6 text-base leading-7 text-slate-700">
               {section.items.map((item) => (
-                <li key={item}>{fillPlaceholders(item)}</li>
+                <li key={item}>
+                  <FilledText contact={contact} text={item} />
+                </li>
               ))}
             </ul>
           )}
           {section.closing !== undefined && (
-            <Paragraphs texts={section.closing} />
+            <Paragraphs contact={contact} texts={section.closing} />
           )}
         </section>
       ))}
