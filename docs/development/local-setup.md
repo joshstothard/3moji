@@ -133,6 +133,23 @@ Install the runtime you intend to use from its current vendor documentation. The
 - Claude Code: `CLAUDE.md` imports `AGENTS.md`, and `.claude/skills` resolves to `.agents/skills`.
 - Codex: `.codex/config.toml`, `.codex/hooks.json`, and `.codex/agents/` are detected.
 
+### Second opinions: the `consultant` role and Claude Code's `advisor` tool
+
+Agents have two escalation paths:
+
+- **The `consultant` role** is a read-only second opinion on consequential design choices. Reach it through its adapter in `.claude/agents/`, `.codex/agents/` or `.github/agents/`.
+- **Claude Code's built-in `advisor` tool** is a separate mechanism, enabled for the whole repo in `.claude/settings.json`:
+
+```json
+{
+  "advisorModel": "opus"
+}
+```
+
+The `advisor` tool is experimental and only works with the Anthropic API. Every call costs extra tokens. To opt out, set `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1`.
+
+[AGENTS.md](../../AGENTS.md) § Consulting the `consultant` Role explains when to use each, and why the role is deliberately not named `advisor`.
+
 ### Codex: trusting the repository hooks
 
 **Codex will not run this repository's hooks until you approve them, and it does not warn you that it isn't.**
