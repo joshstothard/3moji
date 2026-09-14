@@ -180,7 +180,7 @@
   "Legal": {
     "draftMarker": "Draft — pending owner review",
     "draftExplainer": "This page is a starting draft. It has not yet been reviewed by the owner or by a lawyer, and it is not legal advice.",
-    "operatorPlaceholder": "[Operator name — the owner adds this before launch]",
+    "operatorName": "Joshua Stothard",
     "contactPlaceholder": "[Contact address — the owner adds this before launch]",
     "Privacy": {
       "metaTitle": "Privacy notice · 3moji",
@@ -220,7 +220,12 @@
         "logsAndBackups": {
           "heading": "Logs and backups",
           "paragraphs": [
-            "Our application logs record what kind of request was made, whether it worked and a random reference number. They are designed not to contain your email address, your password, your IP address or your Profile. Our hosting and database providers also keep their own records and backups for a limited time, so deleted data can remain in those for a short while before it is gone. [How long each provider keeps logs and backups — the owner confirms this before launch]"
+            "Our application logs record what kind of request was made, whether it worked and a random reference number. They are designed not to contain your email address, your password, your IP address or your Profile. Our providers also keep their own records for a limited time, so deleted data can remain in them for a short while before it is gone:"
+          ],
+          "items": [
+            "Vercel keeps our application's runtime logs for 1 hour. It keeps our page-view analytics for at least a month, and may keep them for longer.",
+            "Neon keeps a history of our database for 6 hours, so that it can be restored to an earlier point. Data deleted from the database can still be recovered from that history until those 6 hours have passed.",
+            "Resend keeps the emails it sends for us, with their delivery records and logs, for 30 days."
           ]
         },
         "cookies": {
@@ -240,13 +245,23 @@
             "Resend sends our emails, so it receives your email address and the emails we send you."
           ],
           "closing": [
-            "We do not sell your data, and we do not use it for advertising. [Where each provider processes data, and the safeguards for any transfer outside the UK — the owner confirms this before launch]"
+            "We do not sell your data, and we do not use it for advertising.",
+            "Vercel's main processing facilities are in the United States. Resend stores its account data, email records and logs in the United States, whichever region our emails are sent from. Neon stores the database in the region chosen when the database was created. [Which Neon region the database is in — the owner confirms this before launch]",
+            "Where your data is transferred to the United States, it is protected by the UK Extension to the EU-US Data Privacy Framework, under which Vercel and Resend are certified. Vercel's and Resend's data processing agreements also include the UK's addendum to the EU Standard Contractual Clauses. [The safeguard for transfers to Neon — the owner confirms this before launch]"
           ]
         },
         "lawfulBasis": {
           "heading": "Why we are allowed to use your data",
           "paragraphs": [
-            "We use your email address, password hash, Handle, Profile and verification records to provide the service you signed up for. We use sessions, rate-limit counters and logs to keep 3moji and your account secure, which is in our and our users' legitimate interests. [The lawful basis for each purpose — the owner confirms this before launch]"
+            "UK data protection law says we need a lawful basis for each way we use your data. These are ours:"
+          ],
+          "items": [
+            "Your account, Handle and Profile: your email address, password hash, Handle, Profile and verification records. We need them to provide the service you signed up for, so the basis is contract.",
+            "Security: your sessions, rate-limit counters and logs. We use them to keep 3moji and your account secure and to stop abuse, which is in our and our users' legitimate interests.",
+            "Understanding how 3moji is used: our page-view analytics, described above. We use them to see which pages are visited so we can improve 3moji, which is in our legitimate interests, and what they record is not tied to you."
+          ],
+          "closing": [
+            "Where the basis is legitimate interests, you have the right to object, as described below."
           ]
         },
         "deletingYourData": {
@@ -276,7 +291,7 @@
         "changes": {
           "heading": "Changes to this notice",
           "paragraphs": [
-            "If we change what we store or why, we will update this page first. [Date this notice was last updated — the owner adds this when it is published]"
+            "If we change what we store or why, we will update this page first. Last updated: 14 September 2026."
           ]
         }
       }
@@ -296,7 +311,7 @@
         "whoCanUse": {
           "heading": "Who can use 3moji",
           "paragraphs": [
-            "You need a working email address to claim a Handle, and each account holds one Handle. You must be at least [minimum age — the owner confirms this before launch] to claim one."
+            "You need a working email address to claim a Handle, and each account holds one Handle. You must be at least 16 years old to claim one."
           ]
         },
         "yourHandle": {
@@ -328,7 +343,14 @@
         "noWarranty": {
           "heading": "No warranty",
           "paragraphs": [
-            "3moji is a free service provided as it is. We do not promise that it will always be available, free of errors or suitable for any particular purpose, and we may change or stop it. Nothing in these terms limits any rights you have that the law does not allow us to limit. [Limitation of liability wording — the owner confirms this with legal advice before launch]"
+            "3moji is a free service provided as it is. We do not promise that it will always be available, free of errors or suitable for any particular purpose, and we may change or stop it. Nothing in these terms limits any rights you have that the law does not allow us to limit."
+          ]
+        },
+        "liability": {
+          "heading": "Our liability to you",
+          "paragraphs": [
+            "3moji is free, and we are not responsible for loss or damage that was not foreseeable when you started using it, or for the websites that Profiles link to.",
+            "Nothing in these terms excludes or limits our liability for death or personal injury caused by our negligence, for fraud or fraudulent misrepresentation, or for anything else the law does not allow us to exclude or limit."
           ]
         },
         "yourData": {
@@ -343,10 +365,14 @@
             "You can stop using 3moji at any time. Deleting your account gives up your Handle, and it becomes available for someone else to claim straight away."
           ]
         },
+        "law": {
+          "heading": "The law that applies",
+          "paragraphs": ["The law of England and Wales applies to these terms."]
+        },
         "changes": {
           "heading": "Changes to these terms",
           "paragraphs": [
-            "If we change these terms, we will update this page first. [Which country's law applies, and the date these terms were last updated — the owner confirms these before launch]"
+            "If we change these terms, we will update this page first. Last updated: 14 September 2026."
           ]
         }
       }

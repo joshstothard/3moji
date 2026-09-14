@@ -27,7 +27,7 @@ Items are grouped by when they have to happen:
     - `BETTER_AUTH_SECRET`: at least 32 random characters. Generate it, never make one up.
     - `RESEND_API_KEY`: from Resend.
     - `RESEND_FROM`: the sender, on the Resend subdomain.
-    - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown. See the report mailbox item below.
+    - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown, and the privacy notice and terms show a bracketed placeholder instead of a contact link ([#242](https://github.com/joshstothard/3moji/issues/242)). See the report mailbox item and the legal item below.
     - `NEXT_PUBLIC_APP_VERSION` is supplied by the build and needs nothing from you. **Never set `TEST_EMAIL_SENDER` on Vercel**: it's test-only, and the app refuses to start with it set there.
     - `PRODUCTION_DATABASE_HOST`: **set it for Preview** ([#32](https://github.com/joshstothard/3moji/issues/32)). The host name of the production database, the part after `@` and before `/` in Production's `DATABASE_URL_UNPOOLED` (the pooled host works too). Copy it from the Vercel or Neon dashboard, never into the repo, an issue or a chat. Every preview build compares its own database against it and **fails if it is production, or if this is unset**, so a preview can never migrate or use production data. It's a host name, not a password, but treat it as private.
     - Vercel's own `VERCEL_ENV`, `VERCEL_URL` and `VERCEL_BRANCH_URL` need "Automatically expose System Environment Variables" left on. A preview builds its verification and reset links from them, because `BETTER_AUTH_URL` holds the production address.
@@ -124,13 +124,22 @@ Items are grouped by when they have to happen:
 - [ ] **Where nightly database backups are stored**
   - **What:** Neon's free plan can only restore to a point in the last 6 hours or so. A mistake noticed the next day, such as a bad migration or an accidental deletion, would lose every Handle, Account and Profile. A nightly copy kept somewhere else fixes that.
   - **Why it matters:** without it, one bad day could permanently wipe out every claimed Handle.
-  - **Options:**
-    - An encrypted database dump in a private S3-compatible bucket, such as Cloudflare R2's free tier.
-    - A private GitHub repository.
-    - GitHub Actions artifacts on this repo are **ruled out**: on a public repository anyone can download them.
-  - **Recommendation:** an encrypted dump in a private Cloudflare R2 bucket.
-  - **Blocks:** Phase 8's backup job and its "restore from backup" runbook. The job itself also waits on [#32](https://github.com/joshstothard/3moji/issues/32).
-  - **Detail:** [workstream](workstreams/3moji-mvp.md) Open questions and Phase 8, deliverable 4; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 2 (restore window).
+  - **Options:** an encrypted dump in a private S3-compatible bucket such as Cloudflare R2, or a private GitHub repository. GitHub Actions artifacts on this repo were **ruled out**: on a public repository anyone can download them.
+  - **Decided 2026-09-14, by the orchestrator at your request:** an age-encrypted `pg_dump` in a private Cloudflare R2 bucket, kept for 30 days by a lifecycle rule. It is encrypted to an age **public** key, which is not a secret. The **private** key stays only in your password manager and never goes to GitHub. The workflow is `.github/workflows/backup.yml` ([#206](https://github.com/joshstothard/3moji/issues/206)). It does nothing until step 7, so the box stays unticked until step 9 is done.
+  - **Your steps:**
+    1. **Create the bucket.** Create a Cloudflare account if you have none, open **R2 Object Storage**, and create a bucket, e.g. `3moji-backups`. Leave it private: don't connect a custom domain, and don't turn on its public `r2.dev` URL. Note your **Account ID** from the R2 overview page.
+    2. **Keep 30 days.** In the bucket's **Settings → Object lifecycle rules**, add a rule that applies to every object and deletes objects 30 days after they were uploaded.
+    3. **Make an API token.** In **R2 → Manage API tokens → Create API token**, choose **Object Read & Write** and apply it to that one bucket only. Save the **Access Key ID** and **Secret Access Key** in your password manager straight away; they are shown once.
+    4. **Make the age key.** On your Mac, run `brew install age`, then `age-keygen -o 3moji-backup.key`. Put the whole contents of `3moji-backup.key` in your password manager as the 3moji backup private key, then delete the file with `rm 3moji-backup.key`. Copy only the public key: the `age1...` value from its `# public key:` line, which `age-keygen` also prints. If the private key is lost, no backup can ever be read. If it leaks, make a new key and replace the variable in step 6.
+    5. **Copy the connection string.** In Neon, open the production project, choose **Connect**, pick the production branch and database, turn **Connection pooling off**, and copy the connection string. Its host has no `-pooler`; the workflow refuses a pooled one. Paste it straight into GitHub in step 6, not into a note or a file.
+    6. **Add the secrets and variables.** In GitHub, open `joshstothard/3moji` → **Settings → Secrets and variables → Actions**:
+       - On the **Secrets** tab, add three repository secrets: `BACKUP_DATABASE_URL` (step 5), `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (step 3).
+       - On the **Variables** tab, add three repository variables: `R2_ACCOUNT_ID` (step 1), `R2_BUCKET` (the bucket name from step 1) and `BACKUP_AGE_RECIPIENT` (the `age1...` public key from step 4). Variables are **not masked** in the public Actions logs, so nothing secret goes on this tab, and never the private key.
+    7. **Turn it on.** On the same **Variables** tab, add `BACKUPS_ENABLED` with the value `true`.
+    8. **Run it once.** In **Actions → Nightly Database Backup → Run workflow**, run it on `main` and check it goes green. Its last upload step ends `Uploaded and confirmed: N bytes.`, and the object appears in the bucket under `3moji/`. If it fails, the error names the setting to fix and never shows its value.
+    9. **Do one test restore** into a Neon branch, following the [restore runbook](runbooks/restore-from-backup.md#5-restore-from-the-nightly-backup) § 5.1 to § 5.4 and § 5.6, never § 5.5. Record the date, the object key and the § 5.4 counts on #206 (counts, never rows). That closes #206.
+  - **Blocks:** closing [#206](https://github.com/joshstothard/3moji/issues/206), and any recovery of data lost more than six hours ago.
+  - **Detail:** [workstream](workstreams/3moji-mvp.md) Decision log (2026-09-14) and Phase 8; [restore runbook](runbooks/restore-from-backup.md) § 5; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 2 (restore window).
 
 - [ ] **Review the privacy notice and terms, and confirm the legal checks**
   - **What:** In Phase 7 the agent drafts `/privacy` and `/terms` in plain English. You review them before announcing. You also check whether the ICO data protection fee applies to you, and confirm Phase 7's written assessment, citing Ofcom, of whether the Online Safety Act's user-to-user duties apply ([takedown runbook](runbooks/takedown.md) § 6).
@@ -142,16 +151,17 @@ Items are grouped by when they have to happen:
 
 - [ ] **Review the privacy notice and terms before removing the draft marker**
   - **What:** `/privacy` and `/terms` show "Draft — pending owner review" until you remove the marker (`DraftMarker` in `apps/web/src/components/legal-document.tsx`). Answer these first. The ICO fee and the Online Safety Act are in the item above.
-    1. **Operator identity and contact:** the controller name and contact address that replace `Legal.operatorPlaceholder` and `Legal.contactPlaceholder`. The contact could be the `REPORT_CONTACT_EMAIL` mailbox.
-    2. **Processor locations and transfers:** where Vercel, Neon and Resend process data, and the safeguards for any transfer outside the UK. Nothing in the repo establishes this.
-    3. **Lawful basis for each purpose:** as drafted, contract for the account and Profile, and legitimate interests for sessions, counters and logs.
+    1. ~~**Operator identity and contact**~~ — answered 2026-09-14 ([#242](https://github.com/joshstothard/3moji/issues/242)). The pages name Joshua Stothard. The contact is **`REPORT_CONTACT_EMAIL`**, rendered as a `mailto:` link when the page loads, so the same mailbox now receives abuse reports _and_ privacy and terms enquiries. **You set its value in the Vercel project's environment variables**; it is never committed. Unset or refused, the pages show the bracketed contact placeholder.
+    2. **Processor locations and transfers:** filled from the providers' own pages in [#242](https://github.com/joshstothard/3moji/issues/242). **Still yours:** check which region the Neon database is in (Neon console, project settings) and replace the bracketed Neon region placeholder. Also confirm the safeguard for transfers to Neon and replace its placeholder: [Databricks' DPF notice](https://www.databricks.com/legal/dpf) names "Databricks, Inc., Neon, LLC" under the UK Extension, but `neon.com/dpa` names no transfer mechanism, so it wasn't verified that this covers a Neon Free account.
+    3. ~~**Lawful basis for each purpose**~~ — filled in [#242](https://github.com/joshstothard/3moji/issues/242): contract for the account, Handle and Profile; legitimate interests for security, rate limits and logs, and for page-view analytics.
     4. **`verification_dispatch` retention:** kept for the life of the account. Should it be pruned?
-    5. **Log and backup retention:** how long Vercel logs and Neon backups keep data on your plans. The page says only "for a limited time".
+    5. ~~**Log and backup retention**~~ — filled in [#242](https://github.com/joshstothard/3moji/issues/242): Vercel runtime logs 1 hour, Vercel analytics at least a month, Neon history 6 hours, Resend 30 days. **If nightly backups are added, the privacy notice must say where they are kept and for how long.**
     6. **Cookies:** confirm that no analytics or other cookies are added before launch. Today there are only Better Auth's session cookies. Vercel Web Analytics, added in PR [#238](https://github.com/joshstothard/3moji/pull/238), does not use cookies, so it does not change this.
-    7. **Minimum age** for claiming a Handle (a placeholder in the terms).
-    8. **Governing law:** England and Wales, Scotland or Northern Ireland. Also the "last updated" dates.
-    9. **Limitation of liability wording**, ideally with legal advice.
+    7. ~~**Minimum age**~~ — set at **16** by the orchestrator in [#242](https://github.com/joshstothard/3moji/issues/242), because you had no view. The reason: every Profile is public, can carry any outbound link, and nobody moderates Profiles, so the service is not suited to younger children. Change the number in the terms if you disagree.
+    8. **Governing law:** the terms now say England and Wales. **This is an assumption for you to confirm**, or change to Scotland or Northern Ireland. The "last updated" dates are set to 14 September 2026.
+    9. **Limitation of liability wording:** short plain wording is drafted in [#242](https://github.com/joshstothard/3moji/issues/242). It does not exclude liability for death or personal injury caused by negligence, for fraud, or for anything the law does not allow to be excluded. Legal advice on it is still recommended.
     10. **The "within one month" reply** to rights requests, the UK GDPR default: confirm you can meet it.
+  - **Follow-up once nightly backups go live** ([#206](https://github.com/joshstothard/3moji/issues/206), PR [#250](https://github.com/joshstothard/3moji/pull/250)): the privacy notice must name Cloudflare R2 as the backup store, with 30-day retention. This is for your review, and isn't yet in the copy.
   - **Why it matters:** the pages are an agent's plain-English draft, and nobody with legal training has reviewed them. The footer and claim form now link to them from every page ([#198](https://github.com/joshstothard/3moji/issues/198)).
   - **Options:** answer each yourself, or take the list to a legal review.
   - **Recommendation:** none recorded beyond the item above.
@@ -298,6 +308,7 @@ Recorded in the [workstream](workstreams/3moji-mvp.md) Decision log on 2026-09-1
 
 Recorded in the Decision log on 2026-09-14:
 
+- **Nightly database backups go to a private Cloudflare R2 bucket**, as an age-encrypted `pg_dump` kept for 30 days, decided by the orchestrator at your request. The private key stays in your password manager. Setup is under "Where nightly database backups are stored".
 - **The spoken form isn't resolved in the path** ([#201](https://github.com/joshstothard/3moji/issues/201)). `/three-ice-cubes` stays a 404 and ADR-0008 stands. Spoken input works in the Find a Handle lookup, which the home page and the 404 page both offer. Revisit if post-launch logs show 404s on spoken-looking paths.
 - **The Content Security Policy is a per-request nonce on every page** (option 1 of [#205](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)). `/`, `/privacy`, `/terms` and the 404 render per request and lose CDN caching in exchange for a strict policy with no `unsafe-inline` script. See [Security headers](architecture/system-overview.md#security-headers).
 - **Vercel Web Analytics was added at your request** (PR [#238](https://github.com/joshstothard/3moji/pull/238)). It is cookieless, and the privacy notice's processors section was updated to say what it records, from Vercel's own docs. Its URL recording would have included the set-new-password page, whose address holds a reset token, so **every URL is redacted before it is sent**: `/reset-password/<token>` becomes `/reset-password/[token]`, every query string and fragment is dropped, and a URL that cannot be parsed is not sent at all. See `apps/web/src/lib/analytics-redaction.ts`, tested in `apps/web/src/lib/analytics-redaction.test.ts`, and wired in by `SiteAnalytics` (asserted in `apps/web/src/components/site-analytics.test.tsx` and `apps/web/src/app/layout.test.tsx`).
