@@ -67,7 +67,12 @@ To restore a schedule, uncomment its `schedule:` block. `morlock.yml` was alread
 
 The `workflow-lint` job (Stage 1, **Workflow lint**) runs `scripts/actionlint.sh`, which checks every file in `.github/workflows` with [actionlint](https://github.com/rhysd/actionlint). That covers expression syntax, which contexts each key may read, `needs:` and `steps.*` references, action inputs, and cron syntax. The script downloads a pinned release, currently `1.7.12` for Linux x86_64, and runs it only if the archive's sha256 matches the one in the script. To upgrade, change the version and the checksum together. Take the checksum from the release's `checksums.txt`, and confirm it against GitHub's asset digest (`gh release view v<version> --repo rhysd/actionlint --json assets`).
 
-On `ubuntu-latest`, actionlint also runs `shellcheck` on each `run:` script, because the runner has shellcheck installed.
+**Deliberate ignores.** Each one has a reason:
+
+- **Shellcheck info and style findings.** On `ubuntu-latest`, actionlint also runs `shellcheck` on each `run:` script, because the runner has shellcheck installed. The script sets `SHELLCHECK_OPTS=--severity=warning`, so only shellcheck warnings and errors fail the job. When the check was added it reported SC2086 (an unquoted variable) in `ci.yml` and `morlock.yml`, and SC2129 (redirects that could be grouped) in `morlock.yml`. These are style findings, and none of them makes a workflow invalid.
+- **`if: false` on the image push step in `ci.yml`.** actionlint reports a constant condition there. The step is disabled on purpose (§ Image push), so `.github/actionlint.yaml` ignores that message for `ci.yml` only.
+
+Add a new ignore to `.github/actionlint.yaml`, scoped to one file, with a comment giving the reason.
 
 **Locally**, `scripts/verify.sh` runs the same script. It uses an `actionlint` on your `PATH` if there is one (for example `brew install actionlint`, which may be a different version from CI's). If there is none, it prints a warning that the workflows were not validated and carries on, so CI's job is the gate. The script never downloads anything outside CI.
 

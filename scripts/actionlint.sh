@@ -21,6 +21,12 @@ ACTIONLINT_VERSION="1.7.12"
 # both the release's actionlint_1.7.12_checksums.txt and GitHub's asset digest.
 ACTIONLINT_LINUX_AMD64_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
 
+# actionlint runs shellcheck on each `run:` script when shellcheck is installed,
+# as it is on ubuntu-latest. Only warnings and errors fail the check: info and
+# style findings (unquoted variables, grouped redirects) are not what makes a
+# workflow invalid. .github/actionlint.yaml lists the other ignores.
+export SHELLCHECK_OPTS="--severity=warning"
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
