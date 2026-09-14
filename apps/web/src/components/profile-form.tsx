@@ -313,12 +313,12 @@ export function ProfileForm({ handle, initial, save }: ProfileFormProps) {
       />
 
       <fieldset
-        className="rounded-xl bg-white p-5 shadow-sm"
+        className="rounded-card bg-card p-5 shadow-card border border-line"
         aria-describedby={
           of("links").length > 0 ? "profile-links-error" : undefined
         }
       >
-        <legend className="px-1 text-lg font-semibold text-slate-900">
+        <legend className="px-1 text-lg font-semibold text-ink">
           {copy.linksHeading}
         </legend>
         <Messages id="profile-links-error" violations={of("links")} />
@@ -516,7 +516,7 @@ function FormNotice({
   if (summary === undefined) return null;
 
   return (
-    <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-rose-800">
+    <p role="alert" className="rounded-2xl bg-rose-50 px-4 py-3 text-rose-800">
       {summary}
     </p>
   );
@@ -540,11 +540,11 @@ function Messages({
 }
 
 const CONTROL =
-  "mt-1 block w-full rounded-xl border border-slate-500 px-3 py-2 text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+  "mt-1 block w-full rounded-2xl border border-control px-3 py-2 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet";
 const PRIMARY_BUTTON =
-  "rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+  "rounded-full bg-violet px-5 py-2.5 font-semibold text-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet";
 const SECONDARY_BUTTON =
-  "mt-4 rounded-xl bg-slate-100 px-4 py-2 font-medium text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+  "mt-4 rounded-2xl bg-violet-tint px-4 py-2 font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet";
 
 /**
  * One labelled control, with its messages attached **by id**.
@@ -594,7 +594,7 @@ function Field({
 
   return (
     <div>
-      <label htmlFor={id} className="font-medium text-slate-900">
+      <label htmlFor={id} className="font-medium text-ink">
         {label}
       </label>
       {multiline ? (
@@ -659,11 +659,11 @@ function LinkFields({
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           title={copy.dragLinkHandle.replace("{position}", position)}
-          className="cursor-grab px-1 text-slate-500 select-none"
+          className="cursor-grab px-1 text-muted select-none"
         >
           ⠿
         </span>
-        <p className="font-medium text-slate-700">
+        <p className="font-medium text-body">
           {copy.linkPosition
             .replace("{position}", position)
             .replace("{total}", String(total))}
@@ -699,7 +699,7 @@ function LinkFields({
       <button
         type="button"
         onClick={onRemove}
-        className="text-sm font-medium text-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        className="text-sm font-medium text-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
       >
         {copy.removeLink.replace("{position}", position)}
       </button>
@@ -740,8 +740,8 @@ function ReorderButton({
       aria-label={label}
       aria-disabled={atEnd}
       onClick={onActivate}
-      className={`rounded-lg px-2 py-1 text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${
-        atEnd ? "opacity-40" : "hover:bg-slate-100"
+      className={`rounded-lg px-2 py-1 text-body focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
+        atEnd ? "opacity-40" : "hover:bg-violet-tint"
       }`}
     >
       <span aria-hidden="true">{glyph}</span>

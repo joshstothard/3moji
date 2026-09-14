@@ -9,11 +9,19 @@
     "reportBody": "The web address of the page, and what is wrong with it:",
     "emojiCredit": "Emoji graphics in link previews are {twemoji} 16.0.1, © Twitter, Inc. and other contributors and jdecked and other contributors, licensed under {licence}.",
     "emojiCreditTwemoji": "Twemoji",
-    "emojiCreditLicence": "CC-BY 4.0"
+    "emojiCreditLicence": "CC-BY 4.0",
+    "tagline": "A web address you can say out loud."
+  },
+  "Brand": {
+    "wordmark": "3moji",
+    "claimHandle": "Claim a Handle"
   },
   "Home": {
-    "heading": "3moji",
-    "tagline": "A web address you can say out loud."
+    "eyebrowEmoji": "🧊🧊🧊",
+    "eyebrow": "“three ice cubes” is a web address",
+    "heading": "Your web address, in {accent}",
+    "headingAccent": "three emoji.",
+    "tagline": "Claim three emoji, put your links behind them, and share your page by saying it out loud."
   },
   "HandleLookup": {
     "heading": "Find a Handle",

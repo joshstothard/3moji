@@ -72,6 +72,14 @@ describe("Footer", () => {
     expect(container.textContent).not.toMatch(/API/i);
   });
 
+  it("signs off with the wordmark and the tagline (#251)", () => {
+    render(<Footer />);
+    const footer = screen.getByRole("contentinfo");
+
+    expect(within(footer).getByText(en.Brand.wordmark)).toBeInTheDocument();
+    expect(within(footer).getByText(copy.tagline)).toBeInTheDocument();
+  });
+
   it("is the page's contentinfo landmark", () => {
     render(<Footer />);
 

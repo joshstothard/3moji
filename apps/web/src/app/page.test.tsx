@@ -49,12 +49,19 @@ describe("claiming from the home page", () => {
 });
 
 describe("Home", () => {
-  it("renders the product name as the page heading", () => {
+  /**
+   * #251. The hero headline is one sentence with its closing phrase in the
+   * brand's violet: one heading, named by the whole sentence, with the phrase
+   * in an element of its own so it can be coloured.
+   */
+  it("heads the page with the hero sentence, its closing phrase set apart", () => {
     render(<Home />);
 
-    expect(
-      screen.getByRole("heading", { level: 1, name: en.Home.heading }),
-    ).toBeInTheDocument();
+    const sentence = en.Home.heading.replace("{accent}", en.Home.headingAccent);
+    const heading = screen.getByRole("heading", { level: 1, name: sentence });
+    const accent = screen.getByText(en.Home.headingAccent);
+    expect(heading).toContainElement(accent);
+    expect(accent).not.toBe(heading);
   });
 
   it("keeps the line that says what the product is", () => {

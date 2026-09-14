@@ -342,10 +342,10 @@ function AliasListing({
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div className="text-center">
-        <h1 className="text-3xl sm:text-4xl mb-4 tracking-tight text-slate-900">
+        <h1 className="text-3xl sm:text-4xl mb-4 tracking-tight text-ink">
           {copy.aliasSeveralHeading}
         </h1>
-        <p className="text-lg text-slate-500">{copy.aliasListing}</p>
+        <p className="text-lg text-muted">{copy.aliasListing}</p>
       </div>
       <ul aria-label={copy.aliasListingLabel} className="mt-10 space-y-3">
         {candidates.map((candidate) => (
@@ -389,7 +389,7 @@ function AliasListingRow({
   return (
     <a
       href={`/${candidate.encoded}`}
-      className="flex items-center gap-4 rounded-xl bg-white px-5 py-4 shadow-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      className="flex min-h-16 items-center gap-4 rounded-slot border border-line bg-card px-5 py-4 shadow-card hover:border-violet hover:bg-violet-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
     >
       <span
         className="text-4xl"
@@ -399,9 +399,7 @@ function AliasListingRow({
         {candidate.key}
       </span>
       {displayName !== undefined && (
-        <span className="text-lg text-slate-900 break-words">
-          {displayName}
-        </span>
+        <span className="text-lg text-ink break-words">{displayName}</span>
       )}
     </a>
   );
@@ -424,10 +422,10 @@ function AmbiguousAlias() {
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
       <div className="text-center">
-        <h1 className="text-3xl sm:text-4xl mb-8 tracking-tight text-slate-900">
+        <h1 className="text-3xl sm:text-4xl mb-8 tracking-tight text-ink">
           {copy.aliasSeveralHeading}
         </h1>
-        <p className="text-lg text-slate-500">{copy.aliasSeveral}</p>
+        <p className="text-lg text-muted">{copy.aliasSeveral}</p>
       </div>
     </main>
   );
@@ -518,7 +516,7 @@ function ResolvedHandle({
     return (
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <HandleHeading handle={handle} spoken={spoken} />
-        <p className="text-center text-lg text-slate-500">
+        <p className="text-center text-lg text-muted">
           <span>{copy.unclaimed}</span>{" "}
           {/*
            * The call to action is a real control
@@ -531,7 +529,7 @@ function ResolvedHandle({
            * somewhere, and the browser moves the focus starting point with it.
            */}
           <a
-            className="font-semibold text-indigo-600 underline hover:text-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="font-semibold text-violet underline hover:text-violet focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
             href="#claim"
           >
             {copy.unclaimedAction}
@@ -588,11 +586,18 @@ function ResolvedHandle({
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
       <div className="text-center">
         <HandleHeading handle={handle} spoken={spoken} />
-        <p className="text-lg text-slate-500">{AVAILABILITY_COPY[resolved]}</p>
+        <p className="text-lg text-muted">{AVAILABILITY_COPY[resolved]}</p>
       </div>
     </main>
   );
 }
+
+/**
+ * How each of the three tiles leans (#251): the first tips left, the second
+ * lifts, the third tips right. Static transforms, so there is no motion to
+ * reduce.
+ */
+const TILE_LEAN = ["-rotate-6", "-translate-y-2.5", "rotate-6"] as const;
 
 /**
  * The Handle itself, large.
@@ -600,6 +605,11 @@ function ResolvedHandle({
  * The emoji carry the meaning, so they are the heading, and `role="img"` with
  * the Spoken Name as the accessible name is what makes it announce as "three
  * ice cubes" rather than as three code points read out one by one.
+ *
+ * **Three tiles, one image** (#251). Each emoji sits on a card of its own, and
+ * all three are inside the one `role="img"`, whose children are presentational:
+ * the heading still announces the Spoken Name once. A tile is keyed by its
+ * position, because a Handle is ordered and may repeat an emoji.
  */
 function HandleHeading({
   handle,
@@ -609,9 +619,20 @@ function HandleHeading({
   readonly spoken: string | undefined;
 }) {
   return (
-    <h1 className="text-6xl sm:text-7xl mb-8 tracking-tight text-center">
-      <span role="img" aria-label={spoken ?? handle.key}>
-        {handle.key}
+    <h1 className="mb-8 flex justify-center">
+      <span
+        role="img"
+        aria-label={spoken ?? handle.key}
+        className="flex gap-3 sm:gap-3.5"
+      >
+        {handle.emoji.map((entry, index) => (
+          <span
+            key={index}
+            className={`flex size-24 items-center justify-center rounded-card border border-line bg-card text-6xl leading-none shadow-card sm:size-32 sm:rounded-card-lg sm:text-[84px] ${TILE_LEAN[index] ?? ""}`}
+          >
+            {entry.emoji}
+          </span>
+        ))}
       </span>
     </h1>
   );
@@ -628,7 +649,7 @@ function SpokenLine({ spoken }: { readonly spoken: string | undefined }) {
   if (spoken === undefined) return null;
 
   return (
-    <p className="text-lg text-slate-500">
+    <p className="text-lg text-muted">
       {copy.spoken.replace("{spoken}", spoken)}
     </p>
   );
@@ -655,7 +676,7 @@ function UneditedHandle({
       <div className="text-center">
         <HandleHeading handle={handle} spoken={spoken} />
         <SpokenLine spoken={spoken} />
-        <p className="mt-4 text-lg text-slate-500">{copy.unedited}</p>
+        <p className="mt-4 text-lg text-muted">{copy.unedited}</p>
       </div>
       <ReportLink encoded={handle.encoded} />
     </main>
@@ -696,23 +717,23 @@ function ProfilePage({
   const share = shareLinkOf(handle.emoji.map((entry) => entry.emoji));
 
   return (
-    <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <main className="mx-auto max-w-[592px] px-4 pt-10 pb-16 sm:pt-14">
       <div className="text-center">
         <HandleHeading handle={handle} spoken={spoken} />
         <SpokenLine spoken={spoken} />
         {profile.displayName !== null && (
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900 break-words">
+          <h2 className="mt-5 font-display text-4xl leading-none font-extrabold tracking-display break-words text-ink sm:text-[56px]">
             {profile.displayName}
           </h2>
         )}
         {profile.bio !== null && (
-          <p className="mt-3 text-lg text-slate-600 whitespace-pre-line break-words">
+          <p className="mx-auto mt-3 max-w-[460px] text-lg leading-relaxed text-pretty whitespace-pre-line break-words text-body">
             {profile.bio}
           </p>
         )}
       </div>
       {profile.links.length > 0 && (
-        <ul aria-label={copy.linksLabel} className="mt-10 space-y-3">
+        <ul aria-label={copy.linksLabel} className="mt-8 space-y-3">
           {profile.links.map((link) => (
             <li key={link.id}>
               <ProfileLinkRow link={link} />
@@ -731,9 +752,31 @@ function ProfilePage({
   );
 }
 
-/** The shared look of a Link row, whether or not it is a link. */
+/**
+ * The shared look of a Link row, whether or not it is a link: a rounded card
+ * (#251). Its border is decoration; the row's text is what identifies it.
+ */
 const LINK_ROW =
-  "block rounded-xl bg-white px-5 py-4 text-center shadow-sm break-words";
+  "flex min-h-16 items-center justify-between gap-4 rounded-slot border border-line bg-card px-[22px] py-4 text-left text-[17px] font-semibold shadow-card";
+
+/** The arrow at the end of a Link row that goes somewhere. Decoration. */
+function OutboundArrow() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-[18px] shrink-0"
+      fill="none"
+      focusable="false"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d="M7 17L17 7M9 7h8v8" />
+    </svg>
+  );
+}
 
 /**
  * One owner-supplied Link, rendered to a stranger.
@@ -753,16 +796,21 @@ function ProfileLinkRow({ link }: { readonly link: ProfileLink }) {
   const href = safeLinkHref(link.url);
 
   if (href === undefined) {
-    return <span className={`${LINK_ROW} text-slate-500`}>{link.title}</span>;
+    return (
+      <span className={`${LINK_ROW} text-muted`}>
+        <span className="min-w-0 break-words">{link.title}</span>
+      </span>
+    );
   }
 
   return (
     <a
       href={href}
       rel="noopener noreferrer"
-      className={`${LINK_ROW} text-indigo-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600`}
+      className={`${LINK_ROW} text-ink hover:border-violet hover:bg-violet-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet`}
     >
-      {link.title}
+      <span className="min-w-0 break-words">{link.title}</span>
+      <OutboundArrow />
     </a>
   );
 }

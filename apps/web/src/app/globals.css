@@ -1,16 +1,83 @@
 @import "tailwindcss";
 
 /*
- * The rare three-of-a-kind celebration in the Handle builder (#202).
+ * The 3moji brand (#251): warm paper, ink type, one violet accent, sunshine
+ * for rare Handles only and coral for remove only. The values are the design
+ * canvas's, except where WCAG AA needed them darker, and each such change is
+ * recorded beside its token with the ratio it measures.
  *
- * Registered as theme animations so they are used like any other Tailwind
- * utility, and only ever through `motion-safe:`: under
- * `prefers-reduced-motion: reduce` neither class applies, and the static badge
- * is all that shows. Each runs once, well inside a second, and animates
- * `transform` alone — never `opacity` — so the badge rests fully opaque and its
- * contrast is what it measures.
+ * `@theme` adds to Tailwind's palette rather than replacing it, so every token
+ * below is a utility (`bg-paper`, `text-ink`, `border-control`, `rounded-card`,
+ * `shadow-card`) beside the defaults. Keep new UI on these, not on `slate` or
+ * `indigo`.
  */
 @theme {
+  /* Surfaces. */
+  --color-paper: #fbf8f4;
+  --color-card: #ffffff;
+
+  /* Text. Ink is 16.87:1 on paper and body 8.84:1. */
+  --color-ink: #1a1523;
+  --color-body: #4a4453;
+  /*
+   * Muted text. The canvas's #7A7385 is 4.29:1 on paper, under AA's 4.5:1, so
+   * it is darkened to 4.75:1 on paper and 5.03:1 on white. It is 4.35:1 on
+   * the violet tint, so muted text never sits on the tint.
+   */
+  --color-muted: #736c7e;
+  /* The URL inside the dark share pill: 12.23:1 on ink. */
+  --color-ink-soft: #d9d3e3;
+
+  /*
+   * Edges. `line` (#ECE6DD, the canvas's) is decoration only: card outlines,
+   * the footer rule. It is 1.17:1 on paper and identifies nothing.
+   *
+   * `control` is the border that identifies a control, where WCAG 1.4.11 asks
+   * for 3:1 against the surface and the fill. The canvas's control border,
+   * #E4DDD2, is 1.27:1 on paper and 1.35:1 on white, so it cannot be that;
+   * #8C8497 is 3.38:1 on paper, 3.58:1 on white and 3.10:1 on the violet tint.
+   */
+  --color-line: #ece6dd;
+  --color-control: #8c8497;
+
+  /* The accent. White on violet is 6.12:1, on the hover 9.10:1; violet text is
+     5.78:1 on paper and 5.29:1 on the tint. */
+  --color-violet: #5b3df5;
+  --color-violet-hover: #3f24c9;
+  --color-violet-tint: #f0ecff;
+
+  /* Sunshine is for rare Handles only (ink on it is 11.32:1); coral is for
+     remove only, and white text on it is 3.91:1, so it carries an icon, never
+     small text. */
+  --color-sunshine: #ffc53d;
+  --color-coral: #e5484d;
+
+  /* Available: the ink is 5.34:1 on the tint. */
+  --color-available: #1f9d55;
+  --color-available-tint: #e6f6ec;
+  --color-available-ink: #16723f;
+
+  /* Shape and depth: slots 24px, cards 28px and 32px, pills fully round
+     (`rounded-full`), and one soft shadow. */
+  --radius-slot: 24px;
+  --radius-card: 28px;
+  --radius-card-lg: 32px;
+  --shadow-card:
+    0 1px 2px rgb(26 21 35 / 0.04), 0 16px 32px -16px rgb(26 21 35 / 0.22);
+
+  /* Display type is set tight. */
+  --tracking-display: -0.045em;
+
+  /*
+   * The rare three-of-a-kind celebration in the Handle builder (#202).
+   *
+   * Registered as theme animations so they are used like any other Tailwind
+   * utility, and only ever through `motion-safe:`: under
+   * `prefers-reduced-motion: reduce` neither class applies, and the static badge
+   * is all that shows. Each runs once, well inside a second, and animates
+   * `transform` alone — never `opacity` — so the badge rests fully opaque and its
+   * contrast is what it measures.
+   */
   --animate-rare-pop: rare-pop 800ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
   --animate-rare-hop: rare-hop 500ms ease-out both;
 
@@ -35,4 +102,20 @@
       transform: translateY(-0.5rem) scale(1.15);
     }
   }
+}
+
+/*
+ * The typefaces, self-hosted by `next/font` at build time (`app/layout.tsx`),
+ * which declares these variables on `<html>`. `inline`, so each utility reads
+ * the variable where it is used rather than through a copy on `:root`.
+ *
+ * Bricolage Grotesque is display type (`font-display`, 700/800, tight
+ * tracking); Geist is everything you read (`font-sans`, the default); Geist
+ * Mono is for URLs (`font-mono`).
+ */
+@theme inline {
+  --font-sans:
+    var(--font-geist), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: var(--font-bricolage), "Arial Black", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }

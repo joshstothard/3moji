@@ -22,6 +22,40 @@ describe("Navbar", () => {
     );
   });
 
+  /**
+   * #251. The logo is the three-slot mark beside the wordmark. The mark is
+   * decoration, hidden from assistive technology, so the link is still named
+   * by the wordmark alone rather than announcing an unlabelled image.
+   */
+  it("shows the logo mark beside the wordmark, named by the wordmark alone", () => {
+    render(<Navbar />);
+
+    const home = screen.getByRole("link", { name: "3moji" });
+    const mark = home.querySelector("svg");
+    expect(mark).not.toBeNull();
+    expect(mark).toHaveAttribute("aria-hidden", "true");
+    expect(home).toHaveAccessibleName(en.Brand.wordmark);
+  });
+
+  it("offers a way to claim a Handle, pointing at the builder on the home page", () => {
+    render(<Navbar />);
+
+    expect(
+      screen.getByRole("link", { name: en.Brand.claimHandle }),
+    ).toHaveAttribute("href", "/#handle-builder-heading");
+  });
+
+  /**
+   * #251. The mockup's header search is #254's; until then nothing in the
+   * navbar is a search, so the page keeps exactly one search landmark.
+   */
+  it("renders no search yet", () => {
+    render(<Navbar />);
+
+    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+  });
+
   it("offers no links to the removed OKR sections", () => {
     render(<Navbar />);
     const hrefs = screen

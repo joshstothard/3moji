@@ -176,8 +176,12 @@ test("the root-level dynamic route does not swallow the home page", async ({
 }) => {
   await page.goto("/");
 
+  // The home page's own heading: the hero sentence since #251.
   await expect(
-    page.getByRole("heading", { level: 1, name: "3moji" }),
+    page.getByRole("heading", {
+      level: 1,
+      name: en.Home.heading.replace("{accent}", en.Home.headingAccent),
+    }),
   ).toBeVisible();
 });
 

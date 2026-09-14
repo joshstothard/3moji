@@ -302,18 +302,18 @@ describe("the emoji picker's accessibility and picking", () => {
       name: "Food & Drink",
     });
 
-    expect(tab.className).toContain("focus-visible:outline-indigo-600");
+    expect(tab.className).toContain("focus-visible:outline-violet");
     expect(
       screen.getByRole("button", { name: "ice cube" }).className,
-    ).toContain("focus-visible:outline-indigo-600");
+    ).toContain("focus-visible:outline-violet");
   });
 
   /**
    * The border is what identifies each button as a control
    * ([#243](https://github.com/joshstothard/3moji/issues/243)): the white fill
-   * and `shadow-sm` are about 1.05:1 on the `slate-50` page. jsdom evaluates no
+   * is about 1.04:1 on the paper page (#251). jsdom evaluates no
    * CSS, so this pins the classes, one token at a time so `border` cannot be
-   * satisfied by `border-slate-500`; `accessibility.spec.ts` measures them.
+   * satisfied by `border-control`; `accessibility.spec.ts` measures them.
    */
   it("gives every category and emoji button the builder's border", () => {
     renderPicker();
@@ -323,11 +323,11 @@ describe("the emoji picker's accessibility and picking", () => {
       expect(tokens(tab)).toEqual(
         expect.arrayContaining([
           "border",
-          "border-slate-500",
-          "hover:border-indigo-600",
+          "border-control",
+          "hover:border-violet",
           // Selected, the border takes the fill's colour: nothing is 3:1
-          // against both `indigo-600` and the page, so the fill is the cue.
-          "aria-pressed:border-indigo-600",
+          // against both `violet` and the page, so the fill is the cue.
+          "aria-pressed:border-violet",
         ]),
       );
     }
@@ -339,10 +339,10 @@ describe("the emoji picker's accessibility and picking", () => {
       expect(tokens(button)).toEqual(
         expect.arrayContaining([
           "border",
-          "border-slate-500",
-          "hover:border-indigo-600",
+          "border-control",
+          "hover:border-violet",
           // A full Handle takes the hover affordance away, border included.
-          "aria-disabled:hover:border-slate-500",
+          "aria-disabled:hover:border-control",
         ]),
       );
     }

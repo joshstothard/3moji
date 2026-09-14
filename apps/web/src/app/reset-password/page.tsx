@@ -57,17 +57,17 @@ export default async function ResetPasswordPage({
 
   return (
     <main className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <h1 className="text-3xl font-bold text-slate-900 mb-4 tracking-tight">
+      <h1 className="text-3xl font-bold text-ink mb-4 tracking-tight">
         {copy.requestHeading}
       </h1>
-      <p className="mb-8 text-base text-slate-700">{copy.requestIntro}</p>
+      <p className="mb-8 text-base text-body">{copy.requestIntro}</p>
 
       {message !== undefined && (
         <p
           className={
             message.role === "status"
-              ? "mb-6 rounded-xl bg-emerald-50 px-4 py-3 text-base text-emerald-900"
-              : "mb-6 rounded-xl bg-red-50 px-4 py-3 text-base text-red-800"
+              ? "mb-6 rounded-2xl bg-emerald-50 px-4 py-3 text-base text-emerald-900"
+              : "mb-6 rounded-2xl bg-red-50 px-4 py-3 text-base text-red-800"
           }
           role={message.role}
         >
@@ -81,14 +81,14 @@ export default async function ResetPasswordPage({
       >
         <div className="flex flex-col gap-2">
           <label
-            className="text-base font-medium text-slate-700"
+            className="text-base font-medium text-body"
             htmlFor="reset-request-email"
           >
             {copy.emailLabel}
           </label>
           <input
             autoComplete="email"
-            className="rounded-xl border border-slate-500 px-4 py-3 text-base text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="rounded-2xl border border-control px-4 py-3 text-base text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
             id="reset-request-email"
             name="email"
             required
@@ -97,7 +97,7 @@ export default async function ResetPasswordPage({
         </div>
 
         <button
-          className="self-start rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="self-start rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
           type="submit"
         >
           {copy.requestSubmit}
@@ -106,7 +106,7 @@ export default async function ResetPasswordPage({
 
       <p className="mt-8 text-base">
         <Link
-          className="font-medium text-indigo-700 underline hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="font-medium text-violet underline hover:text-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
           href="/sign-in"
         >
           {copy.backToSignIn}
