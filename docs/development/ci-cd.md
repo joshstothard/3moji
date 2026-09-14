@@ -42,6 +42,7 @@ push / PR
 | `.github/workflows/nightly-security.yml`     | `workflow_dispatch` only (daily 06:00 UTC schedule disabled)    | Calls `security.yml`                  |
 | `.github/workflows/nightly-mutation.yml`     | `workflow_dispatch` only (weekdays 02:00 UTC schedule disabled) | Stryker mutation testing              |
 | `.github/workflows/morlock.yml`              | `workflow_dispatch` only (nightly 01:00 UTC schedule disabled)  | Morlock security probe                |
+| `.github/workflows/backup.yml`               | Nightly 03:17 UTC schedule (enabled), `workflow_dispatch`       | Encrypted database backup to R2       |
 | `.github/workflows/neon-preview-cleanup.yml` | PR closed, `workflow_dispatch` (sweeps)                         | Delete Neon preview database branches |
 
 ### Scheduled workflows are manual-only
@@ -54,6 +55,8 @@ gh workflow run nightly-mutation.yml
 ```
 
 To restore a schedule, uncomment its `schedule:` block. `morlock.yml` was already manual-only for a separate reason recorded in the workflow file (scheduled runs were being rejected by the Anthropic API); follow that note before re-enabling it. `security.yml` still runs as a blocking stage of `ci.yml` on every PR, so audit regressions are caught without the nightly run.
+
+**`backup.yml` is the exception: its schedule is on** ([#206](https://github.com/joshstothard/3moji/issues/206)). A backup that has to be remembered is not a backup, the repository is now public so the minutes are free, and until the owner sets the `BACKUPS_ENABLED` variable to `true` every run is a green no-op that stops after one step. It runs only on `main` of `joshstothard/3moji`, never on a fork. Because this repository's logs and artifacts are public, the dump is piped from `pg_dump` straight into `age`, never uploaded as an artifact, and removed from `$RUNNER_TEMP` even on failure. The database password goes in a mode-600 libpq password file there, never on `pg_dump`'s command line. `scripts/backup-workflow-guard.test.mjs` fails the Script tests job if the workflow gains an artifact upload, `set -x`, an `echo` of a secret or variable name, or an expression pasted into a script. The decisions (skip, fail naming what is missing, object key, size checks) are `scripts/backup-plan.mjs`, tested in `scripts/backup-plan.test.mjs`. Restoring is [restore from backup § 5](../runbooks/restore-from-backup.md#5-restore-from-the-nightly-backup).
 
 ## Auto-merge
 
@@ -246,13 +249,18 @@ This is **non-blocking** — it is an antibody generator, not a merge gate.
 
 ## Required secrets / variables
 
-| Name                              | Required by                | Notes                                                                                                                              |
-| --------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`               | `morlock.yml`              | Claude Code action                                                                                                                 |
-| `SEMGREP_APP_TOKEN`               | `security.yml`             | Optional — Semgrep runs without it but results won't appear in the Semgrep dashboard                                               |
-| `NEON_API_KEY` (secret)           | `neon-preview-cleanup.yml` | A project-scoped Neon API key for the 3moji project. Setup: [owner actions](../owner-actions.md), "Clean up Neon preview branches" |
-| `NEON_PROJECT_ID` (variable)      | `neon-preview-cleanup.yml` | The Neon project ID. Variables are not masked in logs; the script never prints it                                                  |
-| `NEON_CLEANUP_ENABLED` (variable) | `neon-preview-cleanup.yml` | `true` turns the cleanup on. Anything else, or unset, makes every run a green no-op                                                |
+| Name                                                 | Required by                | Notes                                                                                                                              |
+| ---------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`                                  | `morlock.yml`              | Claude Code action                                                                                                                 |
+| `SEMGREP_APP_TOKEN`                                  | `security.yml`             | Optional — Semgrep runs without it but results won't appear in the Semgrep dashboard                                               |
+| `BACKUP_DATABASE_URL` (secret)                       | `backup.yml`               | Production's direct Neon connection string, pooling off                                                                            |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (secrets) | `backup.yml`               | R2 API token, Object Read & Write on the backup bucket only                                                                        |
+| `R2_ACCOUNT_ID`, `R2_BUCKET` (variables)             | `backup.yml`               | Not secret. Variables are not masked in logs                                                                                       |
+| `BACKUP_AGE_RECIPIENT` (variable)                    | `backup.yml`               | The age **public** key. The private key never goes to GitHub                                                                       |
+| `BACKUPS_ENABLED` (variable)                         | `backup.yml`               | `true` turns backups on; anything else makes every run a green no-op                                                               |
+| `NEON_API_KEY` (secret)                              | `neon-preview-cleanup.yml` | A project-scoped Neon API key for the 3moji project. Setup: [owner actions](../owner-actions.md), "Clean up Neon preview branches" |
+| `NEON_PROJECT_ID` (variable)                         | `neon-preview-cleanup.yml` | The Neon project ID. Variables are not masked in logs; the script never prints it                                                  |
+| `NEON_CLEANUP_ENABLED` (variable)                    | `neon-preview-cleanup.yml` | `true` turns the cleanup on. Anything else, or unset, makes every run a green no-op                                                |
 
 All other secrets (external service URLs, registry credentials) are only needed when you enable the
 corresponding features in your project. See comments in `ci.yml` for guidance.
