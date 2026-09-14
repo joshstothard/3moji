@@ -9,7 +9,8 @@
     ".": {
       "development": "./src/index.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./messages/en.json": "./messages/en.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

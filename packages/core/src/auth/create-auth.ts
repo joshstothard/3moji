@@ -9,6 +9,7 @@ import {
   authClientAddressOptions,
   authRateLimitOptions,
 } from "./auth-rate-limit";
+import { passwordResetEmail, verificationEmail } from "./account-emails";
 import { hashedRateLimitKeys } from "./auth-rate-limit-key";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-length";
 import type { EmailSender } from "./ports/email-sender";
@@ -208,13 +209,16 @@ export function createAuth(input: CreateAuthInput) {
       minPasswordLength: PASSWORD_MIN_LENGTH,
       maxPasswordLength: PASSWORD_MAX_LENGTH,
       sendResetPassword: async ({ user, token }) => {
-        await emailSender.send({
-          to: user.email,
-          subject: "Reset your 3moji password",
-          // The token travels in the URL only, never the subject: subjects are
-          // logged and previewed far more widely than bodies.
-          text: `Reset your password: ${passwordResetLink(input.baseUrl, token)}\n\nThe link works once, for an hour.\n\nIf you did not ask for this, ignore this email and nothing will change.\n\nFrom ${from}`,
-        });
+        // Multipart text and HTML, copy from `en.json` (#240). The token
+        // travels in the URL only, never the subject: subjects are logged and
+        // previewed far more widely than bodies.
+        await emailSender.send(
+          passwordResetEmail({
+            to: user.email,
+            link: passwordResetLink(input.baseUrl, token),
+            from,
+          }),
+        );
       },
     },
     emailVerification: {
@@ -236,14 +240,16 @@ export function createAuth(input: CreateAuthInput) {
           sentAt: input.clock.now(),
         });
 
-        await emailSender.send({
-          to: user.email,
-          subject: "Verify your email to claim your 3moji handle",
-          // The token travels in the URL only, never the subject: subjects are
-          // logged, previewed on lock screens and indexed far more widely than
-          // bodies.
-          text: `Verify your email: ${verificationLink(input.baseUrl, token)}\n\nYour handle is held for 24 hours while you do. After that it returns to the pool.\n\nIf the link has expired by the time you get to it, the page will offer you a new one — your handle is still held.\n\nFrom ${from}`,
-        });
+        // Multipart text and HTML, copy from `en.json` (#240). The token
+        // travels in the URL only, never the subject: subjects are logged,
+        // previewed on lock screens and indexed far more widely than bodies.
+        await emailSender.send(
+          verificationEmail({
+            to: user.email,
+            link: verificationLink(input.baseUrl, token),
+            from,
+          }),
+        );
       },
     },
     ...(input.plugins === undefined ? {} : { plugins: input.plugins }),

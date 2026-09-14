@@ -8,21 +8,34 @@ describe("createRecordingEmailSender", () => {
       to: "a@example.com",
       subject: "Verify your email",
       text: "http://localhost:3000/verify?token=abc",
+      html: '<a href="http://localhost:3000/verify?token=abc">Verify</a>',
     });
 
+    // Both parts, so a test can assert an email is multipart (#240).
     expect(sender.sent).toEqual([
       {
         to: "a@example.com",
         subject: "Verify your email",
         text: "http://localhost:3000/verify?token=abc",
+        html: '<a href="http://localhost:3000/verify?token=abc">Verify</a>',
       },
     ]);
   });
 
   it("keeps them in order", async () => {
     const sender = createRecordingEmailSender();
-    await sender.send({ to: "1@example.com", subject: "s1", text: "t1" });
-    await sender.send({ to: "2@example.com", subject: "s2", text: "t2" });
+    await sender.send({
+      to: "1@example.com",
+      subject: "s1",
+      text: "t1",
+      html: "h",
+    });
+    await sender.send({
+      to: "2@example.com",
+      subject: "s2",
+      text: "t2",
+      html: "h",
+    });
 
     expect(sender.sent.map((email) => email.to)).toEqual([
       "1@example.com",
@@ -32,7 +45,12 @@ describe("createRecordingEmailSender", () => {
 
   it("can be cleared between assertions", async () => {
     const sender = createRecordingEmailSender();
-    await sender.send({ to: "a@example.com", subject: "s", text: "t" });
+    await sender.send({
+      to: "a@example.com",
+      subject: "s",
+      text: "t",
+      html: "h",
+    });
     sender.clear();
 
     expect(sender.sent).toEqual([]);
@@ -40,8 +58,18 @@ describe("createRecordingEmailSender", () => {
 
   it("exposes the last email, which is what a test usually wants", async () => {
     const sender = createRecordingEmailSender();
-    await sender.send({ to: "first@example.com", subject: "s1", text: "t1" });
-    await sender.send({ to: "last@example.com", subject: "s2", text: "t2" });
+    await sender.send({
+      to: "first@example.com",
+      subject: "s1",
+      text: "t1",
+      html: "h",
+    });
+    await sender.send({
+      to: "last@example.com",
+      subject: "s2",
+      text: "t2",
+      html: "h",
+    });
 
     expect(sender.lastSent()?.to).toBe("last@example.com");
   });

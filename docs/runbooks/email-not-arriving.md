@@ -21,6 +21,7 @@ What to do when somebody does not get the email they were promised: a verificati
 - Somebody asked for a resent link or a password reset link, was told it is on its way, and nothing came.
 - A form answers "something went wrong", or the resend button or the password reset form answers with the generic failure state. **That is not a failed send.** Every email goes out after the answer, so a send cannot change it ([§ 2](#2-which-email-and-what-sends-it)). The action itself could not answer: go to [site down](site-down.md).
 - Several people report it on the same day. Suspect the **Resend daily cap** first.
+- The email arrived, but in the **Junk or Spam folder**. See [§ 5d](#5d-landing-in-junk). Nothing failed in the app.
 
 **Do not ask a reporter to post their email address in a GitHub issue.** Handle the conversation privately. This repository is public (`AGENTS.md` § This Repository Is Public).
 
@@ -77,7 +78,7 @@ If the domain shows as unverified, check the SPF, DKIM and DMARC records for the
 1. **Capture the Vercel logs now**, before the hour passes.
 2. **Is there an email failure line** for the time the person tried? It is written after that request's `api_boundary` line, so look a little later, and match by `correlationId` where the person quoted one. If yes, read `error` against the table in § 3 and go to its recovery step.
 3. **If there is no failure line**, Resend accepted the email. Find it in Resend's email log **(verify on deploy)**:
-   - _Delivered_: it reached the recipient's server. Ask them to check spam and any filters, and to search for the sending address.
+   - _Delivered_: it reached the recipient's server. Ask them to check spam and any filters, and to search for the sending address. If it is in junk, go to [5d](#5d-landing-in-junk).
    - _Bounced_: the address is wrong or the mailbox refuses mail. The person must use a different address. For a Claim, that means a new Claim once the hold lapses.
    - _Complained / suppressed_: the recipient marked a previous email as spam, and Resend will not send to them again. That is resolved in Resend's suppression list, not in 3moji **(verify on deploy)**.
    - _Not in the log at all_: the request never reached Resend. Recheck step 2 against the right time window and timezone. The logs may already be gone. A deferred send also runs only within the function's maximum duration on Vercel, which is the platform's promise rather than a tested one ([auth.md](../architecture/auth.md#what-an-operator-sees-when-a-send-fails)).
@@ -116,6 +117,23 @@ The **other emails** fail the same quiet way, under `auth_email_send_failed`. A 
 4. **Unrecognised or 5xx**: check Resend's status page. If Resend is healthy and the code is new, open an issue to add it to `RESEND_ERROR_CODES`.
 5. After any fix, ask one affected person to resend. Their `verification.resend` line says `redirected` whether or not the email went out, so watch instead for **no** `auth_email_send_failed` line under its `correlationId` in the minutes after it.
 
+### 5d. Landing in junk
+
+The email was sent and delivered, and the recipient's provider filed it as junk. **No app log shows this**: Resend reports it as delivered. The first live verification email, on 2026-09-14, landed in Outlook's Junk folder with SPF, DKIM and DMARC all passing ([#240](https://github.com/joshstothard/3moji/issues/240)).
+
+1. **Confirm it was delivered.** Find the email in Resend's email log **(verify on deploy)**. _Delivered_ means it reached the provider, so junk filtering is the cause. _Bounced_ or _suppressed_ is a different problem: go back to [§ 4](#4-step-by-step-checks).
+2. **Read the authentication results in the message headers.** Ask the recipient to open the message source (Outlook: _View_ then _View message source_; Gmail: _Show original_) and to read you only the `Authentication-Results` line, not paste the whole source anywhere. The headers contain their address. Expect `spf=pass`, `dkim=pass` with `header.d=mail.3moji.me`, and `dmarc=pass`. Any `fail` or `none` is a DNS fault: check the records in [§ 3 DNS](#dns).
+3. **Check the email is multipart.** The source should show `Content-Type: multipart/alternative`, with a `text/plain` part and a `text/html` part. Since #240 every email has both. A `text/plain` email alone means production is running a build from before #240, or the Resend adapter has stopped posting `html`.
+4. **Have the recipient mark it as not junk.** In Outlook, _Not junk_; in Gmail, _Report not spam_. Adding the sending address to their safe senders or contacts helps too. It fixes that one mailbox, and the provider counts it as a signal for the domain.
+5. **Look at the domain's reputation.** `mail.3moji.me` is a new sending domain, and a new domain with little volume has no reputation to lean on.
+   - **Google Postmaster Tools** shows spam rate and domain reputation for mail to Gmail, once the domain is verified there. It shows data only after a sustained daily volume to Gmail, so an empty dashboard at low volume is normal **(verify on deploy)**.
+   - **Microsoft SNDS** shows data per sending IP address, not per domain. Resend sends from shared IP addresses we do not control, so SNDS may not be available to us at all **(verify on deploy)**. For persistent junking at Outlook, Hotmail or Live addresses, Microsoft's sender support form is the route, and Resend's support can say whether their shared IPs have a known problem.
+   - Both are optional owner registrations, listed on [owner actions](../owner-actions.md).
+6. **Do not try to game the filter.** Do not send test emails in bulk to warm the domain, change the sending address, or add images or tracking. The emails are deliberately plain ([auth.md § What every email looks like](../architecture/auth.md#what-every-email-looks-like)). Reputation builds with steady, wanted mail and few complaints.
+7. **A claimant with a held Handle is still in time.** If the verification email is in junk, the link in it works as long as it is the newest one and under an hour old. If it has expired, they press **resend** on the hold screen, as in [5a](#5a-a-claim-succeeded-but-its-email-did-not-arrive).
+
+Record the provider (Outlook, Gmail and so on), the `Authentication-Results` outcome, and whether the recipient marked it not junk, in the record below. Never record the address.
+
 ## 6. Record
 
 Keep the record **outside this repository**. It involves people's email addresses, which never go in a GitHub issue, commit or PR.
@@ -125,7 +143,7 @@ Keep the record **outside this repository**. It involves people's email addresse
 | Reported         | When, in UTC, how many people, and through what route                                                                                            |
 | Email type       | Verification on Claim, collision notice, resend, or password reset                                                                               |
 | Logs             | Whether the Vercel lines were captured in time; the failure `event`, `error.name`, `code` and `status`                                           |
-| Resend status    | What Resend's log showed for the email: accepted, delivered, bounced, suppressed, or absent                                                      |
+| Resend status    | What Resend's log showed for the email: accepted, delivered, bounced, suppressed, or absent. For junk, the provider and the header results       |
 | Daily count      | Resend's count for the day, when the cap is suspected                                                                                            |
 | Cause and action | What was wrong, what was changed (names, never values), when, and by whom                                                                        |
 | Held Handles     | Claimants in 5a's position: whether each resent in time or the hold lapsed. Record the Handle keys, not addresses, if a count is shared anywhere |

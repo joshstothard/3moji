@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.4",
+    "@template/shared": "*",
     "better-auth": "^1.7.4",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.23.0",

@@ -130,6 +130,55 @@ describe("createAuth", () => {
       await close();
     });
 
+    it("sends verification mail as multipart text and HTML (#240)", async () => {
+      const { auth, emailSender, close } = build();
+
+      await auth.options.emailVerification.sendVerificationEmail({
+        user: { id: "u1", email: "someone@example.com" },
+        url: `${BASE_URL}/api/auth/verify-email?token=abc`,
+        token: "abc",
+      } as never);
+
+      const sent = emailSender.lastSent();
+      const link = `${BASE_URL}/claim/verify?token=abc`;
+      expect(sent?.text).toContain(link);
+      expect(sent?.html).toContain('<html lang="en">');
+      expect(sent?.html).toContain(`href="${link}"`);
+      await close();
+    });
+
+    it("sends reset mail as multipart text and HTML (#240)", async () => {
+      const { auth, emailSender, close } = build();
+
+      await auth.options.emailAndPassword.sendResetPassword({
+        user: { id: "u1", email: "reset@example.com" },
+        url: `${BASE_URL}/api/auth/reset-password/xyz?callbackURL=`,
+        token: "xyz",
+      } as never);
+
+      const sent = emailSender.lastSent();
+      const link = `${BASE_URL}/reset-password/xyz`;
+      expect(sent?.text).toContain(link);
+      expect(sent?.html).toContain('<html lang="en">');
+      expect(sent?.html).toContain(`href="${link}"`);
+      await close();
+    });
+
+    it("escapes the sender in the HTML part (#240)", async () => {
+      const { auth, emailSender, close } = build();
+
+      await auth.options.emailAndPassword.sendResetPassword({
+        user: { id: "u1", email: "reset@example.com" },
+        url: `${BASE_URL}/api/auth/reset-password/xyz?callbackURL=`,
+        token: "xyz",
+      } as never);
+
+      const html = emailSender.lastSent()?.html ?? "";
+      expect(html).not.toContain("<no-reply@mail.3moji.me>");
+      expect(html).toContain("3moji &lt;no-reply@mail.3moji.me&gt;");
+      await close();
+    });
+
     it("never puts the raw token in the subject line", async () => {
       const { auth, emailSender, close } = build();
 

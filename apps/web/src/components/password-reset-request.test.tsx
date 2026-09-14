@@ -453,6 +453,7 @@ describe("the password reset request form when the email provider is slow or fai
             to: email,
             subject: "Reset your 3moji password",
             text: "Reset your password: https://3moji.me/reset-password/token",
+            html: '<a href="https://3moji.me/reset-password/token">Reset your password</a>',
           });
         }
         return "accepted";

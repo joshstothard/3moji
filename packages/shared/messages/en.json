@@ -401,5 +401,35 @@
     "body": "We could not show this page just now. Try again, or start again from the home page.",
     "retry": "Try again",
     "home": "Go to the home page"
+  },
+  "Email": {
+    "linkFallback": "If the link does not work, copy this address into your browser:",
+    "from": "From {from}",
+    "verification": {
+      "subject": "Verify your email to claim your 3moji handle",
+      "heading": "Verify your email",
+      "intro": "Confirm this email address to claim your 3moji handle.",
+      "action": "Verify your email",
+      "hold": "Your handle is held for 24 hours while you do. After that it returns to the pool.",
+      "expired": "If the link has expired by the time you get to it, the page will offer you a new one — your handle is still held."
+    },
+    "passwordReset": {
+      "subject": "Reset your 3moji password",
+      "heading": "Reset your password",
+      "intro": "Somebody asked to set a new password for the 3moji account that uses this email address.",
+      "action": "Reset your password",
+      "once": "The link works once, for an hour.",
+      "ignore": "If you did not ask for this, ignore this email and nothing will change."
+    },
+    "claimCollision": {
+      "subject": "Someone tried to sign up with your 3moji email",
+      "heading": "Someone tried to sign up with your email",
+      "intro": "Somebody just tried to claim a 3moji handle using this email address.",
+      "owned": "Nothing changed. You already have an account here, and it owns {handle} so nobody else can take it.",
+      "ownedSpoken": "Nothing changed. You already have an account here, and it owns {handle} — {spoken} — so nobody else can take it.",
+      "forgotten": "If that was you and you have forgotten your password, you can set a new one.",
+      "action": "Set a new password",
+      "notYou": "If it was not you, there is nothing to do."
+    }
   }
 }

@@ -138,7 +138,10 @@ export function createResendEmailSender(
           from: input.from,
           to: [email.to],
           subject: email.subject,
+          // Both parts: Resend sends them as one multipart/alternative email
+          // (#240). A text-only email that is mostly a link reads as junk.
           text: email.text,
+          html: email.html,
         }),
       });
 

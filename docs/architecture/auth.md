@@ -4,26 +4,27 @@
 
 ## Where each piece lives
 
-| Piece                               | Lives in                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------------------- |
-| The auth instance and its settings  | `packages/core/src/auth/create-auth.ts`                                                     |
-| The email port and its two adapters | `packages/core/src/auth/ports/`, `packages/core/src/auth/adapters/`                         |
-| The wiring                          | `apps/web/src/lib/services.ts`, the only module that reads the environment                  |
-| The HTTP surface                    | `apps/web/src/app/api/auth/[...all]/route.ts`                                               |
-| The verification landing            | `apps/web/src/app/claim/verify/route.ts`                                                    |
-| The hold screen and resend          | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`                            |
-| The Claim's rate limit              | `packages/core/src/handle/claim-rate-limit.ts`, `apps/web/src/lib/client-address.ts`        |
-| Better Auth's rate limit            | `packages/core/src/auth/auth-rate-limit.ts`, applied in `create-auth.ts`                    |
-| Hashing Better Auth's counter keys  | `packages/core/src/auth/auth-rate-limit-key.ts`, applied in `create-auth.ts`                |
-| Resend's per-client-address limit   | `packages/core/src/auth/resend-rate-limit.ts`                                               |
-| The sign-in form's limit            | `packages/core/src/auth/sign-in-rate-limit.ts`, gated in `sign-in-action.ts`                |
-| Password reset                      | `packages/core/src/auth/password-reset.ts`, `apps/web/src/app/reset-password/`              |
-| The reset request form's limit      | `packages/core/src/auth/reset-request-rate-limit.ts`                                        |
-| Sending email after the response    | `packages/core/src/ports/background-tasks.ts`, `apps/web/src/lib/after-background-tasks.ts` |
-| Reading the session                 | `apps/web/src/lib/session.ts`, the one place an identity enters the app                     |
-| The signed-in indicator's answer    | `packages/core/src/auth/viewer-summary.ts`, `apps/web/src/lib/viewer.ts`                    |
-| The signed-in indicator             | `apps/web/src/app/api/viewer/route.ts`, `src/components/account-menu.tsx`                   |
-| Signing out                         | `apps/web/src/components/sign-out-action.ts`                                                |
+| Piece                              | Lives in                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| The auth instance and its settings | `packages/core/src/auth/create-auth.ts`                                                     |
+| The email port and its adapters    | `packages/core/src/auth/ports/`, `packages/core/src/auth/adapters/`                         |
+| What every email looks like        | `packages/core/src/auth/email-template.ts`, `account-emails.ts`, `claim-collision.ts`       |
+| The wiring                         | `apps/web/src/lib/services.ts`, the only module that reads the environment                  |
+| The HTTP surface                   | `apps/web/src/app/api/auth/[...all]/route.ts`                                               |
+| The verification landing           | `apps/web/src/app/claim/verify/route.ts`                                                    |
+| The hold screen and resend         | `apps/web/src/app/claim/held/`, `src/components/hold-screen.tsx`                            |
+| The Claim's rate limit             | `packages/core/src/handle/claim-rate-limit.ts`, `apps/web/src/lib/client-address.ts`        |
+| Better Auth's rate limit           | `packages/core/src/auth/auth-rate-limit.ts`, applied in `create-auth.ts`                    |
+| Hashing Better Auth's counter keys | `packages/core/src/auth/auth-rate-limit-key.ts`, applied in `create-auth.ts`                |
+| Resend's per-client-address limit  | `packages/core/src/auth/resend-rate-limit.ts`                                               |
+| The sign-in form's limit           | `packages/core/src/auth/sign-in-rate-limit.ts`, gated in `sign-in-action.ts`                |
+| Password reset                     | `packages/core/src/auth/password-reset.ts`, `apps/web/src/app/reset-password/`              |
+| The reset request form's limit     | `packages/core/src/auth/reset-request-rate-limit.ts`                                        |
+| Sending email after the response   | `packages/core/src/ports/background-tasks.ts`, `apps/web/src/lib/after-background-tasks.ts` |
+| Reading the session                | `apps/web/src/lib/session.ts`, the one place an identity enters the app                     |
+| The signed-in indicator's answer   | `packages/core/src/auth/viewer-summary.ts`, `apps/web/src/lib/viewer.ts`                    |
+| The signed-in indicator            | `apps/web/src/app/api/viewer/route.ts`, `src/components/account-menu.tsx`                   |
+| Signing out                        | `apps/web/src/components/sign-out-action.ts`                                                |
 
 **The Next.js cookie plugin is the boundary's one interesting case.** It comes from `better-auth/next-js`, which `packages/core` may not import, so `createAuth` accepts plugins from its caller and `apps/web` passes it in. The boundary holds without giving up the plugin.
 
@@ -153,6 +154,18 @@ What a failure costs the person, and how they recover:
 - **Collision notice:** the owner is not told somebody used their address. Nothing depends on it.
 
 **Where `after()` runs is the platform's promise, not a tested one.** On Vercel, `after()` callbacks run under `waitUntil` once the response has been sent, within the function's maximum duration. The tests prove every send is handed to `after()` and that the answer comes back before any send runs; they do not measure a deployment. A host that held the response open until its callbacks finished would bring the timing difference back without anything failing.
+
+### What every email looks like
+
+**Every email is multipart: a text part and an HTML part with the same content** ([#240](https://github.com/joshstothard/3moji/issues/240)). The first live verification email was text only, little more than a long bare link, and it landed in Outlook's Junk folder with SPF, DKIM and DMARC all passing. `OutboundEmail.html` is required, not optional, so an email cannot be added without one, and the Resend adapter posts `text` and `html` together.
+
+- **One renderer.** `renderEmail` in `email-template.ts` takes plain-text content (subject, heading, paragraphs, one action link, the sender) and builds both parts. `account-emails.ts` builds the verification and password-reset emails from it, and `claim-collision.ts` the collision notice.
+- **The copy is i18n keys.** Every word is in the `Email` namespace of `packages/shared/messages/en.json`. `packages/core` imports it through the `@template/shared/messages/en.json` export, and `{name}` placeholders are filled by `fillCopy`, which inserts values literally.
+- **Every value is HTML-escaped**, the link included, in the `href` and in the address written out as text. The sender, `3moji <no-reply@…>`, is the value that proves it matters: unescaped, its angle brackets would hide the rest of the line. An action link that is not `http` or `https` throws, without repeating it.
+- **The HTML is plain on purpose.** `lang="en"`, a heading, paragraphs, one link whose text says what it does, and the same address as text for a client that strips links. Inline styles only, in colours above 7:1 on white, and the link is underlined rather than told apart by colour. No images, no remote CSS, and no open or click tracking, so it reads the same with images off.
+- **The text part writes the link once**, beside its label. The integration tests and the E2E seed read the token out of the text part, and some assert it holds exactly one address.
+
+When an email lands in junk anyway, see [email not arriving § 5d](../runbooks/email-not-arriving.md#5d-landing-in-junk).
 
 ### Signing in before verifying
 

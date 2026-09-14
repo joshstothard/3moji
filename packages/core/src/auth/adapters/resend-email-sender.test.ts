@@ -4,6 +4,7 @@ const EMAIL = {
   to: "someone@example.com",
   subject: "Verify your email",
   text: "http://localhost:3000/verify?token=abc",
+  html: '<!doctype html><html lang="en"><p><a href="http://localhost:3000/verify?token=abc">Verify</a></p></html>',
 } as const;
 
 interface RecordedCall {
@@ -58,6 +59,8 @@ describe("createResendEmailSender", () => {
       to: [EMAIL.to],
       subject: EMAIL.subject,
       text: EMAIL.text,
+      // Both parts, so the email is multipart (#240).
+      html: EMAIL.html,
     });
   });
 
