@@ -29,7 +29,12 @@ import {
   measureBorderContrast,
   measureContrast,
 } from "./support/contrast";
-import { categoryTabs, dismissClaimSheet, pickEmoji } from "./support/picker";
+import {
+  categoryTabs,
+  dismissClaimSheet,
+  pickEmoji,
+  waitForClaimForm,
+} from "./support/picker";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -309,6 +314,9 @@ test("the claim form's field borders meet non-text contrast", async ({
   page,
 }) => {
   await page.goto(unclaimedHandlePath());
+  // On a phone, hydration moves the form into the claim sheet (#263); measure
+  // the one that stays, not the inline one on its way out.
+  await waitForClaimForm(page);
 
   await expectBorderIdentifiesControl(
     page.getByRole("textbox", { name: claimCopy.claimEmailLabel }),
@@ -324,6 +332,7 @@ test("the claim form's privacy and terms links meet text contrast (#198)", async
   page,
 }) => {
   await page.goto(unclaimedHandlePath());
+  await waitForClaimForm(page);
 
   for (const name of [claimCopy.claimPrivacyLink, claimCopy.claimTermsLink]) {
     const link = page.getByRole("link", { name });

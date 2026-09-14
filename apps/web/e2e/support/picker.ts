@@ -76,7 +76,7 @@ const PHONE_BELOW = 768;
  * `composer.spec.ts` is where the sheet itself is proved.
  */
 export async function dismissClaimSheet(page: Page): Promise<void> {
-  if ((page.viewportSize()?.width ?? PHONE_BELOW) >= PHONE_BELOW) return;
+  if (!isPhone(page)) return;
   await expect(page.getByText(copy.checking, { exact: true })).toHaveCount(0);
   const available = page.getByText(copy.stateAvailable, { exact: true });
   if (!(await available.isVisible())) return;
@@ -85,4 +85,29 @@ export async function dismissClaimSheet(page: Page): Promise<void> {
   await expect(sheet).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
+}
+
+function isPhone(page: Page): boolean {
+  return (page.viewportSize()?.width ?? PHONE_BELOW) < PHONE_BELOW;
+}
+
+/**
+ * Waits until an unclaimed Handle's claim form is where it will stay, so a
+ * spec that measures the form does not measure a node being replaced
+ * ([#263](https://github.com/joshstothard/3moji/issues/263)).
+ *
+ * The server renders the form inline in step 2 on every width. On a phone,
+ * hydration then moves it into the claim sheet: the inline form is unmounted
+ * and a new one mounted in the dialog. A measurement that lands between the
+ * two reads a detached element, whose computed style is empty. On a wider
+ * screen the form never moves, so this only waits for it to be visible.
+ */
+export async function waitForClaimForm(page: Page): Promise<void> {
+  const form = page.getByRole("form", { name: en.Claim.claimHeading });
+  if (isPhone(page)) {
+    await expect(
+      page.getByRole("dialog", { name: en.Claim.claimHeading }),
+    ).toBeVisible();
+  }
+  await expect(form).toBeVisible();
 }
