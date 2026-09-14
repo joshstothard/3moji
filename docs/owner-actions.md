@@ -27,7 +27,7 @@ Items are grouped by when they have to happen:
     - `BETTER_AUTH_SECRET`: at least 32 random characters. Generate it, never make one up.
     - `RESEND_API_KEY`: from Resend.
     - `RESEND_FROM`: the sender, on the Resend subdomain.
-    - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown. See the report mailbox item below.
+    - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown, and the privacy notice and terms show a bracketed placeholder instead of a contact link ([#242](https://github.com/joshstothard/3moji/issues/242)). See the report mailbox item and the legal item below.
     - `NEXT_PUBLIC_APP_VERSION` is supplied by the build and needs nothing from you. **Never set `TEST_EMAIL_SENDER` on Vercel**: it's test-only, and the app refuses to start with it set there.
     - `PRODUCTION_DATABASE_HOST`: **set it for Preview** ([#32](https://github.com/joshstothard/3moji/issues/32)). The host name of the production database, the part after `@` and before `/` in Production's `DATABASE_URL_UNPOOLED` (the pooled host works too). Copy it from the Vercel or Neon dashboard, never into the repo, an issue or a chat. Every preview build compares its own database against it and **fails if it is production, or if this is unset**, so a preview can never migrate or use production data. It's a host name, not a password, but treat it as private.
     - Vercel's own `VERCEL_ENV`, `VERCEL_URL` and `VERCEL_BRANCH_URL` need "Automatically expose System Environment Variables" left on. A preview builds its verification and reset links from them, because `BETTER_AUTH_URL` holds the production address.
@@ -142,16 +142,17 @@ Items are grouped by when they have to happen:
 
 - [ ] **Review the privacy notice and terms before removing the draft marker**
   - **What:** `/privacy` and `/terms` show "Draft — pending owner review" until you remove the marker (`DraftMarker` in `apps/web/src/components/legal-document.tsx`). Answer these first. The ICO fee and the Online Safety Act are in the item above.
-    1. **Operator identity and contact:** the controller name and contact address that replace `Legal.operatorPlaceholder` and `Legal.contactPlaceholder`. The contact could be the `REPORT_CONTACT_EMAIL` mailbox.
-    2. **Processor locations and transfers:** where Vercel, Neon and Resend process data, and the safeguards for any transfer outside the UK. Nothing in the repo establishes this.
-    3. **Lawful basis for each purpose:** as drafted, contract for the account and Profile, and legitimate interests for sessions, counters and logs.
+    1. ~~**Operator identity and contact**~~ — answered 2026-09-14 ([#242](https://github.com/joshstothard/3moji/issues/242)). The pages name Joshua Stothard. The contact is **`REPORT_CONTACT_EMAIL`**, rendered as a `mailto:` link when the page loads, so the same mailbox now receives abuse reports _and_ privacy and terms enquiries. **You set its value in the Vercel project's environment variables**; it is never committed. Unset or refused, the pages show the bracketed contact placeholder.
+    2. **Processor locations and transfers:** filled from the providers' own pages in [#242](https://github.com/joshstothard/3moji/issues/242). **Still yours:** check which region the Neon database is in (Neon console, project settings) and replace the bracketed Neon region placeholder. Also confirm the safeguard for transfers to Neon and replace its placeholder: [Databricks' DPF notice](https://www.databricks.com/legal/dpf) names "Databricks, Inc., Neon, LLC" under the UK Extension, but `neon.com/dpa` names no transfer mechanism, so it wasn't verified that this covers a Neon Free account.
+    3. ~~**Lawful basis for each purpose**~~ — filled in [#242](https://github.com/joshstothard/3moji/issues/242): contract for the account, Handle and Profile; legitimate interests for security, rate limits and logs, and for page-view analytics.
     4. **`verification_dispatch` retention:** kept for the life of the account. Should it be pruned?
-    5. **Log and backup retention:** how long Vercel logs and Neon backups keep data on your plans. The page says only "for a limited time".
+    5. ~~**Log and backup retention**~~ — filled in [#242](https://github.com/joshstothard/3moji/issues/242): Vercel runtime logs 1 hour, Vercel analytics at least a month, Neon history 6 hours, Resend 30 days. **If nightly backups are added, the privacy notice must say where they are kept and for how long.**
     6. **Cookies:** confirm that no analytics or other cookies are added before launch. Today there are only Better Auth's session cookies. Vercel Web Analytics, added in PR [#238](https://github.com/joshstothard/3moji/pull/238), does not use cookies, so it does not change this.
-    7. **Minimum age** for claiming a Handle (a placeholder in the terms).
-    8. **Governing law:** England and Wales, Scotland or Northern Ireland. Also the "last updated" dates.
-    9. **Limitation of liability wording**, ideally with legal advice.
+    7. ~~**Minimum age**~~ — set at **16** by the orchestrator in [#242](https://github.com/joshstothard/3moji/issues/242), because you had no view. The reason: every Profile is public, can carry any outbound link, and nobody moderates Profiles, so the service is not suited to younger children. Change the number in the terms if you disagree.
+    8. **Governing law:** the terms now say England and Wales. **This is an assumption for you to confirm**, or change to Scotland or Northern Ireland. The "last updated" dates are set to 14 September 2026.
+    9. **Limitation of liability wording:** short plain wording is drafted in [#242](https://github.com/joshstothard/3moji/issues/242). It does not exclude liability for death or personal injury caused by negligence, for fraud, or for anything the law does not allow to be excluded. Legal advice on it is still recommended.
     10. **The "within one month" reply** to rights requests, the UK GDPR default: confirm you can meet it.
+  - **Follow-up once nightly backups go live** ([#206](https://github.com/joshstothard/3moji/issues/206), PR [#250](https://github.com/joshstothard/3moji/pull/250)): the privacy notice must name Cloudflare R2 as the backup store, with 30-day retention. This is for your review, and isn't yet in the copy.
   - **Why it matters:** the pages are an agent's plain-English draft, and nobody with legal training has reviewed them. The footer and claim form now link to them from every page ([#198](https://github.com/joshstothard/3moji/issues/198)).
   - **Options:** answer each yourself, or take the list to a legal review.
   - **Recommendation:** none recorded beyond the item above.
