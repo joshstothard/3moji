@@ -62,7 +62,18 @@ async function recordLayoutShifts(page: Page): Promise<void> {
               .filter((attribute) => attribute.name.startsWith("data-"))
               .map((attribute) => attribute.name)
               .join(",");
-            return `${node.tagName.toLowerCase()}${marker === "" ? "" : `[${marker}]`}`;
+            // Where it is and what it is called, so a report names the control
+            // that moved rather than only its tag.
+            const place =
+              node.closest("nav") !== null
+                ? "nav"
+                : node.closest("[data-composer]") !== null
+                  ? "composer"
+                  : "page";
+            const name = (node.getAttribute("aria-label") ?? node.textContent)
+              .trim()
+              .slice(0, 30);
+            return `${place}: ${node.tagName.toLowerCase()}${marker === "" ? "" : `[${marker}]`}${name === "" ? "" : ` "${name}"`}`;
           }),
         });
       }

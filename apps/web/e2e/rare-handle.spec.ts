@@ -227,6 +227,13 @@ test("the rare badge meets text contrast, and the builder passes axe with it sho
   console.log(account);
   expect(measured.ratio, account).toBeGreaterThanOrEqual(TEXT_CONTRAST);
 
+  // From the top, as `composer.spec.ts` checks the page: scrolled, the grid
+  // passes under the phone's sticky Handle bar, and axe walks past the bar's
+  // opaque paper to a grid cell behind it that does not cover the bar's text,
+  // and reports that text "partially overlaps other elements".
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
   const report = await checkPage(page);
   expect(report.violations, "axe violations").toEqual([]);
   expect(report.incomplete, "axe incomplete results").toEqual([]);
