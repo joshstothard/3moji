@@ -27,7 +27,7 @@ Items are grouped by when they have to happen:
     - `BETTER_AUTH_SECRET`: at least 32 random characters. Generate it, never make one up.
     - `RESEND_API_KEY`: from Resend.
     - `RESEND_FROM`: the sender, on the Resend subdomain.
-    - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown. See the report mailbox item below.
+    - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown, and the privacy notice and terms show a bracketed placeholder instead of a contact link ([#242](https://github.com/joshstothard/3moji/issues/242)). See the report mailbox item and the legal item below.
     - `NEXT_PUBLIC_APP_VERSION` is supplied by the build and needs nothing from you. **Never set `TEST_EMAIL_SENDER` on Vercel**: it's test-only, and the app refuses to start with it set there.
     - `PRODUCTION_DATABASE_HOST`: **set it for Preview** ([#32](https://github.com/joshstothard/3moji/issues/32)). The host name of the production database, the part after `@` and before `/` in Production's `DATABASE_URL_UNPOOLED` (the pooled host works too). Copy it from the Vercel or Neon dashboard, never into the repo, an issue or a chat. Every preview build compares its own database against it and **fails if it is production, or if this is unset**, so a preview can never migrate or use production data. It's a host name, not a password, but treat it as private.
     - Vercel's own `VERCEL_ENV`, `VERCEL_URL` and `VERCEL_BRANCH_URL` need "Automatically expose System Environment Variables" left on. A preview builds its verification and reset links from them, because `BETTER_AUTH_URL` holds the production address.
