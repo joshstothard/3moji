@@ -7,10 +7,12 @@ import en from "../../../../packages/shared/messages/en.json";
  * The branded 404 (#203), for an unknown path and for every `notFound()`.
  *
  * It renders inside the root layout, so it has the navbar and footer. **It
- * reads nothing from the request**: a response that became dynamic could be
+ * reads nothing from the request**: a page that awaited request data could be
  * streamed, and a streamed response has sent its status before this page can
  * set one, so the 404 would reach the wire as a 200. `e2e/error-pages.spec.ts`
- * asserts the status.
+ * asserts the status. Since #205 the root layout renders every page per request
+ * so each carries its CSP nonce; that is not streaming, and the 404 still
+ * answers 404 in a production build (`e2e/content-security-policy.production.ts`).
  *
  * It changes no route's answer. `[handle]` still decides what is a Handle, a
  * word alias or neither; a reserved Handle such as `/🍕🍕🍕` still resolves with

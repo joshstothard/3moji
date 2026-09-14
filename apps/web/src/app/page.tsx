@@ -17,7 +17,8 @@ import en from "../../../../packages/shared/messages/en.json";
  * is inherited by every page, Profiles included. With no configured origin it
  * is omitted, like every absolute URL in the card (`lib/og/metadata.ts`), so
  * Next.js never resolves one against a guessed host. Read when the page renders,
- * not at module scope; the home page is static, so that is at build time.
+ * not at module scope; since #205 every page renders per request, so that is at
+ * runtime.
  */
 export function generateMetadata(): Metadata {
   const origin = siteOrigin();

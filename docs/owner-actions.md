@@ -205,17 +205,6 @@ Items are grouped by when they have to happen:
   - **Blocks:** one of Phase 4's acceptance criteria, which stays unticked until then.
   - **Detail:** [#121](https://github.com/joshstothard/3moji/issues/121).
 
-- [ ] **Choose how strict the Content Security Policy is ([#205](https://github.com/joshstothard/3moji/issues/205))**
-  - **What:** A strict script CSP needs a per-request nonce. Hashes are impractical, because Next's inline page-data script changes per page and per build. A nonce only exists at request time, so a page built ahead of time can't carry one.
-  - **Why it matters:** the CSP is the main defence against cross-site scripting on Profiles, which show user content. The strict version costs CDN caching on `/`, `/privacy`, `/terms` and `/_not-found`, which [#204](https://github.com/joshstothard/3moji/issues/204) made static. The Profile is unaffected: it is already not cached.
-  - **Options:**
-    1. **Nonce everywhere.** Strict on every page; those four pages render per request.
-    2. **Split by path.** Nonce on dynamic routes, `'unsafe-inline'` scripts on the four static pages only. They stay static, but this breaks #205's "no `unsafe-inline` for scripts" criterion as worded.
-    3. **Hash manifest.** A post-build step hashes each static page's inline scripts. Strict and static, but every build relies on a fragile step.
-  - **Recommendation:** option 1. Losing CDN caching on four small static pages costs little at MVP scale.
-  - **Blocks:** the CSP part of #205. HSTS, `nosniff`, `Referrer-Policy` and `X-Frame-Options` already ship without it.
-  - **Detail:** [the #205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123), with the measurements, the recommended policy and the open questions.
-
 - [ ] **Accept that a failed email no longer tells the person it failed**
   - **What:** Since [#216](https://github.com/joshstothard/3moji/issues/216), reset links, verification links and "you already have an account" notices are sent after the page has answered. If the email provider fails, the person still sees "a link is on its way", and the failure shows up only in the logs, as `auth_email_send_failed`, `claim_collision_email_failed` or `claim_verification_email_failed`.
   - **Why it matters:** before, a provider outage showed "something went wrong", but only for registered addresses, which told anyone who asked that the address had an account. Now nobody is told, including the real owner, who waits for an email that never comes.
@@ -295,3 +284,7 @@ Recorded in the [workstream](workstreams/3moji-mvp.md) Decision log on 2026-09-1
 - **Three-of-a-kind Handles stay claimable**, and an available one gets a short "rare" animation in the builder.
 - **Error tracking uses Vercel's own logs**, not a third-party service. The fuller version waits on Vercel Pro.
 - **The agent drafts the privacy notice and terms, and you review them** before launch.
+
+Recorded in the Decision log on 2026-09-14:
+
+- **The Content Security Policy is a per-request nonce on every page** (option 1 of [#205](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)). `/`, `/privacy`, `/terms` and the 404 render per request and lose CDN caching in exchange for a strict policy with no `unsafe-inline` script. See [Security headers](architecture/system-overview.md#security-headers).

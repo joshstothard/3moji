@@ -24,6 +24,7 @@ Thumbs.db
 # Playwright test output — traces, screenshots and the HTML reporter
 test-results/
 playwright-report/
+playwright-report-production/
 
 # Playwright MCP output — screenshots saved to repo root by /run skill
 .playwright-mcp/
