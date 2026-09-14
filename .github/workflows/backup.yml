@@ -1,0 +1,146 @@
+name: Nightly Database Backup
+
+# Takes a logical dump of the production database every night, encrypts it to
+# the owner's age public key, and uploads it to a private Cloudflare R2 bucket
+# that keeps each object for 30 days (#206). Restoring is
+# docs/runbooks/restore-from-backup.md § 5; setup is docs/owner-actions.md,
+# "Where nightly database backups are stored".
+#
+# THIS REPOSITORY, ITS ACTIONS LOGS AND ITS ARTIFACTS ARE PUBLIC. So:
+#
+# - The dump never touches the workspace and is never an artifact. It is piped
+#   from pg_dump straight into age, written encrypted under $RUNNER_TEMP, and
+#   removed at the end even when a step fails.
+# - No step echoes a secret, a variable, or their names, and no step turns on
+#   shell tracing. Secrets and variables reach a script only through `env:`, never
+#   pasted in with an expression. scripts/backup-plan.mjs names a missing
+#   setting; it never prints a value.
+# - Repository VARIABLES are not masked in logs. Only the R2 account ID, the
+#   bucket name and the age PUBLIC key are variables. The connection string and
+#   the R2 keys are secrets. The age private key never goes to GitHub at all.
+#
+# Guarded by scripts/backup-workflow-guard.test.mjs; every decision is tested
+# in scripts/backup-plan.test.mjs.
+#
+# Unlike the other scheduled workflows (docs/development/ci-cd.md), this
+# schedule is on: the repository is public, so the minutes are free, and until
+# the owner sets BACKUPS_ENABLED=true every run is a green no-op that stops
+# after the decide step.
+
+on:
+  schedule:
+    # 03:17 UTC, off the hour, when GitHub's scheduler is least congested.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Back up the production database
+    # Never on a fork, and never from a branch: a manual run from another ref
+    # could run a modified copy of this file with the production secrets.
+    if: github.repository == 'joshstothard/3moji' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The encrypted dump, outside the workspace.
+      DUMP_FILE: ${{ runner.temp }}/3moji-backup.dump.age
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      # Skips (green) until BACKUPS_ENABLED is true; fails naming any missing or
+      # malformed setting once it is. Writes proceed=true|false.
+      - name: Decide whether to back up
+        id: decide
+        env:
+          BACKUPS_ENABLED: ${{ vars.BACKUPS_ENABLED }}
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: node scripts/backup-plan.mjs decide
+
+      # pg_dump must be at least the server's major version, or it refuses to
+      # dump. Neon supports Postgres 14 to 18 and new projects default to 18
+      # (neon.com/docs/cli/projects, read 2026-09-14), so the version-18 client
+      # covers every server Neon can run. Installed from the PostgreSQL
+      # project's own apt repository (wiki.postgresql.org/wiki/Apt), because
+      # Ubuntu's archive carries an older major. age is in Ubuntu's archive.
+      - name: Install pg_dump 18 and age
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error --location \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          codename="$(. /etc/os-release && printf '%s' "$VERSION_CODENAME")"
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$codename" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.sources > /dev/null
+          sudo apt-get update --quiet
+          sudo apt-get install --yes --quiet --no-install-recommends postgresql-client-18 age
+          /usr/lib/postgresql/18/bin/pg_dump --version
+          age --version
+
+      # Custom format, so pg_restore can restore one table on its own. The
+      # pipe goes straight into age, so the plaintext dump is never on disk;
+      # pipefail makes a failed pg_dump fail the step even though age succeeds.
+      - name: Dump and encrypt
+        if: steps.decide.outputs.proceed == 'true'
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          umask 077
+          case "$DUMP_FILE" in
+            "$RUNNER_TEMP"/*) ;;
+            *) exit 1 ;;
+          esac
+          /usr/lib/postgresql/18/bin/pg_dump --format=custom --no-owner --no-privileges --dbname="$BACKUP_DATABASE_URL" \
+            | age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" --output "$DUMP_FILE"
+          node scripts/backup-plan.mjs check-size "$DUMP_FILE"
+
+      # R2's S3-compatible endpoint with the AWS CLI already on the runner.
+      # Region `auto` is what Cloudflare documents. The checksum settings stop
+      # newer AWS CLIs sending checksum headers R2 has rejected in the past.
+      - name: Upload to R2 and confirm
+        if: steps.decide.outputs.proceed == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          AWS_EC2_METADATA_DISABLED: "true"
+          AWS_PAGER: ""
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          key="$(node scripts/backup-plan.mjs key)"
+          size="$(node scripts/backup-plan.mjs check-size "$DUMP_FILE")"
+          aws s3api put-object --endpoint-url "$endpoint" --bucket "$R2_BUCKET" \
+            --key "$key" --body "$DUMP_FILE" --content-type application/octet-stream > /dev/null
+          remote="$(aws s3api head-object --endpoint-url "$endpoint" --bucket "$R2_BUCKET" \
+            --key "$key" --query ContentLength --output text)"
+          node scripts/backup-plan.mjs check-upload "$size" "$remote"
+
+      - name: Remove the encrypted dump
+        if: always()
+        run: rm -f "$RUNNER_TEMP/3moji-backup.dump.age"

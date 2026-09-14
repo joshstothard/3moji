@@ -353,7 +353,7 @@ _Site hygiene:_
 
 _Operations:_
 
-- [ ] A scheduled GitHub Actions job takes a nightly logical backup of the production database to a private, non-public destination, echoes no secret, and commits no dump to this public repository. Planning picks the destination (Open questions). **Not met:** blocked on #32.
+- [ ] A scheduled GitHub Actions job takes a nightly logical backup of the production database to a private, non-public destination, echoes no secret, and commits no dump to this public repository. The destination is an age-encrypted dump in a private Cloudflare R2 bucket (Decision log, 2026-09-14). **Not met:** the workflow is built (#206); the owner's setup, first green run and test restore are outstanding.
 - [ ] An uptime check watches `/` and one Profile. **Not met:** waits on #32.
 - [x] Runbooks exist in `docs/runbooks/` for "site down", "email not arriving" and "restore from backup".
 - [x] Error tracking is recorded as waiting on the Vercel Pro upgrade.
@@ -370,7 +370,7 @@ _Operations:_
 - #203 Add branded not-found and error pages — done: the pages merged in PR #228, and server-side render-error logging through `onRequestError` in PR #232
 - #204 Add a favicon, robots.txt, sitemap and home-page preview metadata — done
 - #205 Send security headers on every response — done: four headers merged in PR #223, and the nonce CSP (option 1) in PR #235
-- #206 Back up the production database nightly — blocked on #32
+- #206 Back up the production database nightly — in progress: the workflow and the restore runbook are in review; closes after the owner's setup, first green run and a test restore ([owner actions](../owner-actions.md))
 - #207 Add uptime checks and the operations runbooks — blocked on #32: the runbooks merged in PRs #224 and #227, and the uptime check waits on #32
 - #233 Render the Handle route's 404 on the server so it works without JavaScript — deferred to Backlog: a Next.js 16.3.5 limitation (a thrown `notFound()` renders the `__next_error__` shell without JavaScript); the only fix is proxy routing, not worth it for the MVP; revisit if Next.js changes or post-launch traffic shows no-JS visitors hitting it ([deferral comment](https://github.com/joshstothard/3moji/issues/233#issuecomment-5660657064))
 
@@ -399,7 +399,7 @@ Every decision and action only the repo owner can take, including the questions 
 - Should the **canonical** word alias prefer a shorter unambiguous synonym where one exists? [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3 joins the `displayName` slugs, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` is accepted on input but names eight Handles.
 - Are 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 the right platform-owned Reserved Handles? They were chosen while implementing [#52](https://github.com/joshstothard/3moji/issues/52) and have never been confirmed as a product decision. 🧊🧊🧊 is deliberately not among them, because ADR-0004 decision 2 names it freely claimable.
 - How is launch-day email volume handled? Resend's free plan caps email at 100 a day — one verification email per claim, plus resends and collision notices — so on launch day claimant 101 gets no email and their hold expires. The owner is undecided. **Recommendation:** launch quietly on Free, log the daily send count, and upgrade to Resend Pro ($20/month, 50,000 emails) together with Vercel Pro before any public announcement.
-- Where do nightly database backups live? Phase 8 needs a private, non-public destination, and planning must pick it.
+- Where do nightly database backups live? **Decided 2026-09-14:** an age-encrypted dump in a private Cloudflare R2 bucket (Decision log).
 
 ## Decision log
 
@@ -427,6 +427,7 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — The production CSP smoke test runs in Chromium only. Decided by the repo owner.
 - 2026-09-14 — The production smoke test runs `next start`, not the Docker image's standalone server, because the site deploys to Vercel. Decided by the orchestrator.
 - 2026-09-14 — #233 (server-rendered Handle-route 404 without JavaScript) deferred as a Next.js limitation. Decided by the orchestrator, for owner review.
+- 2026-09-14 — Nightly database backups are an age-encrypted `pg_dump` in a private Cloudflare R2 bucket, kept 30 days by a bucket lifecycle rule. The dump is encrypted to an age public key held as a repository variable; the private key stays only in the owner's password manager and never goes to GitHub. A private GitHub repository was the alternative, and Actions artifacts were ruled out as public. Decided by the orchestrator at the owner's request ([#206](https://github.com/joshstothard/3moji/issues/206)).
 
 ## Changelog
 
