@@ -260,12 +260,20 @@ test("the public Profile is the same bytes and headers for a signed-out visitor,
   ]);
 
   /**
-   * The body with `next dev`'s per-request id blanked, and nothing else.
+   * The body with the two per-request tokens blanked, and nothing else.
    *
    * `next dev` writes `self.__next_r="<random>"` into a dev-only inline script,
    * so two requests from the same visitor can differ by that token alone.
    * `next start` does not emit it. **At most one occurrence is replaced**, so
    * it cannot hide any other difference.
+   *
+   * Every script also carries the request's CSP nonce (#205), fresh per request
+   * and the same for every visitor. It appears as each tag's `nonce="…"` and,
+   * escaped, as a `"nonce"` field in the RSC payload that repeats those tags.
+   * **Only the nonce this response's own `Content-Security-Policy` names is
+   * blanked**, every `nonce` attribute must be that one value, and every
+   * occurrence must be in one of those two places, so a nonce anywhere else, or
+   * any other difference, still fails the comparison.
    */
   const normalised = async (response: APIResponse): Promise<string> => {
     const body = (await response.body()).toString("utf8");
@@ -273,7 +281,27 @@ test("the public Profile is the same bytes and headers for a signed-out visitor,
     expect(tokens.length, "more than one dev request id").toBeLessThanOrEqual(
       1,
     );
-    return body.replace(/self\.__next_r="[^"]*"/, 'self.__next_r=""');
+    const nonce = /'nonce-([A-Za-z0-9+/]+={0,2})'/.exec(
+      response.headers()["content-security-policy"] ?? "",
+    )?.[1];
+    expect(nonce, "a CSP nonce on the Profile").toBeDefined();
+    const attributes = new Set(
+      [...body.matchAll(/nonce="([^"]*)"/g)].map((match) => match[1]),
+    );
+    expect([...attributes], "one nonce, the policy's, in the HTML").toEqual([
+      nonce,
+    ]);
+    const value = nonce ?? "";
+    const occurrences = body.split(value).length - 1;
+    const asAttribute = body.split(`nonce="${value}"`).length - 1;
+    const inPayload = body.split(`\\"nonce\\":\\"${value}`).length - 1;
+    expect(
+      asAttribute + inPayload,
+      "the nonce appears only as a nonce attribute or payload field",
+    ).toBe(occurrences);
+    return body
+      .replace(/self\.__next_r="[^"]*"/, 'self.__next_r=""')
+      .replaceAll(value, "");
   };
 
   const asked = async (cookie: string | undefined): Promise<APIResponse> => {

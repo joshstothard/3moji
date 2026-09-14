@@ -205,17 +205,6 @@ Items are grouped by when they have to happen:
   - **Blocks:** one of Phase 4's acceptance criteria, which stays unticked until then.
   - **Detail:** [#121](https://github.com/joshstothard/3moji/issues/121).
 
-- [ ] **Choose how strict the Content Security Policy is ([#205](https://github.com/joshstothard/3moji/issues/205))**
-  - **What:** A strict script CSP needs a per-request nonce. Hashes are impractical, because Next's inline page-data script changes per page and per build. A nonce only exists at request time, so a page built ahead of time can't carry one.
-  - **Why it matters:** the CSP is the main defence against cross-site scripting on Profiles, which show user content. The strict version costs CDN caching on `/`, `/privacy`, `/terms` and `/_not-found`, which [#204](https://github.com/joshstothard/3moji/issues/204) made static. The Profile is unaffected: it is already not cached.
-  - **Options:**
-    1. **Nonce everywhere.** Strict on every page; those four pages render per request.
-    2. **Split by path.** Nonce on dynamic routes, `'unsafe-inline'` scripts on the four static pages only. They stay static, but this breaks #205's "no `unsafe-inline` for scripts" criterion as worded.
-    3. **Hash manifest.** A post-build step hashes each static page's inline scripts. Strict and static, but every build relies on a fragile step.
-  - **Recommendation:** option 1. Losing CDN caching on four small static pages costs little at MVP scale.
-  - **Blocks:** the CSP part of #205. HSTS, `nosniff`, `Referrer-Policy` and `X-Frame-Options` already ship without it.
-  - **Detail:** [the #205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123), with the measurements, the recommended policy and the open questions.
-
 - [ ] **Accept that a failed email no longer tells the person it failed**
   - **What:** Since [#216](https://github.com/joshstothard/3moji/issues/216), reset links, verification links and "you already have an account" notices are sent after the page has answered. If the email provider fails, the person still sees "a link is on its way", and the failure shows up only in the logs, as `auth_email_send_failed`, `claim_collision_email_failed` or `claim_verification_email_failed`.
   - **Why it matters:** before, a provider outage showed "something went wrong", but only for registered addresses, which told anyone who asked that the address had an account. Now nobody is told, including the real owner, who waits for an email that never comes.
@@ -223,24 +212,6 @@ Items are grouped by when they have to happen:
   - **Recommendation:** accept it, and alert on those three events when Phase 8's error tracking lands. Every one of those emails can be asked for again from the page the person is already on.
   - **Blocks:** nothing.
   - **Detail:** [Authentication](architecture/auth.md#what-an-operator-sees-when-a-send-fails).
-
-- [ ] **Allow an instrumentation file that only logs request errors ([#203](https://github.com/joshstothard/3moji/issues/203), [#148](https://github.com/joshstothard/3moji/issues/148))**
-  - **What:** Add `apps/web/src/instrumentation.ts` exporting only Next's `onRequestError`, delegating to the handler already merged in `apps/web/src/lib/request-error.ts`. It has no `register()` and no tracing import. Today the file doesn't exist, because `scripts/tracing-guard.test.mjs` fails the build whenever it does, pending the tracing decision in #148.
-  - **Why it matters:** without it, a page that fails to render on the server writes no structured log line. The branded error page is shown, but nothing with a correlation id reaches the logs, so the failure can't be traced. `error.tsx` runs in the browser and can't do this job.
-  - **Options:**
-    1. **Allow it**, and tighten `scripts/tracing-guard.test.mjs` to forbid only `register()` and tracing imports. The guard's reason, that OpenTelemetry spans record drizzle's bound parameters, still holds, because neither is allowed.
-    2. **Wait for #148**, and leave server render errors unlogged until then.
-  - **Recommendation:** allow it. It's a three-line file plus a guard change, and it keeps the protection the guard exists for.
-  - **Blocks:** the last acceptance criterion of #203, which stays open until this is decided.
-  - **Detail:** [the #203 comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457), [system overview](architecture/system-overview.md) § Error tracking.
-
-- [ ] **Decide whether the Handle-path spoken form needs a new ADR ([#201](https://github.com/joshstothard/3moji/issues/201))**
-  - **What:** Typing `3moji.me/three-ice-cubes` still 404s. The spoken form already works in the `/find` lookup (PR [#217](https://github.com/joshstothard/3moji/pull/217)), which needed no ADR.
-  - **Why it matters:** accepting the spoken form in the path reverses ADR-0008 decision 2, which rejected a hyphen-joined address as ambiguous. Phase 8's acceptance criterion asks for the path form, so the criterion and the ADR disagree until you pick one.
-  - **Options:** reword the Phase 8 criterion to the `/find` lookup only; authorise a short ADR where the spoken path redirects to a dotted alias and never renders; authorise a fuller ADR where the spoken path is a real address; or drop the path form.
-  - **Recommendation:** keep `/find` only, and write the redirect-only ADR (run `/adr`) only if the typed path must also work.
-  - **Blocks:** #201 and one Phase 8 acceptance criterion.
-  - **Detail:** [the #201 comment](https://github.com/joshstothard/3moji/issues/201#issuecomment-5656238125), [ADR-0008](adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md).
 
 - [ ] **Review: how axe checks the open account menu ([#225](https://github.com/joshstothard/3moji/pull/225))**
   - **What:** The orchestrator took this call overnight. When an open dropdown covers page text, axe checks only the open menu panel, and the whole page is still checked with the menu closed. It uses a new optional `include` on `checkPage` in `apps/web/e2e/support/axe.ts`, and every other caller is unchanged.
@@ -295,3 +266,8 @@ Recorded in the [workstream](workstreams/3moji-mvp.md) Decision log on 2026-09-1
 - **Three-of-a-kind Handles stay claimable**, and an available one gets a short "rare" animation in the builder.
 - **Error tracking uses Vercel's own logs**, not a third-party service. The fuller version waits on Vercel Pro.
 - **The agent drafts the privacy notice and terms, and you review them** before launch.
+
+Recorded in the Decision log on 2026-09-14:
+
+- **The spoken form isn't resolved in the path** ([#201](https://github.com/joshstothard/3moji/issues/201)). `/three-ice-cubes` stays a 404 and ADR-0008 stands. Spoken input works in the Find a Handle lookup, which the home page and the 404 page both offer. Revisit if post-launch logs show 404s on spoken-looking paths.
+- **The Content Security Policy is a per-request nonce on every page** (option 1 of [#205](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)). `/`, `/privacy`, `/terms` and the 404 render per request and lose CDN caching in exchange for a strict policy with no `unsafe-inline` script. See [Security headers](architecture/system-overview.md#security-headers).

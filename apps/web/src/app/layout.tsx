@@ -12,6 +12,19 @@ export const metadata: Metadata = {
   description: "A web address you can say out loud.",
 };
 
+/**
+ * **Every page renders per request** (#205, option 1, decided by the repo
+ * owner). The Content Security Policy's nonce is generated per request in
+ * `proxy.ts`, and Next.js can only put it on the scripts of a page it renders
+ * for that request: a prerendered page carries no nonce, so under the policy
+ * its scripts are refused and it never hydrates. This is why `/`, `/privacy`,
+ * `/terms` and the 404 are no longer static.
+ *
+ * It is segment config, not a request read: the layout still calls no
+ * `headers()` or `cookies()` (#193), and Next.js reads the nonce itself.
+ */
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="h-full">
