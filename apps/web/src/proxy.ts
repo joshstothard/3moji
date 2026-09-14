@@ -2,13 +2,30 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import {
+  buildContentSecurityPolicy,
+  CONTENT_SECURITY_POLICY_HEADER,
+  generateNonce,
+  NONCE_HEADER,
+  policyModeOf,
+} from "./lib/content-security-policy";
+import {
   CORRELATION_ID_HEADER,
   resolveCorrelationId,
   VERCEL_ID_HEADER,
 } from "./lib/correlation-id";
 
 /**
- * Give every request a correlation id (#155).
+ * Give every request a correlation id (#155) and a Content Security Policy
+ * with a fresh nonce (#205).
+ *
+ * The policy is set on the request as well as the response: Next.js reads the
+ * nonce from the request's `Content-Security-Policy` header and puts it on the
+ * scripts it renders, so application code never reads it — the public Profile
+ * still calls no `headers()` (#193). A client-sent `x-nonce` or policy is
+ * overwritten, never trusted. The policy itself is in
+ * `lib/content-security-policy.ts`.
+ *
+ * The correlation id:
  *
  * The id is a well-formed `x-vercel-id` when Vercel's edge sent one, otherwise
  * a random UUID; a malformed value is replaced and never echoed, and a
@@ -22,12 +39,20 @@ import {
  */
 export function proxy(request: NextRequest): NextResponse {
   const id = resolveCorrelationId(request.headers.get(VERCEL_ID_HEADER));
+  const nonce = generateNonce();
+  const policy = buildContentSecurityPolicy(
+    nonce,
+    policyModeOf(process.env.NODE_ENV),
+  );
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(CORRELATION_ID_HEADER, id);
+  requestHeaders.set(NONCE_HEADER, nonce);
+  requestHeaders.set(CONTENT_SECURITY_POLICY_HEADER, policy);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set(CORRELATION_ID_HEADER, id);
+  response.headers.set(CONTENT_SECURITY_POLICY_HEADER, policy);
   return response;
 }
 

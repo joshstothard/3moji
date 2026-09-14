@@ -109,6 +109,92 @@ describe("proxy", () => {
   });
 });
 
+/**
+ * The Content Security Policy (#205). Next.js reads the nonce from the
+ * `Content-Security-Policy` header **on the request** and puts it on the
+ * scripts it renders, so the policy has to be on the request as well as on the
+ * response, with the same nonce.
+ */
+describe("the proxy's Content Security Policy", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const NONCE_SOURCE = /'nonce-([A-Za-z0-9+/]+={0,2})'/;
+
+  function policiesOf(response: Response): {
+    readonly response: string | null;
+    readonly request: string | null;
+    readonly nonceHeader: string | null;
+  } {
+    return {
+      response: response.headers.get("content-security-policy"),
+      request: response.headers.get(
+        "x-middleware-request-content-security-policy",
+      ),
+      nonceHeader: response.headers.get("x-middleware-request-x-nonce"),
+    };
+  }
+
+  function scriptSourcesOf(policy: string | null): readonly string[] {
+    const directive = (policy ?? "")
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith("script-src "));
+    return directive?.split(/\s+/).slice(1) ?? [];
+  }
+
+  it("sends a nonce policy on the response and the same one on the request", () => {
+    const policies = policiesOf(proxy(request()));
+    const nonce = NONCE_SOURCE.exec(policies.response ?? "")?.[1];
+
+    expect(nonce).toBeDefined();
+    expect(policies.request).toBe(policies.response);
+    expect(policies.nonceHeader).toBe(nonce);
+  });
+
+  it("uses a fresh nonce on every request", () => {
+    const first = policiesOf(proxy(request())).nonceHeader;
+    const second = policiesOf(proxy(request())).nonceHeader;
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(first).not.toBe(second);
+  });
+
+  it("allows no eval and no unsafe-inline script outside next dev", () => {
+    const sources = scriptSourcesOf(policiesOf(proxy(request())).response);
+
+    expect(sources).toContain("'strict-dynamic'");
+    expect(sources).not.toContain("'unsafe-eval'");
+    expect(sources).not.toContain("'unsafe-inline'");
+  });
+
+  it("adds 'unsafe-eval' under next dev only", () => {
+    jest.replaceProperty(process.env, "NODE_ENV", "development");
+
+    const sources = scriptSourcesOf(policiesOf(proxy(request())).response);
+
+    expect(sources).toContain("'unsafe-eval'");
+  });
+
+  it("never trusts a client-sent nonce or policy", () => {
+    const sent = "Y2xpZW50LWNob3Nlbi1ub25jZQ==";
+    const policies = policiesOf(
+      proxy(
+        request({
+          "x-nonce": sent,
+          "content-security-policy": `script-src 'nonce-${sent}'`,
+        }),
+      ),
+    );
+
+    expect(policies.nonceHeader).not.toBe(sent);
+    expect(policies.request).not.toContain(sent);
+    expect(policies.response).not.toContain(sent);
+  });
+});
+
 describe("the proxy's matcher", () => {
   it.each([
     "/",
@@ -118,6 +204,20 @@ describe("the proxy's matcher", () => {
     "/ice-cube.ice-cube.ice-cube",
     "/api/auth/ok",
     "/sign-in",
+    // Every other HTML page must reach the proxy, or it has no CSP (#205).
+    "/privacy",
+    "/terms",
+    "/find",
+    "/account",
+    "/reset-password",
+    "/reset-password/some-token",
+    "/claim/held",
+    "/claim/held/%F0%9F%A7%8A%F0%9F%A7%8A%F0%9F%A7%8A",
+    "/claim/verified/%F0%9F%A7%8A%F0%9F%A7%8A%F0%9F%A7%8A",
+    "/test-only-error",
+    "/no/such/page",
+    "/og-image",
+    "/%F0%9F%A7%8A%F0%9F%A7%8A%F0%9F%A7%8A/og-image",
   ])("runs on %s", (url) => {
     expect(unstable_doesMiddlewareMatch({ config, url })).toBe(true);
   });

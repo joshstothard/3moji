@@ -22,6 +22,7 @@
     "test": "turbo test",
     "test:integration": "turbo test:integration --continue",
     "test:e2e": "playwright test --pass-with-no-tests",
+    "test:e2e:production": "playwright test --config playwright.production.config.ts",
     "test:scripts": "node --test scripts/*.test.mjs",
     "generate:emoji": "node scripts/generate-emoji-set.mjs",
     "verify:agents": "node scripts/verify-agent-workflow.mjs",

@@ -349,7 +349,7 @@ _Site hygiene:_
 - [x] A favicon.
 - [x] `robots.txt`, and a sitemap of the static pages (not every Profile).
 - [x] Home-page Open Graph metadata using the existing generic image.
-- [ ] Responses carry a Content Security Policy, HSTS, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy` and `X-Content-Type-Options`, verified by a test. **Not met.** HSTS, `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options` merged in PR #223. The Content Security Policy waits on an owner decision ([#205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)).
+- [ ] Responses carry a Content Security Policy, HSTS, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy` and `X-Content-Type-Options`, verified by a test. **Not met until #205 merges.** HSTS, `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options` merged in PR #223. The Content Security Policy is a per-request nonce on every page (option 1 of the [#205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)), in the PR that closes #205.
 
 _Operations:_
 
@@ -369,7 +369,7 @@ _Operations:_
 - #202 Celebrate an available three-of-a-kind Handle as rare — done
 - #203 Add branded not-found and error pages — open: the pages merged in PR #228, and server-side render-error logging waits on an owner decision about the tracing guard, #148 ([comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457))
 - #204 Add a favicon, robots.txt, sitemap and home-page preview metadata — done
-- #205 Send security headers on every response — open: four headers merged in PR #223, and the CSP waits on an owner decision ([comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123))
+- #205 Send security headers on every response — open: four headers merged in PR #223; the nonce CSP (option 1) is in the PR that closes it
 - #206 Back up the production database nightly — blocked on #32
 - #207 Add uptime checks and the operations runbooks — open: the runbooks merged in PRs #224 and #227, and the uptime check waits on #32
 
@@ -515,3 +515,4 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-13 — Phase 7 planned: epic #191, issues #192–#198. Phase 8 planned: epic #199, issues #200–#207.
 - 2026-09-14 — Synced from GitHub: **Phase 7 Planned → Done** (epic #191 closed, all nine issues closed with #214 and #216 appended; privacy and terms are drafts pending owner review) and **Phase 8 Planned → In progress** (epic #199, 3 of 8 closed: #200, #202 and #204). #201, #203, #205 and #207 are partly merged and wait on owner decisions or #32, and #206 is blocked on #32. Nothing in either phase is verified on a live site, which waits on #32 (blocked on #19). The Decision log gains the overnight axe-scope call on #225.
 - 2026-09-14 — #201 finished without an ADR: the owner declined resolving the spoken form in the path, the Phase 8 criterion is reworded to the Find a Handle lookup and ticked, and the branded 404 page now offers that lookup. #233 filed under epic #199: a `[handle]` 404 has no markup without JavaScript.
+- 2026-09-14 — CSP: nonce on every page (option 1). Decided by the repo owner.

@@ -36,7 +36,7 @@ jest.mock("../components/sign-out-action", () => ({
   signOutFormAction: (): Promise<void> => Promise.resolve(),
 }));
 
-import RootLayout, { metadata } from "./layout";
+import RootLayout, { dynamic, metadata } from "./layout";
 
 const shell = () =>
   renderToStaticMarkup(
@@ -83,5 +83,16 @@ describe("RootLayout", () => {
     // The island is in the tree, and renders nobody's links on the server.
     expect(markup).toContain('href="/sign-in"');
     expect(markup).not.toMatch(/%F0%9F|\/edit"/);
+  });
+
+  /**
+   * #205, option 1. The Content Security Policy's nonce exists only at request
+   * time, and a prerendered page carries none, so its scripts would be refused
+   * and it would never hydrate. The layout renders every page per request, and
+   * does it by segment config rather than by reading the request, so the test
+   * above still holds.
+   */
+  it("renders every page per request, so each carries its request's CSP nonce", () => {
+    expect(dynamic).toBe("force-dynamic");
   });
 });
