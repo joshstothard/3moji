@@ -29,6 +29,17 @@ Items are grouped by when they have to happen:
     - `RESEND_FROM`: the sender, on the Resend subdomain.
     - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown. See the report mailbox item below.
     - `NEXT_PUBLIC_APP_VERSION` is supplied by the build and needs nothing from you. **Never set `TEST_EMAIL_SENDER` on Vercel**: it's test-only, and the app refuses to start with it set there.
+    - `PRODUCTION_DATABASE_HOST`: **set it for Preview** ([#32](https://github.com/joshstothard/3moji/issues/32)). The host name of the production database, the part after `@` and before `/` in Production's `DATABASE_URL_UNPOOLED` (the pooled host works too). Copy it from the Vercel or Neon dashboard, never into the repo, an issue or a chat. Every preview build compares its own database against it and **fails if it is production, or if this is unset**, so a preview can never migrate or use production data. It's a host name, not a password, but treat it as private.
+    - Vercel's own `VERCEL_ENV`, `VERCEL_URL` and `VERCEL_BRANCH_URL` need "Automatically expose System Environment Variables" left on. A preview builds its verification and reset links from them, because `BETTER_AUTH_URL` holds the production address.
+  - **Vercel project settings** (Settings → Build and Deployment), for the build in `apps/web/vercel.json` ([#32](https://github.com/joshstothard/3moji/issues/32)):
+    - **Root Directory:** `apps/web`. `vercel.json` is read from there.
+    - **Include files outside the root directory in the Build Step:** on. The build needs `packages/` and `scripts/`.
+    - **Framework Preset:** Next.js.
+    - **Build Command, Install Command and Output Directory:** leave the overrides off. `vercel.json` sets the first two, and the output is Next.js's default, `.next` in `apps/web`.
+    - **Node.js Version:** 24.x, to match `engines` in the root `package.json`.
+    - **Don't set `NODE_ENV=production` or `NPM_CONFIG_PRODUCTION=true` as Vercel environment variables.** The build needs devDependencies (turbo and drizzle-kit), and without them it fails with an unhelpful "not found".
+    - **Neon integration:** connected for Production and Preview, with a database branch per preview deployment turned on.
+    - What a build does with them, and when it fails on purpose, is in [system-overview.md § The build](architecture/system-overview.md#the-build). A failed build's reason is in its build log, on a line starting `[vercel-migrate]`.
   - **Blocks:** [#32](https://github.com/joshstothard/3moji/issues/32), the first deploy. That in turn blocks every "on the live site" check, including dotted alias paths on Vercel's CDN, backups and uptime.
   - **Detail:** [#19](https://github.com/joshstothard/3moji/issues/19) (the checklist; the repo rename on it is already done), [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 5 for the exact DNS records, `apps/web/.env.example`.
 
