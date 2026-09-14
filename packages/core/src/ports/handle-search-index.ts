@@ -35,4 +35,23 @@ export interface HandleSearchIndex {
     groups: readonly (readonly string[])[],
     limit: number,
   ): Promise<readonly HandleKey[]>;
+
+  /**
+   * Every claimed Handle whose key holds, at each position, one of that
+   * position's emoji: the exact matches of a three-term query, at most
+   * `limit` of them.
+   *
+   * **A read of its own so decision 5's first tier cannot be truncated
+   * away.** {@link claimedKeysContaining} keeps a limited answer by key order,
+   * which has nothing to do with the search's order, so on a large table the
+   * exact match could be past its cut. This read names only Handles that say
+   * the whole query, a population far smaller than "holds an apple somewhere".
+   *
+   * @param positions Exactly three entries, one per position, none empty.
+   * Anything else names no Handle and answers `[]`.
+   */
+  claimedKeysSaying(
+    positions: readonly (readonly string[])[],
+    limit: number,
+  ): Promise<readonly HandleKey[]>;
 }

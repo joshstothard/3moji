@@ -6,6 +6,9 @@ import { handle } from "../db/handle";
 import type { HandleKey } from "../db/handle-key";
 import type { HandleSearchIndex } from "../ports/handle-search-index";
 
+/** A Handle is three emoji, so an exact read names three positions. */
+const HANDLE_POSITIONS = 3;
+
 /**
  * {@link HandleSearchIndex} over the `handle` table
  * ([ADR-0012](../../../../docs/adr/0012-header-search-lists-claimed-handles-with-display-names-capped-and-rate-limited.md),
@@ -53,6 +56,39 @@ export function createDrizzleHandleSearchIndex(
           .select({ key: handle.key })
           .from(handle)
           .where(and(isNotNull(handle.claimedAt), ...containment))
+          .orderBy(asc(handle.key))
+          .limit(limit),
+      );
+      return rows.map((row) => row.key);
+    },
+
+    async claimedKeysSaying(
+      positions: readonly (readonly string[])[],
+      limit: number,
+    ): Promise<readonly HandleKey[]> {
+      if (
+        positions.length !== HANDLE_POSITIONS ||
+        positions.some((position) => position.length === 0)
+      ) {
+        // Not three non-empty positions names no Handle: nothing to ask.
+        return [];
+      }
+
+      // `substr` counts characters, and a key is three code points. The
+      // position number is this loop's own constant; every emoji is bound.
+      const saying = positions.map(
+        (position, at): SQL =>
+          sql`substr(${handle.key}, ${sql.raw(String(at + 1))}, 1) in (${sql.join(
+            position.map((emoji) => sql`${emoji}`),
+            sql`, `,
+          )})`,
+      );
+
+      const rows = await withSafeDatabaseErrors(() =>
+        db
+          .select({ key: handle.key })
+          .from(handle)
+          .where(and(isNotNull(handle.claimedAt), ...saying))
           .orderBy(asc(handle.key))
           .limit(limit),
       );

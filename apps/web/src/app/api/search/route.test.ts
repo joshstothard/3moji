@@ -42,7 +42,10 @@ const admit = jest.fn(
   (_address: string | undefined): Promise<{ state: string }> =>
     Promise.resolve({ state: "admitted" }),
 );
-const handleSearch = { claimedKeysContaining: jest.fn() };
+const handleSearch = {
+  claimedKeysContaining: jest.fn(),
+  claimedKeysSaying: jest.fn(),
+};
 const profiles = { profileOf: jest.fn(), displayNamesOf: jest.fn() };
 const getServices = jest.fn((): unknown => ({
   searchClientRateLimiter: { admit },

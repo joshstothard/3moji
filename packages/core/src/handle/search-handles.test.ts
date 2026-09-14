@@ -46,13 +46,19 @@ function keyOf(emoji: string): HandleKey {
  * exactly: every group must have one of its emoji somewhere in the key. It
  * records what it was asked, so a test can prove what never reached it.
  */
-function claimedIndex(claimed: readonly string[]): {
+function claimedIndex(
+  claimed: readonly string[],
+  { containmentCut }: { readonly containmentCut?: number } = {},
+): {
   readonly index: HandleSearchIndex;
   readonly asked: (readonly (readonly string[])[])[];
+  readonly askedExact: (readonly (readonly string[])[])[];
 } {
   const asked: (readonly (readonly string[])[])[] = [];
+  const askedExact: (readonly (readonly string[])[])[] = [];
   return {
     asked,
+    askedExact,
     index: {
       claimedKeysContaining: (groups, limit) => {
         asked.push(groups);
@@ -63,8 +69,23 @@ function claimedIndex(claimed: readonly string[]): {
                 group.some((emoji) => Array.from(key).includes(emoji)),
               ),
             )
-            .slice(0, limit)
+            .slice(0, Math.min(limit, containmentCut ?? limit))
             .map(keyOf),
+        );
+      },
+      claimedKeysSaying: (positions, limit) => {
+        askedExact.push(positions);
+        return Promise.resolve(
+          positions.length !== 3
+            ? []
+            : claimed
+                .filter((key) =>
+                  Array.from(key).every(
+                    (emoji, at) => positions[at]?.includes(emoji) === true,
+                  ),
+                )
+                .slice(0, limit)
+                .map(keyOf),
         );
       },
     },
@@ -377,6 +398,40 @@ describe("searchHandles: ordering (decision 5)", () => {
 
     expect(keysOf(search)[0]).toBe(exact);
     expect(keysOf(search)).toHaveLength(3);
+  });
+
+  it("keeps the exact match first when the containment read was cut before reaching it", async () => {
+    // The containment read keeps a limited answer by key order, not by rank,
+    // so on a large table the exact match can fall past its cut. Simulated
+    // here by cutting that read to the first two keys.
+    const exact = `${PIZZA}${GREEN}${RED}`;
+    const { index } = claimedIndex(
+      [`${RED}${RED}${PIZZA}`, `${RED}${PIZZA}${GREEN}`, exact],
+      { containmentCut: 2 },
+    );
+
+    const search = await searchHandles({
+      query: "pizza apple apple",
+      index,
+      profiles: profilesNaming().profiles,
+      list: NOTHING_RESERVED,
+    });
+
+    expect(keysOf(search)).toEqual([
+      exact,
+      `${RED}${RED}${PIZZA}`,
+      `${RED}${PIZZA}${GREEN}`,
+    ]);
+  });
+
+  it("asks for exact matches position by position for three terms only", async () => {
+    const { index, askedExact } = claimedIndex([`${PIZZA}${GREEN}${RED}`]);
+    const profiles = profilesNaming().profiles;
+
+    await searchHandles({ query: "apple pizza", index, profiles });
+    await searchHandles({ query: `pizza apple ${ICE}`, index, profiles });
+
+    expect(askedExact).toEqual([[[PIZZA], [RED, GREEN], [ICE]]]);
   });
 });
 

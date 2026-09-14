@@ -192,6 +192,34 @@ describeWithDatabase("the header search against a real Postgres", () => {
       );
       expect(await index.claimedKeysContaining([[CAPPED]], 3)).toHaveLength(3);
     });
+
+    it("answers exact matches position by position, claimed only", async () => {
+      const index = createDrizzleHandleSearchIndex(db);
+
+      expect(
+        await index.claimedKeysSaying([[MARK], [OTHER], [OTHER]], 1000),
+      ).toEqual([keys.claimedNamed]);
+
+      // MARK MARK OTHER (an expired hold) fits these positions too, and a
+      // held Handle is never an answer; OTHER OTHER MARK does not fit.
+      const either = await index.claimedKeysSaying(
+        [
+          [MARK, OTHER],
+          [OTHER, MARK],
+          [OTHER, ABSENT],
+        ],
+        1000,
+      );
+      expect([...either].sort()).toEqual(
+        [keys.claimedNamed, keys.claimedUnnamed].sort(),
+      );
+      expect(
+        await index.claimedKeysSaying(
+          [[CAPPED], [CAPPED, FILL_A, FILL_B], [CAPPED, FILL_A, FILL_B]],
+          2,
+        ),
+      ).toHaveLength(2);
+    });
   });
 
   describe("searchHandles over the real index and Profiles", () => {

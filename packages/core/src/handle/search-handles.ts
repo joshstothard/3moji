@@ -54,9 +54,14 @@ export const SEARCH_EMOJI_LIMIT = 8;
  * name. A one-word query such as `apple` matches every claimed Handle holding
  * either apple, and the order of decision 5 is decided here, after the read,
  * so capping the read at five would drop better results. A thousand three-emoji
- * keys is a few kilobytes. Past it, the adapter keeps the first thousand by
- * key, so on a table that large the order would be decided over that subset:
- * recorded as a scale limit to revisit, not a behaviour anybody sees at launch.
+ * keys is a few kilobytes.
+ *
+ * **Past it, a better-ranked Handle can be omitted, not merely misordered.**
+ * The containment read keeps the thousand lowest keys, and key order has
+ * nothing to do with rank, so once more than a thousand claimed Handles hold a
+ * query's emoji, one with more of them can fall past the cut. The exact match
+ * cannot: a three-term query reads its exact matches separately
+ * (`claimedKeysSaying`). A scale limit to revisit; nothing near it at launch.
  */
 export const SEARCH_READ_LIMIT = 1000;
 
@@ -318,10 +323,16 @@ export async function searchHandles(
   const terms = searchTermsOf(input.query);
   if (terms === undefined) return { handles: [], emoji };
 
-  const keys = await input.index.claimedKeysContaining(
-    terms.map((term) => term.map((entry) => entry.emoji)),
-    SEARCH_READ_LIMIT,
-  );
+  const groups = terms.map((term) => term.map((entry) => entry.emoji));
+  // The exact matches are read on their own, so the containment read's cut
+  // (key order, not rank) can never drop decision 5's first tier.
+  const [exact, contained] = await Promise.all([
+    terms.length === HANDLE_LENGTH
+      ? input.index.claimedKeysSaying(groups, SEARCH_READ_LIMIT)
+      : Promise.resolve([]),
+    input.index.claimedKeysContaining(groups, SEARCH_READ_LIMIT),
+  ]);
+  const keys = [...new Set([...exact, ...contained])];
 
   const list = input.list ?? RESERVED_HANDLES;
   const shown = keys

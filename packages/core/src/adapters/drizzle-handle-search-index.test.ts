@@ -61,4 +61,49 @@ describe("createDrizzleHandleSearchIndex", () => {
       await closed.end();
     }
   });
+
+  it("rejects the exact read as DatabaseQueryFailed too, with no bound emoji", async () => {
+    const closed = new Pool({
+      host: "127.0.0.1",
+      port: 59999,
+      connectionTimeoutMillis: 2000,
+    });
+    const index = createDrizzleHandleSearchIndex(
+      drizzle(closed, { schema: authSchema }),
+    );
+
+    let caught: unknown;
+    try {
+      await index.claimedKeysSaying([[PIZZA], [PIZZA], [PIZZA]], 5);
+    } catch (error) {
+      caught = error;
+    } finally {
+      await closed.end();
+    }
+
+    expect(
+      typeof caught === "object" && caught !== null && "name" in caught
+        ? caught.name
+        : undefined,
+    ).toBe("DatabaseQueryFailed");
+    expect(`${String(caught)} ${JSON.stringify(caught)}`).not.toContain(PIZZA);
+  });
+
+  it("asks nothing for an exact read that is not three non-empty positions", async () => {
+    const closed = new Pool({ host: "127.0.0.1", port: 59999 });
+    const index = createDrizzleHandleSearchIndex(
+      drizzle(closed, { schema: authSchema }),
+    );
+
+    try {
+      await expect(
+        index.claimedKeysSaying([[PIZZA], [PIZZA]], 5),
+      ).resolves.toEqual([]);
+      await expect(
+        index.claimedKeysSaying([[PIZZA], [], [PIZZA]], 5),
+      ).resolves.toEqual([]);
+    } finally {
+      await closed.end();
+    }
+  });
 });

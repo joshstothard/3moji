@@ -101,6 +101,7 @@ describe("createCoreServices", () => {
 
     expect(Object.keys(services.handleSearch)).toEqual([
       "claimedKeysContaining",
+      "claimedKeysSaying",
     ]);
     expect(Object.keys(services.searchClientRateLimiter)).toEqual(["admit"]);
     await close();
