@@ -2,10 +2,10 @@
 
 What to do when production data is wrong or gone: a migration that damaged rows, an accidental delete, or a takedown run against the wrong Handle ([#207](https://github.com/joshstothard/3moji/issues/207)).
 
-> **Written before the first deploy, and half of it is pending.**
+> **Written before the first deploy, and parts are unverified.**
 >
-> - [§ 4, Neon's restore window](#4-restore-from-neons-restore-window) is the only restore available today. Its console steps are marked **(verify on deploy)**: there is no Neon project yet ([#19](https://github.com/joshstothard/3moji/issues/19), [#32](https://github.com/joshstothard/3moji/issues/32)).
-> - [§ 5, the nightly backup](#5-restore-from-the-nightly-backup-pending-206) **does not exist yet**. It waits on [#206](https://github.com/joshstothard/3moji/issues/206) and on the owner's choice of destination ([owner actions](../owner-actions.md), "Where nightly database backups are stored"). #206 fills that section in, and must perform the restore once into a scratch database.
+> - [§ 4, Neon's restore window](#4-restore-from-neons-restore-window) covers the last six hours. Its console steps are marked **(verify on deploy)**.
+> - [§ 5, the nightly backup](#5-restore-from-the-nightly-backup) is built ([#206](https://github.com/joshstothard/3moji/issues/206)), but **no backup has run and no restore has been performed yet**. Both are owner steps: [owner actions](../owner-actions.md), "Where nightly database backups are stored", steps 8 and 9. Until then, every command in § 5 is untested.
 
 ## Contents
 
@@ -13,7 +13,7 @@ What to do when production data is wrong or gone: a migration that damaged rows,
 2. [Act fast: the window is six hours](#2-act-fast-the-window-is-six-hours)
 3. [Where to look](#3-where-to-look)
 4. [Restore from Neon's restore window](#4-restore-from-neons-restore-window)
-5. [Restore from the nightly backup (pending #206)](#5-restore-from-the-nightly-backup-pending-206)
+5. [Restore from the nightly backup](#5-restore-from-the-nightly-backup)
 6. [After a restore](#6-after-a-restore)
 7. [Record](#7-record)
 
@@ -28,7 +28,7 @@ What to do when production data is wrong or gone: a migration that damaged rows,
 
 ## 2. Act fast: the window is six hours
 
-**Neon Free can restore to a point within the last 6 hours, up to 1 GB-month** ([hosting and email report](../reports/2026-09-11-hosting-and-email.md) § 2). Data damaged earlier than that has no restore today. That gap is why #206 exists.
+**Neon Free can restore to a point within the last 6 hours, up to 1 GB-month** ([hosting and email report](../reports/2026-09-11-hosting-and-email.md) § 2). Anything older needs the nightly backup (§ 5), which keeps 30 days once the owner has set it up.
 
 So, before any diagnosis:
 
@@ -69,27 +69,131 @@ So, before any diagnosis:
 4. **Do not repoint `DATABASE_URL` at the restore branch by hand.** The Neon integration injects the connection variables ([owner actions](../owner-actions.md)). A hand-typed connection string drifts from the integration, and typing it risks leaking it.
 5. **Schema must match the code.** If the target time is before a migration, the restored database lacks that migration. Either keep the older deployment serving, or let the next deployment's build re-apply the migration. If the migration was the cause, fix it in a PR first, so the rebuild does not damage the data again.
 
-## 5. Restore from the nightly backup (pending #206)
+## 5. Restore from the nightly backup
 
-> **Pending [#206](https://github.com/joshstothard/3moji/issues/206) and the owner's destination decision.** Nothing in this section exists yet. The shape below comes from #206's acceptance criteria. #206 replaces it with tested commands and the evidence of one restore into a scratch database.
+> **Not yet performed.** No backup has run, and this restore has never been done against a real one. The owner's first green run and one test restore into a Neon scratch branch are outstanding ([owner actions](../owner-actions.md), "Where nightly database backups are stored", steps 8 and 9). Record that evidence on [#206](https://github.com/joshstothard/3moji/issues/206) (the date, the object key, and the § 5.4 counts, never rows), fix anything here that turned out wrong, and then delete this note.
 
 This is the path when the damage is **older than six hours**.
 
-What #206 is expected to provide:
+**What exists.** `.github/workflows/backup.yml` runs every night at 03:17 UTC. It takes a custom-format `pg_dump` of production with `--no-owner --no-privileges`, pipes it straight into `age` encrypted to the owner's public key, and uploads it to a private Cloudflare R2 bucket as `3moji/YYYY/MM/DD/3moji-YYYYMMDDTHHMMSSZ.dump.age`. A bucket lifecycle rule deletes objects after 30 days. The age **private** key is only in the owner's password manager; without it no backup can be read. Nothing is written to the repository or to Actions artifacts, and a run that could not dump, produced a dump under 4 KiB, or could not confirm the upload fails.
 
-- A scheduled GitHub Actions workflow takes a nightly logical dump of production, encrypts it, and uploads it to a private destination. The owner has not chosen the destination; the recommendation is a private S3-compatible bucket such as Cloudflare R2.
-- **No dump is ever written to this repository or to Actions artifacts.** Both are public on a public repository. No secret or connection string is echoed in the workflow's log.
-- A failed backup run fails loudly.
+**Where to do it.** On a trusted machine you control, never in a CI job, whose log is public. You need:
 
-The restore, once #206 has written it, will cover:
+- `age` (`brew install age`).
+- The AWS CLI (`brew install awscli`).
+- A `pg_restore` of **major version 18 or later**, because the dump was made by `pg_dump` 18 and an older `pg_restore` refuses it (`brew install postgresql@18`, then check `pg_restore --version`).
 
-1. Find the newest dump **before** the damage, in the private destination, and check the backup run that made it succeeded.
-2. Download and decrypt it on a trusted machine, never in a CI job whose log is public. The key's location is recorded privately by the owner, never in the repository.
-3. Restore into a **scratch** Neon branch or database first, and check it with § 3's counts.
-4. Bring it back as in § 4 step 3: whole, or the affected rows only.
-5. Delete the local decrypted copy. It holds every Account's email address and password hash.
+**Never paste a secret onto a command line.** It ends up in shell history. Each `read -rs` below prompts without echoing, and the value lives only in that shell.
 
-Until #206 merges, **there is no recovery for data lost more than six hours ago.** Say so plainly in the record.
+### 5.1 Pick the dump
+
+1. In GitHub, **Actions → Nightly Database Backup**, find the newest **green** run from **before** the damage. Its last upload step ends `Uploaded and confirmed: N bytes.`
+2. Put the R2 credentials into this shell. The workflow's token works, or make a read-only one in R2 for restores:
+
+   ```bash
+   read -rs AWS_ACCESS_KEY_ID && export AWS_ACCESS_KEY_ID
+   read -rs AWS_SECRET_ACCESS_KEY && export AWS_SECRET_ACCESS_KEY
+   export AWS_DEFAULT_REGION=auto
+   export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
+   export AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+   R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
+   ```
+
+3. List that day's objects and pick the one whose size matches the run:
+
+   ```bash
+   aws s3api list-objects-v2 --endpoint-url "$R2_ENDPOINT" --bucket <bucket> \
+     --prefix 3moji/YYYY/MM/DD/ --query 'Contents[].[Key,Size]' --output text
+   ```
+
+### 5.2 Download and decrypt
+
+```bash
+mkdir -m 700 ~/3moji-restore && cd ~/3moji-restore
+aws s3api get-object --endpoint-url "$R2_ENDPOINT" --bucket <bucket> \
+  --key <object-key> 3moji.dump.age > /dev/null
+
+# Paste the private key file's contents from the password manager, then Ctrl-D.
+umask 077 && cat > 3moji-backup.key
+age --decrypt --identity 3moji-backup.key --output 3moji.dump 3moji.dump.age
+rm 3moji-backup.key
+
+pg_restore --list 3moji.dump | grep -c 'TABLE DATA'
+```
+
+The last line counts the tables with data in the dump. A decryption error means the wrong private key, or an object that is not a backup.
+
+### 5.3 Restore into a scratch database, never production
+
+Pick one. Both start empty, so nothing is overwritten.
+
+- **Local Postgres 18:**
+
+  ```bash
+  createdb 3moji_restore
+  pg_restore --no-owner --no-privileges --exit-on-error --dbname=3moji_restore 3moji.dump
+  RESTORE_DATABASE_URL=postgresql:///3moji_restore
+  ```
+
+- **A Neon scratch branch** **(verify on deploy)**:
+  1. In the Neon console, create a branch named `restore-<yyyymmdd>` from production.
+  2. On **that branch**, create a new, empty database named `restore_check`. Restoring into a database that does not exist on production means a wrong connection string fails instead of touching production.
+  3. Copy the branch's **direct** connection string (pooling off) for `restore_check`. Its host must not be production's.
+
+  ```bash
+  read -rs RESTORE_DATABASE_URL && export RESTORE_DATABASE_URL
+  pg_restore --no-owner --no-privileges --exit-on-error --dbname="$RESTORE_DATABASE_URL" 3moji.dump
+  ```
+
+`--exit-on-error` stops at the first failure instead of restoring half a database silently.
+
+### 5.4 Check it
+
+The § 3 counts, against the restored database, and the migrations it carries:
+
+```bash
+psql "$RESTORE_DATABASE_URL" -c 'SELECT count(*) FROM handle;'
+psql "$RESTORE_DATABASE_URL" -c 'SELECT count(*) FROM "user";'
+psql "$RESTORE_DATABASE_URL" -c 'SELECT count(*) FROM profile;'
+psql "$RESTORE_DATABASE_URL" -c 'SELECT max(claimed_at) FROM handle;'
+psql "$RESTORE_DATABASE_URL" -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;'
+```
+
+- `max(claimed_at)` should fall shortly before the backup's timestamp.
+- The migration count should equal the number of `.sql` files in `packages/core/migrations/` at the commit that was live that night. If it is lower, see § 4 step 5.
+- Counts that are zero, or far below what § 3 measured before the damage, mean the wrong dump: go back to 5.1.
+
+### 5.5 Bring it back into production, last and deliberately
+
+Only once 5.4 looks right, and § 2's steps are done: writes stopped and the damaging deployment rolled back.
+
+1. **Branch production as it is now** in the Neon console **(verify on deploy)**, named `pre-restore-<yyyymmdd-hhmm>`. That is the undo.
+2. **Narrow damage:** copy the affected rows from the scratch database into production, as § 4 step 3 describes: a reviewed, parameterised script, run once.
+3. **Broad damage:** replace production's contents with the dump, in one transaction, so a failure leaves production as it was:
+
+   ```bash
+   read -rs PRODUCTION_DATABASE_URL && export PRODUCTION_DATABASE_URL
+   pg_restore --no-owner --no-privileges --clean --if-exists \
+     --single-transaction --exit-on-error \
+     --dbname="$PRODUCTION_DATABASE_URL" 3moji.dump
+   ```
+
+   The connection string is production's **direct** one (pooling off). `--clean` drops each object before recreating it; that is the destructive step, and why it comes last.
+
+4. **Schema must match the code:** § 4 step 5 applies unchanged.
+5. Carry on with § 6.
+
+### 5.6 Clean up
+
+```bash
+cd ~ && rm -rf ~/3moji-restore
+dropdb 3moji_restore   # if you restored locally
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY RESTORE_DATABASE_URL PRODUCTION_DATABASE_URL
+```
+
+The decrypted dump holds every Account's email address and password hash, so delete it the same day. Delete the Neon scratch branch too (§ 6 step 5).
+
+Until the owner has enabled backups and one run is green, **there is no recovery for data lost more than six hours ago.** Say so plainly in the record.
 
 ## 6. After a restore
 
@@ -108,7 +212,7 @@ Keep the record **outside this repository**, in a private note the owner control
 | Damage           | What was wrong, when it happened (UTC), and how it was found                      |
 | Cause            | The deployment, migration, or SQL that did it                                     |
 | Measured         | The § 3 counts before and after. Counts, not rows                                 |
-| Source           | Neon restore window, or (after #206) which nightly dump                           |
+| Source           | Neon restore window, or the nightly dump's object key                             |
 | Target time      | The point restored to, and why that one                                           |
 | Method           | Whole restore or copied rows; the branch name used                                |
 | Lost writes      | How many boundary writes fell after the target time, and what was done about them |
