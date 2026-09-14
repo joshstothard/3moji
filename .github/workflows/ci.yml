@@ -169,8 +169,16 @@ jobs:
           # packages/core/dist is what the E2E seed helper imports: Playwright
           # resolves @template/core without the `development` condition Next.js
           # uses, so it needs the compiled package (#151).
+          #
+          # `.next` is a hidden directory, and upload-artifact skips hidden files
+          # unless told otherwise, so until #205 the build never reached the E2E
+          # job at all. The production CSP smoke test runs `next start` on it.
+          # The build cache and the standalone bundle are not needed to start it.
+          include-hidden-files: true
           path: |
             apps/web/.next/
+            !apps/web/.next/cache/
+            !apps/web/.next/standalone/
             packages/core/dist/
             packages/shared/dist/
           retention-days: 1
