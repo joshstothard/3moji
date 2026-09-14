@@ -145,9 +145,25 @@ export function problems(text) {
   ) {
     found.push("is not both scheduled and manually runnable");
   }
+  // Every `permissions:` value, top-level or job-level, inline or as an
+  // indented block, with comments removed: a comment is not a permission.
+  const permissionValues = [];
+  const lines = text.split("\n");
+  lines.forEach((line, index) => {
+    const match = line.match(/^([ \t]*)permissions:[ \t]*(.*)$/);
+    if (match === null) return;
+    const [, indent, inline] = match;
+    const value = [inline.replace(/#.*$/, "")];
+    for (const next of lines.slice(index + 1)) {
+      if (next.trim() === "") continue;
+      if (next.search(/\S/) <= indent.length) break;
+      value.push(next.replace(/#.*$/, ""));
+    }
+    permissionValues.push(value.join("\n"));
+  });
   if (
-    !/^permissions:\s*\n\s+contents:\s*read\s*$/m.test(text) ||
-    /:\s*write\b/.test(text)
+    !/^permissions:[ \t]*\n[ \t]+contents:[ \t]*read[ \t]*$/m.test(text) ||
+    permissionValues.some((value) => /\bwrite/.test(value))
   ) {
     found.push("permissions are not contents: read only");
   }
@@ -214,6 +230,38 @@ jobs:
 describe("the backup workflow guard, against known-bad workflows", () => {
   it("passes the minimal good workflow, so the rules below fail for their own reason", () => {
     assert.deepEqual(problems(GOOD), []);
+  });
+
+  // The permissions rule reads permissions blocks, not the whole file, so a
+  // comment cannot trip it: the `set -x` rule was tripped by a comment once.
+  it("does not mistake a comment that mentions write for a write permission", () => {
+    const commented = GOOD.replace(
+      "jobs:\n",
+      "# The R2 token's permission: write, on one bucket only.\njobs:\n",
+    );
+    assert.deepEqual(problems(commented), []);
+  });
+
+  it("fails a job-level write permission", () => {
+    const jobWrite = GOOD.replace(
+      "    runs-on: ubuntu-latest\n",
+      "    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n",
+    );
+    assert.ok(
+      problems(jobWrite).some((p) => /permissions/.test(p)),
+      JSON.stringify(problems(jobWrite)),
+    );
+  });
+
+  it("fails permissions: write-all", () => {
+    const writeAll = GOOD.replace(
+      "    runs-on: ubuntu-latest\n",
+      "    runs-on: ubuntu-latest\n    permissions: write-all\n",
+    );
+    assert.ok(
+      problems(writeAll).some((p) => /permissions/.test(p)),
+      JSON.stringify(problems(writeAll)),
+    );
   });
 
   const bad = [
