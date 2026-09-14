@@ -341,10 +341,13 @@ export function HandleBuilder({
    */
   const [dismissed, setDismissed] = useState<string | undefined>(undefined);
   /**
-   * The bar slot that takes focus when the sheet closes: the last one, unless
-   * an emoji was removed from the sheet, in which case the slot it was in.
+   * What takes focus when the sheet closes: the Claim button in the Handle bar
+   * (#272), which is on screen wherever the visitor has scrolled and opens the
+   * sheet again, unless an emoji was removed from the sheet, in which case the
+   * bar slot it was in.
    */
-  const returnFocusTo = useRef(HANDLE_LENGTH - 1);
+  const returnFocusTo = useRef<number | "claim">("claim");
+  const barClaimControl = useRef<HTMLButtonElement>(null);
   const sheetWasOpen = useRef(false);
 
   const claimable =
@@ -353,13 +356,28 @@ export function HandleBuilder({
     availability === "available";
   const sheetMode = phone && claim !== undefined;
   const sheetOpen = sheetMode && claimable && dismissed !== segment;
+  /**
+   * The bar's Claim button (#272). Its room is kept from the moment all three
+   * are picked, which is in the server's HTML for a Handle the page opened on,
+   * and the pill fills it only once the sheet has been dismissed.
+   */
+  const barClaimRoom = claim !== undefined && full;
+  const offerBarClaim = sheetMode && claimable && !sheetOpen;
 
   useEffect(() => {
     // After the sheet's own effect has closed the dialog and the card has lost
-    // `inert`, so the slot can take focus. Focus never falls to `<body>`.
+    // `inert`, so the control can take focus. Focus never falls to `<body>`:
+    // if the Claim button is not there (the screen widened past a phone's),
+    // the bar's last slot takes it.
     if (sheetWasOpen.current && !sheetOpen) {
-      slotControls.current.get(returnFocusTo.current)?.focus();
-      returnFocusTo.current = HANDLE_LENGTH - 1;
+      const target = returnFocusTo.current;
+      const control =
+        target === "claim"
+          ? (barClaimControl.current ??
+            slotControls.current.get(HANDLE_LENGTH - 1))
+          : slotControls.current.get(target);
+      control?.focus();
+      returnFocusTo.current = "claim";
     }
     sheetWasOpen.current = sheetOpen;
   }, [sheetOpen]);
@@ -494,8 +512,25 @@ export function HandleBuilder({
               <p className="hidden font-mono text-sm text-muted md:block">
                 {url}
               </p>
-              <p className="min-h-4 text-xs font-medium md:min-h-5 md:text-sm">
-                <span aria-live="polite" className="text-violet">
+              {/* The availability line. On a phone, while the bar keeps room
+                  for Claim, it runs on across that room (the column, the gap
+                  and the room) and is kept to one line, cut with an ellipsis
+                  if it must be, so "Checking whether this Handle is free…"
+                  becoming "This Handle is available." changes no height and
+                  moves nothing in the bar. The live region still announces
+                  every word. While the pill is there the line is visually
+                  hidden, and still announced (#272). */}
+              <p
+                className={`min-h-4 text-xs font-medium md:min-h-5 md:text-sm${
+                  barClaimRoom
+                    ? " max-md:w-[calc(100%+5.25rem)] max-md:truncate"
+                    : ""
+                }`}
+              >
+                <span
+                  aria-live="polite"
+                  className={`text-violet${offerBarClaim ? " max-md:sr-only" : ""}`}
+                >
                   {availability === undefined
                     ? ""
                     : AVAILABILITY_COPY[availability]}
@@ -505,6 +540,36 @@ export function HandleBuilder({
                 )}
               </p>
             </div>
+
+            {/* The phone's way back to the claim sheet (#272): a Claim pill at
+                the bar's right, on screen wherever the visitor has scrolled.
+                Its room is kept from the moment all three are picked, in the
+                server's HTML too, so neither the pill appearing nor hydration
+                moves anything; the bar is 56px tall either way. The pill shows
+                only while the Handle is available and the sheet is shut, and
+                never from `md`, where step 2 holds the form in the card. The
+                empty room takes no pointer events, so it is not in the way of
+                the availability line that runs across it. */}
+            {barClaimRoom ? (
+              <div
+                data-bar-claim=""
+                className="pointer-events-none flex h-11 w-18 shrink-0 items-center md:hidden"
+              >
+                {offerBarClaim ? (
+                  <button
+                    ref={barClaimControl}
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      setDismissed(undefined);
+                    }}
+                    className="pointer-events-auto inline-flex h-11 w-full items-center justify-center rounded-full bg-violet px-3 text-sm font-semibold text-white hover:bg-violet-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+                  >
+                    {copy.barClaim}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 

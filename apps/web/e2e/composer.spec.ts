@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { HANDLE_LENGTH, spokenHandle, type CuratedEmoji } from "@template/core";
+import { spokenHandle, type CuratedEmoji } from "@template/core";
 import en from "../../../packages/shared/messages/en.json";
 import { checkPage, PAGE_RULES, type PageReport } from "./support/axe";
 import { categoryTabs, emojiGrid, pickEmoji } from "./support/picker";
@@ -52,6 +52,17 @@ function slotBar(page: Page): Locator {
  */
 function barSlots(page: Page): Locator {
   return slotBar(page).locator("[role='group'] button");
+}
+
+/** The sticky bar's Claim button (#272), offered once the sheet is dismissed. */
+function barClaim(page: Page): Locator {
+  return slotBar(page).getByRole("button", { name: copy.barClaim });
+}
+
+declare global {
+  interface Window {
+    __composerShifts?: number[];
+  }
 }
 
 function tabsRow(page: Page): Locator {
@@ -241,6 +252,8 @@ test.describe("on a wide screen", () => {
       claimStep(page).getByRole("textbox", { name: claimCopy.claimEmailLabel }),
     ).toBeVisible();
     await expect(sheet(page)).toHaveCount(0);
+    // The bar's Claim button is a phone's control (#272).
+    await expect(barClaim(page)).toHaveCount(0);
     await animationsSettle(claimStep(page));
     // Picking scrolled the grid up under the sticky slot row, and axe cannot
     // work out the colour behind text that overlaps other content, so the
@@ -406,17 +419,80 @@ test.describe("on a phone", () => {
     await page.keyboard.press("Escape");
 
     await expect(dialog).toBeHidden();
-    await expect(barSlots(page).nth(HANDLE_LENGTH - 1)).toBeFocused();
+    await expect(barClaim(page)).toBeFocused();
     await expect(composer(page)).not.toHaveAttribute("inert");
     expect(await slotGroupsInAccessibilityTree(page)).toBe(1);
 
-    await page.getByRole("button", { name: copy.sheetReopen }).click();
+    await barClaim(page).click();
     await expect(dialog).toBeVisible();
 
     await dialog.getByRole("button", { name: copy.sheetClose }).click();
 
     await expect(dialog).toBeHidden();
-    await expect(barSlots(page).nth(HANDLE_LENGTH - 1)).toBeFocused();
+    await expect(barClaim(page)).toBeFocused();
+  });
+
+  test("once the sheet is dismissed, the Claim button in the sticky Handle bar opens it again without scrolling, and nothing moves (#272)", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await buildAvailableHandle(page);
+    const dialog = sheet(page);
+    await expect(dialog).toBeVisible();
+    await expect(barClaim(page)).toHaveCount(0);
+    const barHeight = (await boxOf(slotBar(page))).height;
+
+    // Every layout shift from here on, input or not: the button appearing and
+    // the sheet opening must move nothing at all.
+    await page.evaluate(() => {
+      const shifts: number[] = [];
+      window.__composerShifts = shifts;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          shifts.push((entry as PerformanceEntry & { value: number }).value);
+        }
+      }).observe({ type: "layout-shift" });
+    });
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(barClaim(page)).toBeFocused();
+    expect((await boxOf(slotBar(page))).height).toBe(barHeight);
+
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+    expectAccessible(await checkPage(page), [...PAGE_RULES, "button-name"]);
+
+    // Browsing the grid: step 2 and its own button are out of view, and the
+    // bar's Claim button is still on screen.
+    await emojiGrid(page)
+      .getByRole("button")
+      .first()
+      .evaluate((element) => {
+        element.scrollIntoView({ block: "center" });
+      });
+    await expect(
+      page.getByRole("button", { name: copy.sheetReopen }),
+    ).not.toBeInViewport();
+    await expect(barClaim(page)).toBeInViewport();
+    const scrolled = await page.evaluate(() => window.scrollY);
+
+    await barClaim(page).tap();
+
+    await expect(dialog).toBeVisible();
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrolled);
+    await expect(
+      dialog.getByRole("button", { name: copy.sheetClose }),
+    ).toBeFocused();
+    expect(
+      await dialog.evaluate((element) =>
+        element.contains(document.activeElement),
+      ),
+    ).toBe(true);
+    const shifts = await page.evaluate(() => window.__composerShifts ?? []);
+    console.log(`layout shifts, dismiss to reopen: ${JSON.stringify(shifts)}`);
+    expect(shifts.reduce((sum, value) => sum + value, 0)).toBe(0);
   });
 
   test("removing an emoji from the sheet closes it and goes back to browsing", async ({

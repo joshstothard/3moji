@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import en from "../../../packages/shared/messages/en.json";
 import { expectHydrated } from "./support/csp";
-import { categoryTabs } from "./support/picker";
+import { categoryTabs, pickEmoji } from "./support/picker";
 import { drawUnclaimedHandle, pathOf } from "./support/unclaimed-handle";
 
 /**
@@ -21,6 +21,7 @@ import { drawUnclaimedHandle, pathOf } from "./support/unclaimed-handle";
  */
 
 const claimCopy = en.Claim;
+const builderCopy = en.HandleBuilder;
 
 /** "Good" Cumulative Layout Shift, per web.dev. */
 const GOOD_CLS = 0.1;
@@ -227,5 +228,87 @@ test.describe("on a phone, with JavaScript", () => {
       `layout shift on an unclaimed Handle at #claim (phone): ${JSON.stringify(report)}`,
     );
     expect(report.total).toBeLessThan(GOOD_CLS);
+  });
+});
+
+test.describe("on a phone, the sticky Handle bar while the availability answer is slow (#272)", () => {
+  test.skip(
+    ({ isMobile }) => !isMobile,
+    "The bar's Claim button is a phone's control.",
+  );
+
+  test("nothing in the bar moves when the answer arrives, when the sheet opens, or when the Claim button appears", async ({
+    page,
+  }) => {
+    // Hold every server action's answer well past the 500 ms after input that
+    // Cumulative Layout Shift forgives, so anything the answer moves would
+    // count against the page.
+    await page.route(
+      () => true,
+      async (route) => {
+        const request = route.request();
+        if (
+          request.method() === "POST" &&
+          request.headers()["next-action"] !== undefined
+        ) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 1500);
+          });
+        }
+        await route.fallback();
+      },
+    );
+
+    await page.goto("/");
+    await expectHydrated(page);
+    await expect(categoryTabs(page).first()).toBeVisible();
+    for (const entry of drawUnclaimedHandle()) {
+      await pickEmoji(page, entry);
+    }
+    await expect(
+      page.getByText(builderCopy.checking, { exact: true }),
+    ).toBeVisible();
+    await settle(page);
+
+    // The bar's text, as the browser lays it out, and where the page is.
+    const snapshot = () =>
+      page.locator("[data-composer-bar] p").evaluateAll((elements) => ({
+        scrollY: Math.round(window.scrollY),
+        boxes: elements.map((element) => {
+          const rect = element.getBoundingClientRect();
+          const half = (value: number) => Math.round(value * 2) / 2;
+          return [
+            half(rect.top),
+            half(rect.left),
+            half(rect.width),
+            half(rect.height),
+          ];
+        }),
+      }));
+
+    const checking = await snapshot();
+
+    await expect(
+      page.getByRole("dialog", { name: claimCopy.claimHeading }),
+    ).toBeVisible();
+    await settle(page);
+    const sheetOpen = await snapshot();
+
+    await page.keyboard.press("Escape");
+    await expect(
+      page
+        .locator("[data-composer-bar]")
+        .getByRole("button", { name: builderCopy.barClaim }),
+    ).toBeVisible();
+    await settle(page);
+    const claimShowing = await snapshot();
+
+    console.log(
+      `bar text boxes (phone): ${JSON.stringify({ checking, sheetOpen, claimShowing })}`,
+    );
+    expect(sheetOpen, "once the answer arrived and the sheet opened").toEqual(
+      checking,
+    );
+    expect(claimShowing, "once the Claim button appeared").toEqual(checking);
   });
 });
