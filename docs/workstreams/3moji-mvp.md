@@ -396,7 +396,6 @@ Every decision and action only the repo owner can take, including the questions 
 - Is three resends an hour the right limit? It is a starting value to tune, not a principle. As built (#82) it is one constant, `RESEND_LIMITS` in `packages/core/src/auth/resend-allowance.ts`, with an overridable parameter on the pure decision — so tuning it is a one-line change, and the sign-up link counts towards the three.
 - Should 🍑 and 🍆 stay claimable? Both were left in ([#18](https://github.com/joshstothard/3moji/issues/18)) on the grounds that context makes them rude. ADR-0007 makes Food & Drink a launch category, so they are now prominent rather than buried among a thousand.
 - Which order do later category drops go in, and what triggers one? ADR-0007 defers Objects and schedules nothing else.
-- Should the **canonical** word alias prefer a shorter unambiguous synonym where one exists? [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3 joins the `displayName` slugs, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` is accepted on input but names eight Handles.
 - Are 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 the right platform-owned Reserved Handles? They were chosen while implementing [#52](https://github.com/joshstothard/3moji/issues/52) and have never been confirmed as a product decision. 🧊🧊🧊 is deliberately not among them, because ADR-0004 decision 2 names it freely claimable.
 - How is launch-day email volume handled? Resend's free plan caps email at 100 a day — one verification email per claim, plus resends and collision notices — so on launch day claimant 101 gets no email and their hold expires. The owner is undecided. **Recommendation:** launch quietly on Free, log the daily send count, and upgrade to Resend Pro ($20/month, 50,000 emails) together with Vercel Pro before any public announcement.
 - Where do nightly database backups live? Phase 8 needs a private, non-public destination, and planning must pick it.
@@ -427,6 +426,7 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — The production CSP smoke test runs in Chromium only. Decided by the repo owner.
 - 2026-09-14 — The production smoke test runs `next start`, not the Docker image's standalone server, because the site deploys to Vercel. Decided by the orchestrator.
 - 2026-09-14 — #233 (server-rendered Handle-route 404 without JavaScript) deferred as a Next.js limitation. Decided by the orchestrator, for owner review.
+- 2026-09-14 — Canonical word aliases always name exactly one Handle: `displayName` slugs stay, and a curated `aliasName` is used for the five display names that also name another emoji, not the shortest term everywhere, which would publish wrong names. An alias with several candidates and none claimed lists the Handles that can be claimed. Accepted by the repo owner ([ADR-0011](../adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md))
 
 ## Changelog
 
@@ -522,3 +522,4 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — #201 finished without an ADR: the owner declined resolving the spoken form in the path, the Phase 8 criterion is reworded to the Find a Handle lookup and ticked, and the branded 404 page now offers that lookup. #233 filed under epic #199: a `[handle]` 404 has no markup without JavaScript.
 - 2026-09-14 — CSP: nonce on every page (option 1). Decided by the repo owner.
 - 2026-09-14 — Synced after PR #235: #201, #203 and #205 done (PRs #234, #232, #235), the security-headers criterion ticked, #233 appended and deferred to Backlog, and four decisions logged (HSTS without `preload`, Chromium-only CSP smoke test, `next start` for the smoke test, #233 deferral). #206 and #207 stay blocked on #32; Phase 8 stays In progress.
+- 2026-09-14 — ADR-0011 accepted: it partially supersedes ADR-0008 decisions 3 and 4, and removes the shorter-synonym open question. Implementation is a follow-up issue; the Phase 4 alias criterion stays unticked until it lands.
