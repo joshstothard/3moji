@@ -33,6 +33,18 @@ jobs:
       - uses: ./.github/actions/setup
       - run: npm run test:scripts
 
+  # An invalid workflow file is not rejected on push: GitHub records a failed,
+  # zero-job run of it on every push and never runs its real triggers (#266).
+  # scripts/actionlint.sh downloads a pinned, checksum-verified actionlint.
+  workflow-lint:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: bash scripts/actionlint.sh
+
   format:
     name: Format
     runs-on: ubuntu-latest
@@ -150,6 +162,7 @@ jobs:
       - code-health
       - adr-sync
       - script-tests
+      - workflow-lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
