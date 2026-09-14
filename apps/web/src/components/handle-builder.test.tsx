@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { UserEvent } from "@testing-library/user-event";
 import type { AvailabilityState } from "./availability-state";
@@ -404,7 +404,7 @@ describe("the Handle builder", () => {
       // one changes slot 2.
       expect(document.body).not.toHaveFocus();
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: /^Slot 2: (?!empty)/ }),
+        screen.getByRole("button", { name: /^Remove .+ from slot 2$/ }),
       );
     });
 
@@ -496,6 +496,114 @@ describe("the Handle builder", () => {
       expect(button).toHaveFocus();
       expect(screen.getByText(copy.pickerFull)).toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * Removing an emoji from a slot ([#252](https://github.com/joshstothard/3moji/issues/252)).
+ *
+ * A filled slot says what activating it does. With a pointer, hovering or
+ * keyboard-focusing it draws a coral X over the faded emoji with a "Remove
+ * <name>" label; on a touch screen, where nothing hovers, every filled slot
+ * wears a small X badge instead.
+ *
+ * jsdom evaluates no CSS, so which of the two shows, and when, is proved in
+ * `e2e/remove-emoji.spec.ts`. What is proved here is the accessible name, that
+ * the marks live inside the one permanent slot control and are hidden from
+ * assistive technology, and the classes that gate them on hover capability.
+ */
+describe("removing an emoji from a slot", () => {
+  /** Every class token on the slot's descendants, for the class assertions. */
+  function classesInside(element: HTMLElement): readonly string[] {
+    return Array.from(element.querySelectorAll("*")).flatMap((each) =>
+      Array.from(each.classList),
+    );
+  }
+
+  it("names a filled slot by what activating it does: Remove <name>", async () => {
+    const { user } = renderBuilder();
+
+    await pick(user, "ice cube");
+
+    expect(
+      screen.getByRole("button", { name: "Remove ice cube from slot 1" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps an empty slot's name, which offers nothing to remove", () => {
+    renderBuilder();
+
+    expect(screen.queryAllByRole("button", { name: /^Remove / })).toHaveLength(
+      0,
+    );
+    expect(slot(1)).toBeInTheDocument();
+  });
+
+  it("draws the X and the Remove label inside the slot control, hidden from assistive technology", async () => {
+    const { user } = renderBuilder();
+    await pick(user, "pizza");
+    const button = filledSlot(1, "pizza");
+
+    // One control per slot (#78): the marks are its children, never a second
+    // button beside it, and its accessible name comes from `aria-label` alone.
+    expect(button.textContent).toContain(
+      copy.slotRemoveHint.replace("{name}", "pizza"),
+    );
+    const marks = button.querySelectorAll("svg");
+    expect(marks.length).toBeGreaterThanOrEqual(2);
+    for (const mark of Array.from(marks)) {
+      expect(mark.closest("[aria-hidden='true']")).not.toBeNull();
+    }
+    expect(within(button).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("shows the coral X and label only on hover or keyboard focus, and only where the device can hover", async () => {
+    const { user } = renderBuilder();
+    await pick(user, "pizza");
+
+    const classes = classesInside(filledSlot(1, "pizza"));
+
+    // `group-hover` is already gated on `(hover: hover)` by Tailwind v4;
+    // focus is not, so the focus variant carries `can-hover` explicitly.
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        "group-hover:flex",
+        "can-hover:group-focus-visible:flex",
+        "text-coral",
+        "group-hover:opacity-35",
+        "can-hover:group-focus-visible:opacity-35",
+      ]),
+    );
+  });
+
+  it("gives every filled slot a small X badge on a device that cannot hover", async () => {
+    const { user } = renderBuilder();
+    await pick(user, "pizza", "ice cube");
+
+    for (const button of [filledSlot(1, "pizza"), filledSlot(2, "ice cube")]) {
+      expect(classesInside(button)).toEqual(
+        expect.arrayContaining(["hidden", "no-hover:flex", "bg-ink"]),
+      );
+    }
+    // An empty slot has nothing to remove, so it carries neither mark.
+    expect(slot(3).querySelectorAll("svg")).toHaveLength(0);
+  });
+
+  it("removes the emoji on Enter and keeps focus on that slot", async () => {
+    const { user } = renderBuilder();
+    await pick(user, "ice cube", "pizza");
+
+    const button = screen.getByRole("button", {
+      name: "Remove pizza from slot 2",
+    });
+    button.focus();
+    await user.keyboard("{Enter}");
+
+    expect(button).toHaveFocus();
+    expect(button).toHaveAccessibleName(
+      copy.slotEmpty.replace("{position}", "2"),
+    );
+    expect(button.textContent).not.toContain("Remove");
   });
 });
 
