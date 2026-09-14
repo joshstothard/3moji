@@ -183,8 +183,11 @@ test.describe("on a wide screen", () => {
     await expect(heading).toHaveCSS("text-align", "center");
     expect(await bottomOf(heading)).toBeLessThan(card.y);
 
-    const lookup = page.getByRole("search", { name: lookupCopy.heading });
-    expect((await boxOf(lookup)).y).toBeGreaterThan(card.y + card.height);
+    // Find a Handle waited below the composer until the header search (#254)
+    // replaced it.
+    await expect(
+      page.getByRole("search", { name: lookupCopy.heading }),
+    ).toHaveCount(0);
   });
 
   test("a tablet gets the same composer, at full width", async ({ page }) => {

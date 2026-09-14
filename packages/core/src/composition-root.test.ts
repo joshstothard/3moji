@@ -91,6 +91,22 @@ describe("createCoreServices", () => {
     await close();
   });
 
+  /**
+   * The header search (ADR-0012, #254): a read-only index of claimed Handles,
+   * and its per-client-address limiter bound like the others, so the route
+   * never holds the secret.
+   */
+  it("wires the header search's read-only index and its per-client-address limiter", async () => {
+    const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
+
+    expect(Object.keys(services.handleSearch)).toEqual([
+      "claimedKeysContaining",
+      "claimedKeysSaying",
+    ]);
+    expect(Object.keys(services.searchClientRateLimiter)).toEqual(["admit"]);
+    await close();
+  });
+
   it("wires the Claim's unit of work", async () => {
     const { services, close } = build(fixedClock("2026-09-12T10:00:00.000Z"));
 

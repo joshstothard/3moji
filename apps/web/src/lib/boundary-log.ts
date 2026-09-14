@@ -79,6 +79,7 @@ export const BOUNDARIES = [
   "og-image.handle",
   "viewer.read",
   "account.delete",
+  "search.read",
 ] as const;
 export type Boundary = (typeof BOUNDARIES)[number];
 

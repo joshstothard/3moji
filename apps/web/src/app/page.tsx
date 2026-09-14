@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { HandleBuilder } from "../components/handle-builder";
-import { HandleLookup } from "../components/handle-lookup";
 import { LinkedSentence } from "../components/linked-sentence";
 import { checkAvailability } from "../components/availability-action";
 import { claimFormAction } from "../components/claim-action";
@@ -44,9 +43,10 @@ export function generateMetadata(): Metadata {
  * **The connected layout** ([#263](https://github.com/joshstothard/3moji/issues/263)):
  * a centred hero, then the builder's composer, which holds the slots, the
  * picker and the claim form in one card from `md` and runs edge to edge on a
- * phone. **Find a Handle** sits below the composer rather than in the hero,
- * until the header search replaces it
- * ([#254](https://github.com/joshstothard/3moji/issues/254)).
+ * phone. **Finding a Handle is the header search's**
+ * ([#254](https://github.com/joshstothard/3moji/issues/254)), on every page,
+ * so this page carries no lookup of its own; `/find` is the no-JavaScript
+ * fallback.
  *
  * `overflow-x-clip` lets the phone's Handle bar and tabs run the full width of
  * the screen without the page scrolling sideways. It is `clip`, not `hidden`,
@@ -83,10 +83,6 @@ export default function Home() {
           checkAvailability={checkAvailability}
           claim={claimFormAction}
         />
-
-        <div className="mx-auto mt-4 max-w-xl">
-          <HandleLookup />
-        </div>
       </div>
     </main>
   );

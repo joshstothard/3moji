@@ -125,7 +125,9 @@ test("404s, 308s, redirects and notFound() write no failure line", async ({
     ["an unmatched path", "/no/such/page", 404],
     ["notFound() from the Handle route", "/abc", 404],
     ["permanentRedirect() to the canonical Handle", NON_CANONICAL, 308],
-    ["redirect() from a bare /find", "/find", 307],
+    // A bare /find renders the lookup since #254, so the redirect() case is
+    // the account page sending a signed-out visitor to sign in.
+    ["redirect() from /account when signed out", "/account", 307],
   ] as const;
 
   const sent: { name: string; id: string }[] = [];

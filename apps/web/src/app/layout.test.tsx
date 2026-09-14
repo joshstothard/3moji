@@ -17,10 +17,12 @@ jest.mock("next/font/google", () => ({
 }));
 
 // The navbar's signed-in indicator reads the current path to know when to ask
-// who is looking again (#193). The real component renders here, so the test
-// below covers the whole shell, island included.
+// who is looking again (#193), and the header search (#254) reads it and the
+// router. The real components render here, so the test below covers the whole
+// shell, both islands included.
 jest.mock("next/navigation", () => ({
   usePathname: () => "/",
+  useRouter: () => ({ push: jest.fn() }),
   redirect: jest.fn(),
   notFound: jest.fn(),
 }));

@@ -30,6 +30,7 @@ export default [
       "src/app/[[]handle]/page.tsx",
       "src/components/navbar.tsx",
       "src/components/account-menu.tsx",
+      "src/components/header-search.tsx",
       "src/components/site-analytics.tsx",
     ],
     rules: {

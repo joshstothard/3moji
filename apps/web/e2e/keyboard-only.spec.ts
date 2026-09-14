@@ -358,8 +358,9 @@ test("a visitor looks up a Handle by keyboard alone (#200)", async ({
 
   const lookupCopy = en.HandleLookup;
 
-  // Words that name no Handle, submitted with the button.
-  await page.goto("/");
+  // Words that name no Handle, submitted with the button, from a bare `/find`:
+  // the home page's lookup became the header search (#254).
+  await page.goto("/find");
   const field = page.getByRole("searchbox", { name: lookupCopy.label });
   await moveFocusTo(page, field, "Tab");
   await page.keyboard.type("three wibbles");
