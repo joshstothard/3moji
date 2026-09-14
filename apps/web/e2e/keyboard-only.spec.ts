@@ -360,6 +360,17 @@ test("a visitor looks up a Handle by keyboard alone (#200)", async ({
 
   await expect(page).toHaveURL("/ice-cube.ice-cube.ice-cube");
 
+  // From the 404 a visitor lands on when they type the spoken form as a path
+  // (#201): the lookup is there, reached and submitted by keyboard alone.
+  const response = await page.goto("/three-ice-cubes");
+  expect(response?.status()).toBe(404);
+  const onNotFound = page.getByRole("searchbox", { name: lookupCopy.label });
+  await moveFocusTo(page, onNotFound, "Tab");
+  await page.keyboard.type("three ice cubes");
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL("/ice-cube.ice-cube.ice-cube");
+
   expect(
     await page.evaluate(() => window.keyboardOnlyPointerEvents ?? null),
   ).toEqual([]);

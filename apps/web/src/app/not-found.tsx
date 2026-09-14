@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { HandleLookup } from "../components/handle-lookup";
 import en from "../../../../packages/shared/messages/en.json";
 
 /**
@@ -15,6 +16,14 @@ import en from "../../../../packages/shared/messages/en.json";
  * It changes no route's answer. `[handle]` still decides what is a Handle, a
  * word alias or neither; a reserved Handle such as `/🍕🍕🍕` still resolves with
  * 200, and only what already answered 404 is shown this page.
+ *
+ * **It offers the Find a Handle lookup** ([#201](https://github.com/joshstothard/3moji/issues/201)).
+ * The spoken path `/three-ice-cubes` stays a 404 under ADR-0008, so a visitor
+ * who typed a spoken or mistyped address searches from where they landed. The
+ * lookup is **empty, never prefilled from the path**: reading the path is
+ * reading the request. It is the page's one `search` landmark, its `h2` follows
+ * the `h1`, and it sits in a left-aligned column so the form is not centred
+ * apart from its own label.
  */
 const copy = en.NotFoundPage;
 
@@ -22,17 +31,22 @@ export const metadata: Metadata = { title: copy.metaTitle };
 
 export default function NotFound() {
   return (
-    <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
-      <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
-        {copy.heading}
-      </h1>
-      <p className="mt-4 text-lg text-slate-600">{copy.body}</p>
-      <Link
-        href="/"
-        className="mt-8 inline-block rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-      >
-        {copy.home}
-      </Link>
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+      <div className="text-center">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
+          {copy.heading}
+        </h1>
+        <p className="mt-4 text-lg text-slate-600">{copy.body}</p>
+        <Link
+          href="/"
+          className="mt-8 inline-block rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          {copy.home}
+        </Link>
+      </div>
+      <div className="mx-auto max-w-md">
+        <HandleLookup />
+      </div>
     </main>
   );
 }

@@ -37,6 +37,8 @@ const NOT_FOUND_WORDS = "three wibbles";
 /** The spoken form Profiles say for 🧊🧊🧊 (#201). */
 const SPOKEN_WORDS = "three ice cubes";
 const ICE_CUBE_ALIAS = "/ice-cube.ice-cube.ice-cube";
+/** The spoken form typed as a path: a 404 under ADR-0008, offering the lookup. */
+const SPOKEN_PATH = "/three-ice-cubes";
 
 function randomOf<T>(items: readonly T[]): T {
   const item = items[Math.floor(Math.random() * items.length)];
@@ -75,6 +77,10 @@ function pathOf(words: string): string {
 
 async function lookUp(page: Page, words: string): Promise<void> {
   await page.goto("/");
+  await submitLookup(page, words);
+}
+
+async function submitLookup(page: Page, words: string): Promise<void> {
   const field = page.getByRole("searchbox", { name: lookupCopy.label });
   await field.fill(words);
   await field.press("Enter");
@@ -155,17 +161,32 @@ for (const javaScriptEnabled of [true, false]) {
     }) => {
       await lookUp(page, SPOKEN_WORDS);
 
-      await expect(page).toHaveURL(ICE_CUBE_ALIAS);
-      // Claimed or not in the shared database, the alias page names 🧊🧊🧊 as
-      // its canonical emoji path, which is what "that Handle's page" means.
-      const canonical = await page
-        .locator('link[rel="canonical"]')
-        .getAttribute("href");
-      expect(decodeURIComponent(canonical ?? "")).toMatch(
-        /\/\u{1F9CA}\u{1F9CA}\u{1F9CA}$/u,
-      );
+      await expectIceCubeHandlePage(page);
+    });
+
+    test("the spoken path is a 404 that offers the lookup, and its words find the Handle (#201)", async ({
+      page,
+    }) => {
+      const response = await page.goto(SPOKEN_PATH);
+      expect(response?.status()).toBe(404);
+
+      await submitLookup(page, SPOKEN_WORDS);
+
+      await expectIceCubeHandlePage(page);
     });
   });
+}
+
+async function expectIceCubeHandlePage(page: Page): Promise<void> {
+  await expect(page).toHaveURL(ICE_CUBE_ALIAS);
+  // Claimed or not in the shared database, the alias page names 🧊🧊🧊 as its
+  // canonical emoji path, which is what "that Handle's page" means.
+  const canonical = await page
+    .locator('link[rel="canonical"]')
+    .getAttribute("href");
+  expect(decodeURIComponent(canonical ?? "")).toMatch(
+    /\/\u{1F9CA}\u{1F9CA}\u{1F9CA}$/u,
+  );
 }
 
 test("the lookup's answers over HTTP: a redirect to the alias, or a page, never an error", async ({
