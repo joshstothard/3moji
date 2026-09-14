@@ -108,7 +108,7 @@ Work down the table. Stop at the first row that matches.
 ### 5d. Schema and code disagree
 
 1. Compare the migrations in `packages/core/migrations/` on the deployed commit with what the database has applied. drizzle-kit records applied migrations in its own table **(verify on deploy)** for its name and location.
-2. If a migration is missing, the build's migrate step did not run or failed. Read the deployment's **build** log (build logs are not the one-hour runtime logs) and fix the cause, then redeploy.
+2. If a migration is missing, the build's migrate step did not run or failed. Read the deployment's **build** log (build logs are not the one-hour runtime logs) and fix the cause, then redeploy. The step is `scripts/vercel-migrate.mjs`, and its lines start `[vercel-migrate]`: a `fail:` line names the variable or rule that stopped it, and anything after `Applying committed migrations` is drizzle-kit's own output. A failed migration fails the build, so Vercel keeps serving the previous deployment; a site that is down with a schema SQLSTATE usually means an older deployment was promoted over a newer schema (5a), not that a build skipped its migration. The rules are in [system-overview.md § The build](../architecture/system-overview.md#the-build).
 3. Never apply DDL by hand (`docs/development/engineering-standards.md` § Database Migrations). If a migration ran and **damaged data**, go to [restore from backup](restore-from-backup.md) now.
 
 ### 5e. Hobby limit exceeded

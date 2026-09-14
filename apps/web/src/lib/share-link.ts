@@ -1,5 +1,7 @@
 import { canonicalAliasOf } from "@template/core";
 
+import { configuredSiteUrl } from "./site-url";
+
 /**
  * The link a claimed Profile offers for sharing: the site origin, `/`, and the
  * Handle's **canonical word alias**
@@ -47,10 +49,11 @@ const ALLOWED_SCHEMES: readonly string[] = ["http:", "https:"];
  * path in the configured value cannot produce `//ice-cube…` or a link under
  * `/api/auth`. **A missing or unusable value is `undefined`, never a guessed
  * host**: a hard-coded `3moji.me` would ship preview deployments links to
- * production.
+ * production. On a Vercel preview the value is the deployment's own address
+ * (`lib/site-url.ts`, #32), for the same reason.
  */
 export function siteOrigin(): string | undefined {
-  const value = process.env.BETTER_AUTH_URL;
+  const value = configuredSiteUrl(process.env);
   if (value === undefined || value === "") return undefined;
 
   let parsed: URL;

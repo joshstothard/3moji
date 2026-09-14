@@ -296,6 +296,86 @@ describe("getServices", () => {
     });
   });
 
+  /**
+   * Preview auth links (#32). `BETTER_AUTH_URL` holds the production address
+   * in every Vercel environment, so a preview must build its verification and
+   * reset links from its own address or they open production.
+   */
+  describe("the auth base URL on a Vercel preview", () => {
+    const VERCEL = ["VERCEL_ENV", "VERCEL_BRANCH_URL", "VERCEL_URL"] as const;
+    type VercelKey = (typeof VERCEL)[number];
+    const savedVercel = new Map<VercelKey, string | undefined>();
+
+    function setVercel(values: Partial<Record<VercelKey, string>>): void {
+      for (const name of VERCEL) {
+        const value = values[name];
+        if (value === undefined) Reflect.deleteProperty(process.env, name);
+        else process.env[name] = value;
+      }
+    }
+
+    beforeEach(() => {
+      for (const name of VERCEL) savedVercel.set(name, process.env[name]);
+    });
+
+    afterEach(() => {
+      for (const name of VERCEL) {
+        const value = savedVercel.get(name);
+        if (value === undefined) Reflect.deleteProperty(process.env, name);
+        else process.env[name] = value;
+      }
+    });
+
+    it("is the preview's branch URL, not the production BETTER_AUTH_URL", async () => {
+      setEnv({ ...ENV, BETTER_AUTH_URL: "https://3moji.example.com" });
+      setVercel({
+        VERCEL_ENV: "preview",
+        VERCEL_BRANCH_URL: "3moji-git-feature.vercel.example.com",
+        VERCEL_URL: "3moji-abc123.vercel.example.com",
+      });
+      const { getServices } = await loadFresh();
+
+      getServices();
+
+      expect(recordedDeps().auth.baseUrl).toBe(
+        "https://3moji-git-feature.vercel.example.com",
+      );
+    });
+
+    it("stays BETTER_AUTH_URL on production", async () => {
+      setEnv({ ...ENV, BETTER_AUTH_URL: "https://3moji.example.com" });
+      setVercel({
+        VERCEL_ENV: "production",
+        VERCEL_BRANCH_URL: "3moji-git-main.vercel.example.com",
+      });
+      const { getServices } = await loadFresh();
+
+      getServices();
+
+      expect(recordedDeps().auth.baseUrl).toBe("https://3moji.example.com");
+    });
+
+    it("refuses to start a preview with no address of its own, rather than link to production", async () => {
+      setEnv(ENV);
+      setVercel({ VERCEL_ENV: "preview" });
+      const { getServices } = await loadFresh();
+
+      expect(() => getServices()).toThrow("VERCEL_URL");
+      expect(createCoreServices).not.toHaveBeenCalled();
+    });
+
+    it("still requires BETTER_AUTH_URL on a preview, so the environment contract does not fork", async () => {
+      setEnv({ ...ENV, BETTER_AUTH_URL: undefined });
+      setVercel({
+        VERCEL_ENV: "preview",
+        VERCEL_URL: "3moji-abc123.vercel.example.com",
+      });
+      const { getServices } = await loadFresh();
+
+      expect(() => getServices()).toThrow("BETTER_AUTH_URL");
+    });
+  });
+
   it("does not build at import time, so next build needs no environment", async () => {
     setEnv({});
 

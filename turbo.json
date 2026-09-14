@@ -4,7 +4,13 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["REPORT_CONTACT_EMAIL"]
+      "env": [
+        "REPORT_CONTACT_EMAIL",
+        "BETTER_AUTH_URL",
+        "VERCEL_ENV",
+        "VERCEL_BRANCH_URL"
+      ],
+      "passThroughEnv": ["VERCEL_URL"]
     },
     "dev": {
       "cache": false,

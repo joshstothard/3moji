@@ -11,6 +11,7 @@ import { nextCookies } from "better-auth/next-js";
 
 import { createAfterBackgroundTasks } from "./after-background-tasks";
 import { isDeployed } from "./deployment";
+import { configuredSiteUrl } from "./site-url";
 
 /**
  * The application's composition point.
@@ -93,6 +94,24 @@ function emailSender(): EmailSender {
   return createRecordingEmailSender();
 }
 
+/**
+ * Where Better Auth builds its links from: `configuredSiteUrl` (#32).
+ *
+ * `BETTER_AUTH_URL` is still required everywhere, so the environment contract
+ * does not fork, but on a Vercel preview the links use the deployment's own
+ * address rather than the production one it holds.
+ */
+function authBaseUrl(): string {
+  required("BETTER_AUTH_URL");
+  const url = configuredSiteUrl(process.env);
+  if (url === undefined) {
+    throw new Error(
+      "A preview deployment has neither VERCEL_BRANCH_URL nor VERCEL_URL. Enable System Environment Variables on the Vercel project.",
+    );
+  }
+  return url;
+}
+
 function build(): CoreServices {
   // First, so a refused sender opens no connection pool.
   const sender = emailSender();
@@ -111,7 +130,7 @@ function build(): CoreServices {
     backgroundTasks: createAfterBackgroundTasks(),
     auth: {
       emailSender: sender,
-      baseUrl: required("BETTER_AUTH_URL"),
+      baseUrl: authBaseUrl(),
       secret: required("BETTER_AUTH_SECRET"),
       from: required("RESEND_FROM"),
       // The only framework-specific piece. It cannot live in packages/core,

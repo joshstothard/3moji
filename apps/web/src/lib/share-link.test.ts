@@ -110,3 +110,28 @@ describe("the share link", () => {
     expect(shareLinkOf([ICE, ICE, ICE])).toBeUndefined();
   });
 });
+
+describe("on a Vercel preview (#32)", () => {
+  const VERCEL = ["VERCEL_ENV", "VERCEL_BRANCH_URL", "VERCEL_URL"] as const;
+  const savedVercel = new Map<string, string | undefined>(
+    VERCEL.map((name) => [name, process.env[name]]),
+  );
+
+  afterEach(() => {
+    for (const name of VERCEL) {
+      const value = savedVercel.get(name);
+      if (value === undefined) Reflect.deleteProperty(process.env, name);
+      else process.env[name] = value;
+    }
+  });
+
+  it("shares the preview's own address, so a share link and a verification link agree", () => {
+    setOrigin("https://3moji.example.com");
+    process.env.VERCEL_ENV = "preview";
+    process.env.VERCEL_BRANCH_URL = "3moji-git-feature.vercel.example.com";
+
+    expect(shareLinkOf([ICE, ICE, ICE])?.href).toBe(
+      "https://3moji-git-feature.vercel.example.com/ice-cube.ice-cube.ice-cube",
+    );
+  });
+});
