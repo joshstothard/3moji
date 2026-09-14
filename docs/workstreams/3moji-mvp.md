@@ -345,11 +345,11 @@ _Rare three-of-a-kind:_
 
 _Site hygiene:_
 
-- [x] Branded 404 and error pages. Merged in PR #228. The last criterion of [#203](https://github.com/joshstothard/3moji/issues/203), a structured log line for a server-side render error, is wired through `onRequestError` in `apps/web/src/instrumentation.ts`, which the owner allowed with tracing still forbidden pending [#148](https://github.com/joshstothard/3moji/issues/148) (Decision log, 2026-09-14).
+- [x] Branded 404 and error pages. Merged in PRs #228 and #232. The last criterion of [#203](https://github.com/joshstothard/3moji/issues/203), a structured log line for a server-side render error, is wired through `onRequestError` in `apps/web/src/instrumentation.ts`, which the owner allowed with tracing still forbidden pending [#148](https://github.com/joshstothard/3moji/issues/148) (Decision log, 2026-09-14).
 - [x] A favicon.
 - [x] `robots.txt`, and a sitemap of the static pages (not every Profile).
 - [x] Home-page Open Graph metadata using the existing generic image.
-- [ ] Responses carry a Content Security Policy, HSTS, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy` and `X-Content-Type-Options`, verified by a test. **Not met until #205 merges.** HSTS, `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options` merged in PR #223. The Content Security Policy is a per-request nonce on every page (option 1 of the [#205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)), in the PR that closes #205.
+- [x] Responses carry a Content Security Policy, HSTS, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy` and `X-Content-Type-Options`, verified by a test. HSTS, `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options` merged in PR #223. The Content Security Policy, a per-request nonce on every page (option 1 of the [#205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)), merged in PR #235. HSTS is sent without `preload` (Decision log, 2026-09-14).
 
 _Operations:_
 
@@ -365,13 +365,14 @@ _Operations:_
 **Issues:**
 
 - #200 Add a "find a Handle" lookup to the home page — done
-- #201 Resolve the spoken form of a Handle in the path — done: the `/find` spoken form merged in PR #217, and the 404 page offers the lookup; the path form was not adopted (Decision log, 2026-09-14)
+- #201 Resolve the spoken form of a Handle in the path — done: the `/find` spoken form merged in PR #217, and the 404 page offers the lookup (PR #234); the path form was not adopted (Decision log, 2026-09-14)
 - #202 Celebrate an available three-of-a-kind Handle as rare — done
-- #203 Add branded not-found and error pages — open: the pages merged in PR #228, and server-side render-error logging waits on an owner decision about the tracing guard, #148 ([comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457))
+- #203 Add branded not-found and error pages — done: the pages merged in PR #228, and server-side render-error logging through `onRequestError` in PR #232
 - #204 Add a favicon, robots.txt, sitemap and home-page preview metadata — done
-- #205 Send security headers on every response — open: four headers merged in PR #223; the nonce CSP (option 1) is in the PR that closes it
+- #205 Send security headers on every response — done: four headers merged in PR #223, and the nonce CSP (option 1) in PR #235
 - #206 Back up the production database nightly — blocked on #32
-- #207 Add uptime checks and the operations runbooks — open: the runbooks merged in PRs #224 and #227, and the uptime check waits on #32
+- #207 Add uptime checks and the operations runbooks — blocked on #32: the runbooks merged in PRs #224 and #227, and the uptime check waits on #32
+- #233 Render the Handle route's 404 on the server so it works without JavaScript — deferred to Backlog: a Next.js 16.3.5 limitation (a thrown `notFound()` renders the `__next_error__` shell without JavaScript); the only fix is proxy routing, not worth it for the MVP; revisit if Next.js changes or post-launch traffic shows no-JS visitors hitting it ([deferral comment](https://github.com/joshstothard/3moji/issues/233#issuecomment-5660657064))
 
 ## Risks & mitigations
 
@@ -422,6 +423,10 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — When an open dropdown covers page text, axe checks only the open menu panel, and the full page is still checked with the menu closed. On Mobile Chrome, the four-row account menu covered the Profile's own text, so axe could not judge that text's contrast. `checkPage` in `apps/web/e2e/support/axe.ts` gained an optional `include` selector, and every other caller is unchanged (PR [#225](https://github.com/joshstothard/3moji/pull/225)). Taken by the orchestrator overnight, for owner review.
 - 2026-09-14 — Resolving the spoken form in the path (e.g. `/three-ice-cubes`) was drafted as ADR-0011 and rejected by the repo owner as not needed for the MVP; spoken input is accepted by the Find a Handle lookup, offered on the home page and the 404 page. Revisit if post-launch logs show 404s on spoken-looking paths.
 - 2026-09-14 — Instrumentation allowed for onRequestError only; tracing still forbidden pending #148. Decided by the repo owner.
+- 2026-09-14 — HSTS stays without `preload` for now. Decided by the repo owner.
+- 2026-09-14 — The production CSP smoke test runs in Chromium only. Decided by the repo owner.
+- 2026-09-14 — The production smoke test runs `next start`, not the Docker image's standalone server, because the site deploys to Vercel. Decided by the orchestrator.
+- 2026-09-14 — #233 (server-rendered Handle-route 404 without JavaScript) deferred as a Next.js limitation. Decided by the orchestrator, for owner review.
 
 ## Changelog
 
@@ -516,3 +521,4 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — Synced from GitHub: **Phase 7 Planned → Done** (epic #191 closed, all nine issues closed with #214 and #216 appended; privacy and terms are drafts pending owner review) and **Phase 8 Planned → In progress** (epic #199, 3 of 8 closed: #200, #202 and #204). #201, #203, #205 and #207 are partly merged and wait on owner decisions or #32, and #206 is blocked on #32. Nothing in either phase is verified on a live site, which waits on #32 (blocked on #19). The Decision log gains the overnight axe-scope call on #225.
 - 2026-09-14 — #201 finished without an ADR: the owner declined resolving the spoken form in the path, the Phase 8 criterion is reworded to the Find a Handle lookup and ticked, and the branded 404 page now offers that lookup. #233 filed under epic #199: a `[handle]` 404 has no markup without JavaScript.
 - 2026-09-14 — CSP: nonce on every page (option 1). Decided by the repo owner.
+- 2026-09-14 — Synced after PR #235: #201, #203 and #205 done (PRs #234, #232, #235), the security-headers criterion ticked, #233 appended and deferred to Backlog, and four decisions logged (HSTS without `preload`, Chromium-only CSP smoke test, `next start` for the smoke test, #233 deferral). #206 and #207 stay blocked on #32; Phase 8 stays In progress.
