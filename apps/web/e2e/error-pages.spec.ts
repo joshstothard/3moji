@@ -12,10 +12,16 @@ import { TEST_ERROR_MESSAGE } from "../src/lib/test-error-route";
  * and that no route's existing answer changed: a reserved Handle still
  * resolves. Their axe and contrast checks are in `accessibility.spec.ts`.
  *
+ * Every 404 offers the Find a Handle lookup, empty
+ * ([#201](https://github.com/joshstothard/3moji/issues/201)). The spoken path
+ * `/three-ice-cubes` stays a 404 under ADR-0008; `find-a-handle.spec.ts` proves
+ * the words typed into the lookup from there reach the Handle.
+ *
  * The error page comes from `/test-only-error`, which throws only because CI's
  * E2E job sets `TEST_ERROR_ROUTE=enabled` (`lib/test-error-route.ts`).
  */
 const notFoundCopy = en.NotFoundPage;
+const lookupCopy = en.HandleLookup;
 const errorCopy = en.ErrorPage;
 
 /** 🍕 U+1F355 — the platform-owned demo Handle in `RESERVED_HANDLE_ENTRIES`. */
@@ -37,6 +43,7 @@ for (const [name, path, title] of [
   ["an unknown path", "/no/such/page", notFoundCopy.metaTitle],
   ["a segment that is not a Handle", "/abc", "3moji"],
   ["a word that names no Handle", "/not-a-word-of-ours", "3moji"],
+  ["the spoken form of a Handle (#201)", "/three-ice-cubes", "3moji"],
 ] as const) {
   test(`${name} gets the branded 404, inside the layout, with status 404`, async ({
     page,
@@ -49,6 +56,14 @@ for (const [name, path, title] of [
     ).toBeVisible();
     await expect(page).toHaveTitle(title);
     await expectLayout(page);
+
+    // The lookup, empty: the page reads nothing from the request (#201).
+    await expect(
+      page.getByRole("search", { name: lookupCopy.heading }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole("searchbox", { name: lookupCopy.label }),
+    ).toHaveValue("");
 
     await page
       .getByRole("main")

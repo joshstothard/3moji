@@ -27,16 +27,40 @@ jest.mock("next/headers", () => ({
 }));
 
 const copy = en.NotFoundPage;
+const lookupCopy = en.HandleLookup;
 
 describe("NotFound", () => {
-  it("says there is nothing at this address, as the page's one heading", () => {
+  it("says there is nothing at this address, as the page's only level-one heading", () => {
     render(<NotFound />);
 
     expect(
       screen.getByRole("heading", { level: 1, name: copy.heading }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("heading")).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByText(copy.body)).toBeInTheDocument();
+  });
+
+  it("keeps its headings in order: the page's h1, then the lookup's h2 (#201)", () => {
+    render(<NotFound />);
+
+    expect(
+      screen.getAllByRole("heading").map((heading) => heading.tagName),
+    ).toEqual(["H1", "H2"]);
+    expect(
+      screen.getByRole("heading", { level: 2, name: lookupCopy.heading }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers the Find a Handle lookup, empty, as the page's one search landmark (#201)", () => {
+    render(<NotFound />);
+
+    const search = screen.getByRole("search", { name: lookupCopy.heading });
+    expect(screen.getAllByRole("search")).toHaveLength(1);
+    expect(search).toHaveAttribute("action", "/find");
+    expect(search).toHaveAttribute("method", "get");
+    expect(
+      screen.getByRole("searchbox", { name: lookupCopy.label }),
+    ).toHaveValue("");
   });
 
   it("links home", () => {
@@ -72,6 +96,8 @@ describe("NotFound", () => {
 
     expect(report.violations).toEqual([]);
     expect(report.incomplete).toEqual([]);
-    expect(report.passed).toEqual(expect.arrayContaining(["link-name"]));
+    expect(report.passed).toEqual(
+      expect.arrayContaining(["link-name", "label", "button-name"]),
+    );
   });
 });

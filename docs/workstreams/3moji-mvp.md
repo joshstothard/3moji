@@ -334,7 +334,7 @@ _Privacy, terms and reporting:_
 _Finding a Handle:_
 
 - [x] A "find a Handle" entry on the home page resolves typed words through `resolveAlias`.
-- [ ] The spoken form, with a number word and a plural (`/three-ice-cubes`), resolves to the Handle or to a listing rather than returning 404. **Not met.** The spoken form resolves in `/find` (PR #217), but the path still 404s. Accepting it conflicts with ADR-0008 decision 2, so it needs either a new ADR or a reworded criterion, and that is the owner's call ([#201 comment](https://github.com/joshstothard/3moji/issues/201#issuecomment-5656238125)).
+- [x] The spoken form (`three ice cubes`) resolves through the Find a Handle lookup, which the 404 page also offers; the spoken path itself stays a 404.
 
 _Rare three-of-a-kind:_
 
@@ -365,7 +365,7 @@ _Operations:_
 **Issues:**
 
 - #200 Add a "find a Handle" lookup to the home page — done
-- #201 Resolve the spoken form of a Handle in the path — open: the `/find` spoken form merged in PR #217, and the path form needs an owner ADR ([comment](https://github.com/joshstothard/3moji/issues/201#issuecomment-5656238125))
+- #201 Resolve the spoken form of a Handle in the path — done: the `/find` spoken form merged in PR #217, and the 404 page offers the lookup; the path form was not adopted (Decision log, 2026-09-14)
 - #202 Celebrate an available three-of-a-kind Handle as rare — done
 - #203 Add branded not-found and error pages — open: the pages merged in PR #228, and server-side render-error logging waits on an owner decision about the tracing guard, #148 ([comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457))
 - #204 Add a favicon, robots.txt, sitemap and home-page preview metadata — done
@@ -420,6 +420,7 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-13 — The agent drafts the privacy notice and terms; the owner reviews them before launch. Decided by the repo owner.
 - 2026-09-13 — Phase 7 is split: finding a Handle, the rare three-of-a-kind celebration, site hygiene and the operations minimum become Phase 8 — Findable, polished and operable, so Phase 7 holds only the launch-blocking owner return path and legal work. Decided by the repo owner when Phase 7 was planned.
 - 2026-09-14 — When an open dropdown covers page text, axe checks only the open menu panel, and the full page is still checked with the menu closed. On Mobile Chrome, the four-row account menu covered the Profile's own text, so axe could not judge that text's contrast. `checkPage` in `apps/web/e2e/support/axe.ts` gained an optional `include` selector, and every other caller is unchanged (PR [#225](https://github.com/joshstothard/3moji/pull/225)). Taken by the orchestrator overnight, for owner review.
+- 2026-09-14 — Resolving the spoken form in the path (e.g. `/three-ice-cubes`) was drafted as ADR-0011 and rejected by the repo owner as not needed for the MVP; spoken input is accepted by the Find a Handle lookup, offered on the home page and the 404 page. Revisit if post-launch logs show 404s on spoken-looking paths.
 
 ## Changelog
 
@@ -512,3 +513,4 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-13 — Owner actions and decisions gathered into [`docs/owner-actions.md`](../owner-actions.md): setup only the owner can do, decisions due before launch, and decisions that can wait until after launch.
 - 2026-09-13 — Phase 7 planned: epic #191, issues #192–#198. Phase 8 planned: epic #199, issues #200–#207.
 - 2026-09-14 — Synced from GitHub: **Phase 7 Planned → Done** (epic #191 closed, all nine issues closed with #214 and #216 appended; privacy and terms are drafts pending owner review) and **Phase 8 Planned → In progress** (epic #199, 3 of 8 closed: #200, #202 and #204). #201, #203, #205 and #207 are partly merged and wait on owner decisions or #32, and #206 is blocked on #32. Nothing in either phase is verified on a live site, which waits on #32 (blocked on #19). The Decision log gains the overnight axe-scope call on #225.
+- 2026-09-14 — #201 finished without an ADR: the owner declined resolving the spoken form in the path, the Phase 8 criterion is reworded to the Find a Handle lookup and ticked, and the branded 404 page now offers that lookup. #233 filed under epic #199: a `[handle]` 404 has no markup without JavaScript.
