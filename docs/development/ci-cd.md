@@ -34,15 +34,16 @@ push / PR
 
 ## Workflows
 
-| File                                     | Trigger                                                         | Purpose                         |
-| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------- |
-| `.github/workflows/ci.yml`               | PR, push to `main`, `workflow_dispatch`                         | Full pipeline                   |
-| `.github/workflows/auto-merge.yml`       | CI run completed, PR labelled `automerge`, `workflow_dispatch`  | Merge PRs once CI passes        |
-| `.github/workflows/security.yml`         | `workflow_call`, `workflow_dispatch`                            | Reusable security job           |
-| `.github/workflows/nightly-security.yml` | `workflow_dispatch` only (daily 06:00 UTC schedule disabled)    | Calls `security.yml`            |
-| `.github/workflows/nightly-mutation.yml` | `workflow_dispatch` only (weekdays 02:00 UTC schedule disabled) | Stryker mutation testing        |
-| `.github/workflows/morlock.yml`          | `workflow_dispatch` only (nightly 01:00 UTC schedule disabled)  | Morlock security probe          |
-| `.github/workflows/backup.yml`           | Nightly 03:17 UTC schedule (enabled), `workflow_dispatch`       | Encrypted database backup to R2 |
+| File                                         | Trigger                                                         | Purpose                               |
+| -------------------------------------------- | --------------------------------------------------------------- | ------------------------------------- |
+| `.github/workflows/ci.yml`                   | PR, push to `main`, `workflow_dispatch`                         | Full pipeline                         |
+| `.github/workflows/auto-merge.yml`           | CI run completed, PR labelled `automerge`, `workflow_dispatch`  | Merge PRs once CI passes              |
+| `.github/workflows/security.yml`             | `workflow_call`, `workflow_dispatch`                            | Reusable security job                 |
+| `.github/workflows/nightly-security.yml`     | `workflow_dispatch` only (daily 06:00 UTC schedule disabled)    | Calls `security.yml`                  |
+| `.github/workflows/nightly-mutation.yml`     | `workflow_dispatch` only (weekdays 02:00 UTC schedule disabled) | Stryker mutation testing              |
+| `.github/workflows/morlock.yml`              | `workflow_dispatch` only (nightly 01:00 UTC schedule disabled)  | Morlock security probe                |
+| `.github/workflows/backup.yml`               | Nightly 03:17 UTC schedule (enabled), `workflow_dispatch`       | Encrypted database backup to R2       |
+| `.github/workflows/neon-preview-cleanup.yml` | PR closed, hourly :23 sweep (enabled), `workflow_dispatch`      | Delete Neon preview database branches |
 
 ### Scheduled workflows are manual-only
 
@@ -56,6 +57,8 @@ gh workflow run nightly-mutation.yml
 To restore a schedule, uncomment its `schedule:` block. `morlock.yml` was already manual-only for a separate reason recorded in the workflow file (scheduled runs were being rejected by the Anthropic API); follow that note before re-enabling it. `security.yml` still runs as a blocking stage of `ci.yml` on every PR, so audit regressions are caught without the nightly run.
 
 **`backup.yml` is the exception: its schedule is on** ([#206](https://github.com/joshstothard/3moji/issues/206)). A backup that has to be remembered is not a backup, the repository is now public so the minutes are free, and until the owner sets the `BACKUPS_ENABLED` variable to `true` every run is a green no-op that stops after one step. It runs only on `main` of `joshstothard/3moji`, never on a fork. Because this repository's logs and artifacts are public, the dump is piped from `pg_dump` straight into `age`, never uploaded as an artifact, and removed from `$RUNNER_TEMP` even on failure. The database password goes in a mode-600 libpq password file there, never on `pg_dump`'s command line. `scripts/backup-workflow-guard.test.mjs` fails the Script tests job if the workflow gains an artifact upload, `set -x`, an `echo` of a secret or variable name, or an expression pasted into a script. The decisions (skip, fail naming what is missing, object key, size checks) are `scripts/backup-plan.mjs`, tested in `scripts/backup-plan.test.mjs`. Restoring is [restore from backup § 5](../runbooks/restore-from-backup.md#5-restore-from-the-nightly-backup).
+
+**`neon-preview-cleanup.yml`'s hourly sweep is on too** ([#258](https://github.com/joshstothard/3moji/issues/258)), for the same reasons: until `NEON_CLEANUP_ENABLED` is `true` every run is a green no-op, and the repository is public, so the minutes are free. See § Neon preview cleanup.
 
 ## Auto-merge
 
@@ -95,6 +98,24 @@ The exemption covers the dispatch itself and nothing downstream of it. Measured 
 **Holding a PR:** remove the `automerge` label, or convert the PR to a draft (`gh pr ready <number> --undo`). A Dependabot minor or patch PR has no label to remove, so convert it to a draft or close it.
 
 **A Dependabot bump of `better-auth` or `@better-auth/*` fails CI, so it never auto-merges.** That is intended. `scripts/better-auth-audit.test.mjs` pins the audited version until someone does the recheck in [auth.md § Rechecking the Account-creation audit](../architecture/auth.md#rechecking-the-account-creation-audit) ([#169](https://github.com/joshstothard/3moji/issues/169)).
+
+## Neon preview cleanup
+
+The Vercel-managed Neon integration creates a `preview/<git branch>` database branch for each preview deployment, and deletes it only when Vercel deletes the last deployment on it, which by default is after about six months ([Neon: preview branch cleanup](https://neon.com/docs/guides/vercel-branch-cleanup), read 2026-09-14). Neon Free allows 10 branches per project, and the project reached that on 2026-09-14 ([#258](https://github.com/joshstothard/3moji/issues/258)). `neon-preview-cleanup.yml` deletes them sooner:
+
+- **When a pull request closes**, it deletes the branch named exactly `preview/<head branch>`, unless another open pull request uses the same git branch.
+- **Every hour, at minute 23, and on a manual run, it sweeps** (`gh workflow run neon-preview-cleanup.yml`, or **Run workflow** in the Actions tab, from `main`): it deletes every `preview/` branch whose name, after the prefix, is neither an open pull request's head branch nor the start of one. Neon may shorten a long branch name, so a branch that could be a shortened open head branch is kept. The close path does not use this rule and deletes on an exact match only.
+- **It never deletes** `main`, the project's default branch, a protected branch, or any branch without the `preview/` prefix. Deleting a branch that is already gone counts as success; a delete Neon refuses fails the run, after the other deletes have been tried.
+
+**A merge by the auto-merge gate does not raise the close event.** The gate merges with `GITHUB_TOKEN`, and GitHub raises no `pull_request` event for that (§ Auto-merge), and almost every pull request here merges through the gate. So the close trigger covers pull requests merged by hand or closed without merging, and **the hourly sweep is what cleans up after auto-merged pull requests**, and after forks and Dependabot. **Decided on 2026-09-14:** an hourly scheduled sweep, chosen by the orchestrator for the owner, who asked for automatic cleanup. An auto-merged pull request's branch is therefore gone within about an hour of the merge.
+
+**Until repository variable `NEON_CLEANUP_ENABLED` is `true`, every run is a green no-op** with a notice. Once it is, a missing `NEON_API_KEY` or `NEON_PROJECT_ID` fails the run, naming what is missing. A pull request from a fork, or a run Dependabot triggered, gets no secrets, so it is skipped with a notice rather than failed; the next sweep deletes its branch.
+
+**Every decision is in `scripts/neon-preview-cleanup.mjs`**, tested in `scripts/neon-preview-cleanup.test.mjs` against a fake Neon and GitHub API. The script is also the only thing that calls an API: it sends the key to Neon in a request header from Node, so the key never goes on a command line, and it prints branch names and HTTP statuses, never a response body, the key or the project ID. `scripts/neon-preview-cleanup-workflow-guard.test.mjs` checks the workflow as text: `pull_request`, never `pull_request_target`; a `schedule:` sweep; no `set -x`; no `echo` or `printf` of the key, the project or the switch; no `${{ }}` expression pasted into a script, because a head branch name is chosen by whoever opens the pull request; no `curl`, `neonctl` or third-party action; read-only permissions; only this repository, and a manual run only from `main`. The job checks out the default branch, so the script that runs is `main`'s, never the closing pull request's.
+
+**Permissions** are `contents: read` and `pull-requests: read`. The second is what lets `GITHUB_TOKEN` list open pull requests, so a branch still in use is never deleted; if that list cannot be read, nothing is deleted.
+
+**Why not `neondatabase/delete-branch-action`.** Neon's guide suggests it, but it installs `neonctl` from npm at run time and passes the key to it, and it resolves a branch name itself. The script here matches names exactly, refuses anything but `preview/`, and is tested.
 
 ## Versioning
 
@@ -230,15 +251,18 @@ This is **non-blocking** — it is an antibody generator, not a merge gate.
 
 ## Required secrets / variables
 
-| Name                                                 | Required by    | Notes                                                                                |
-| ---------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------ |
-| `ANTHROPIC_API_KEY`                                  | `morlock.yml`  | Claude Code action                                                                   |
-| `SEMGREP_APP_TOKEN`                                  | `security.yml` | Optional — Semgrep runs without it but results won't appear in the Semgrep dashboard |
-| `BACKUP_DATABASE_URL` (secret)                       | `backup.yml`   | Production's direct Neon connection string, pooling off                              |
-| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (secrets) | `backup.yml`   | R2 API token, Object Read & Write on the backup bucket only                          |
-| `R2_ACCOUNT_ID`, `R2_BUCKET` (variables)             | `backup.yml`   | Not secret. Variables are not masked in logs                                         |
-| `BACKUP_AGE_RECIPIENT` (variable)                    | `backup.yml`   | The age **public** key. The private key never goes to GitHub                         |
-| `BACKUPS_ENABLED` (variable)                         | `backup.yml`   | `true` turns backups on; anything else makes every run a green no-op                 |
+| Name                                                 | Required by                | Notes                                                                                                                              |
+| ---------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`                                  | `morlock.yml`              | Claude Code action                                                                                                                 |
+| `SEMGREP_APP_TOKEN`                                  | `security.yml`             | Optional — Semgrep runs without it but results won't appear in the Semgrep dashboard                                               |
+| `BACKUP_DATABASE_URL` (secret)                       | `backup.yml`               | Production's direct Neon connection string, pooling off                                                                            |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (secrets) | `backup.yml`               | R2 API token, Object Read & Write on the backup bucket only                                                                        |
+| `R2_ACCOUNT_ID`, `R2_BUCKET` (variables)             | `backup.yml`               | Not secret. Variables are not masked in logs                                                                                       |
+| `BACKUP_AGE_RECIPIENT` (variable)                    | `backup.yml`               | The age **public** key. The private key never goes to GitHub                                                                       |
+| `BACKUPS_ENABLED` (variable)                         | `backup.yml`               | `true` turns backups on; anything else makes every run a green no-op                                                               |
+| `NEON_API_KEY` (secret)                              | `neon-preview-cleanup.yml` | A project-scoped Neon API key for the 3moji project. Setup: [owner actions](../owner-actions.md), "Clean up Neon preview branches" |
+| `NEON_PROJECT_ID` (variable)                         | `neon-preview-cleanup.yml` | The Neon project ID. Variables are not masked in logs; the script never prints it                                                  |
+| `NEON_CLEANUP_ENABLED` (variable)                    | `neon-preview-cleanup.yml` | `true` turns the cleanup on. Anything else, or unset, makes every run a green no-op                                                |
 
 All other secrets (external service URLs, registry credentials) are only needed when you enable the
 corresponding features in your project. See comments in `ci.yml` for guidance.

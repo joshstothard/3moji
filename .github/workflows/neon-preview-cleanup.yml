@@ -1,0 +1,114 @@
+name: Neon Preview Cleanup
+
+# Deletes Neon preview database branches (#258). The Vercel-managed Neon
+# integration creates a `preview/<git branch>` branch for each preview
+# deployment and deletes it only when Vercel deletes the last deployment on it,
+# after about six months by default (neon.com/docs/guides/vercel-branch-cleanup).
+# Neon Free allows 10 branches per project, so they have to go sooner.
+#
+# - A pull request closing deletes the branch named exactly
+#   `preview/<head branch>`.
+# - Every hour, and on a manual run (Run workflow), it sweeps: it deletes
+#   every `preview/` branch whose name is neither an open pull request's head
+#   branch nor the start of one. Neon may shorten a long name, so a branch
+#   that could be a shortened open head branch is kept.
+# - Nothing deletes `main`, the default branch, a protected branch, or a
+#   branch without the `preview/` prefix. scripts/neon-preview-cleanup.mjs
+#   makes every one of those decisions, and is the only thing here that calls
+#   an API.
+#
+# A MERGE BY THE AUTO-MERGE GATE DOES NOT RAISE THE CLOSE EVENT. The gate
+# merges with GITHUB_TOKEN, and GitHub raises no `pull_request` event for that
+# (docs/development/ci-cd.md, Auto-merge). So the close trigger covers pull
+# requests merged by hand or closed without merging, and the hourly sweep
+# cleans up after everything else, forks and Dependabot included (decided
+# 2026-09-14). The repository is public, so the minutes are free.
+# docs/owner-actions.md has the setup.
+#
+# THIS REPOSITORY AND ITS ACTIONS LOGS ARE PUBLIC. So:
+#
+# - The trigger is `pull_request`, which gives a pull request from a fork no
+#   secrets. The script skips those runs, and runs Dependabot triggered, with
+#   a notice.
+# - No step echoes a secret or a variable, and no step turns on shell tracing.
+#   Values reach the script only through `env:`, never pasted into a script
+#   with an expression: a head branch name is chosen by whoever opened the
+#   pull request.
+# - The API key goes to Neon in a request header from Node, never on a command
+#   line. The script prints branch names and HTTP statuses, never a response
+#   body, the key or the project ID.
+#
+# Guarded by scripts/neon-preview-cleanup-workflow-guard.test.mjs; every
+# decision is tested in scripts/neon-preview-cleanup.test.mjs. Until the owner
+# sets NEON_CLEANUP_ENABLED=true, every run is a green no-op.
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+  schedule:
+    # Minute 23 of every hour, off the hour, when GitHub's scheduler is least
+    # congested. Scheduled runs are on the default branch.
+    - cron: "23 * * * *"
+
+permissions:
+  contents: read
+  # Listing open pull requests, so a branch still in use is never deleted.
+  pull-requests: read
+
+concurrency:
+  group: neon-preview-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete Neon preview branches
+    # Never on a fork. A manual run only from main: a run from another branch
+    # could run a modified copy of this file with the Neon key.
+    if: github.repository == 'joshstothard/3moji' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The script always comes from the default branch, never from the pull
+      # request being closed.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      # Skips (green) until NEON_CLEANUP_ENABLED is true, and for forks and
+      # Dependabot; fails naming any missing setting once enabled. Writes
+      # proceed=true|false.
+      - name: Decide whether to clean up
+        id: decide
+        env:
+          NEON_CLEANUP_ENABLED: ${{ vars.NEON_CLEANUP_ENABLED }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          ACTOR: ${{ github.actor }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: node scripts/neon-preview-cleanup.mjs decide
+
+      - name: Delete preview branches
+        if: steps.decide.outputs.proceed == 'true'
+        env:
+          NEON_CLEANUP_ENABLED: ${{ vars.NEON_CLEANUP_ENABLED }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          ACTOR: ${{ github.actor }}
+          HEAD_REF: ${{ github.head_ref }}
+          # Left out of the open pull requests: GitHub can still list the
+          # closing one as open when its close event fires.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/neon-preview-cleanup.mjs clean
