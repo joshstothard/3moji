@@ -75,6 +75,21 @@ Items are grouped by when they have to happen:
   - **Blocks:** nothing.
   - **Detail:** PR [#238](https://github.com/joshstothard/3moji/pull/238), [Vercel Web Analytics quickstart](https://vercel.com/docs/analytics/quickstart).
 
+- [ ] **Clean up Neon preview branches**
+  - **What:** The Neon project reached the Free plan's 10-branch limit on 2026-09-14, because the Vercel integration keeps each `preview/<git branch>` database branch for about six months. `.github/workflows/neon-preview-cleanup.yml` deletes them, once it has a key ([#258](https://github.com/joshstothard/3moji/issues/258)). After the pull request that adds it has merged:
+    1. **Create a project-scoped Neon API key.** In the Neon Console, open your organization's **Settings**, then **API keys**, select **Create new**, choose **Project-scoped**, and pick the 3moji project. Only an organization Admin can create one. It has Editor access to that one project, which covers deleting branches, and it can't delete the project or reach any other. If the Settings page offers no project-scoped key (this hasn't been checked for an organization Vercel manages), a personal key from **Account settings**, **API keys** also works, but it reaches every project you can see, so say so here.
+    2. **Add it to GitHub as a secret.** In this repository's **Settings**, **Secrets and variables**, **Actions**, on the **Secrets** tab, add a repository secret named `NEON_API_KEY`. Paste the key straight from Neon: never into a note, an issue or a chat.
+    3. **Add the project ID as a variable.** On the **Variables** tab, add `NEON_PROJECT_ID`. Copy it from the Neon project's **Settings**, **General**. Vercel's environment variables list a `NEON_PROJECT_ID` too, but Vercel hides the value, so copy it from Neon. Variables are not masked in logs; the workflow never prints it.
+    4. **Turn it on.** Add the variable `NEON_CLEANUP_ENABLED` with the value `true`. Until then every run is a green no-op.
+    5. **Sweep the existing branches.** In **Actions**, open **Neon Preview Cleanup**, select **Run workflow** on `main` (or run `gh workflow run neon-preview-cleanup.yml`). The log names each branch it deleted, and how many preview branches had no open pull request. `main` and any branch without the `preview/` prefix are never touched.
+    6. **Sweep again whenever a preview deployment has no database**, until the decision below is made.
+  - **Why it matters:** once the limit is reached, a new preview deployment gets no database branch, so previews can't be tested.
+  - **The gap:** a pull request closing deletes its branch only when it is merged by hand or closed without merging. The auto-merge gate merges with `GITHUB_TOKEN`, which GitHub doesn't raise a `pull_request` event for, so an auto-merged pull request leaves its branch until the next sweep ([CI/CD § Neon preview cleanup](development/ci-cd.md#neon-preview-cleanup)).
+  - **Options:** sweep by hand (step 6); add a daily scheduled sweep to the workflow (free on a public repository); or have the auto-merge gate dispatch the sweep after each merge, as it already dispatches CI.
+  - **Recommendation:** a daily scheduled sweep. It's one `schedule:` line, catches forks and Dependabot too, and leaves the merge gate alone. Either change is a small follow-up issue.
+  - **Blocks:** nothing technical, but previews stop getting a database once the limit is reached.
+  - **Detail:** [#258](https://github.com/joshstothard/3moji/issues/258), [CI/CD § Neon preview cleanup](development/ci-cd.md#neon-preview-cleanup), [Neon: preview branch cleanup](https://neon.com/docs/guides/vercel-branch-cleanup), [Neon: API keys](https://neon.com/docs/manage/api-keys).
+
 - [ ] **Optional: register the sending domain with Google Postmaster Tools, and check Microsoft SNDS**
   - **What:** The first live verification email landed in Outlook's Junk folder ([#240](https://github.com/joshstothard/3moji/issues/240)). Every email is now multipart text and HTML, which should help. To see how providers rate the domain:
     - **Google Postmaster Tools:** add `mail.3moji.me` (or `3moji.me`) and verify it with the TXT record Google gives you, at GoDaddy. Nothing in the app changes.
