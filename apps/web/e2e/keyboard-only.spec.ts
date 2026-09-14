@@ -4,6 +4,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   curatedEmojiSet,
   findCuratedEmoji,
+  HANDLE_LENGTH,
   isReservedHandle,
   resolveAlias,
   spokenHandle,
@@ -63,6 +64,9 @@ const LARGEST_CATEGORY = Math.max(
   ],
 );
 const MAX_PRESSES = LARGEST_CATEGORY + 40;
+
+/** Tailwind's `md`, 48rem: below it the builder takes its phone layout (#263). */
+const PHONE_BELOW = 768;
 
 /**
  * The APIs this spec must never call, spelled as bare names so that this list
@@ -540,14 +544,19 @@ test("a visitor fills, swaps and reaches the claim form by keyboard alone", asyn
 
   const changedSlot = slotButton(page, chosen.position);
   const slotUnfocused = await styleOf(changedSlot);
+  // On a phone, a complete and available Handle opens the claim sheet, which
+  // takes focus (#263). On a wider screen focus stays on the slot.
+  const onPhone = (page.viewportSize()?.width ?? PHONE_BELOW) < PHONE_BELOW;
   await page.keyboard.press("Enter");
 
-  // The suggestion that had focus is gone; focus is on the slot it changed.
   const newName = nameOf(swapped[chosen.position] ?? "");
   await expect(changedSlot).toHaveAccessibleName(
     filledSlotName(chosen.position, newName),
   );
-  await expectFocusIndicated(page, changedSlot, slotUnfocused);
+  if (!onPhone) {
+    // The suggestion that had focus is gone; focus is on the slot it changed.
+    await expectFocusIndicated(page, changedSlot, slotUnfocused);
+  }
 
   // A suggestion is well-formed and not Reserved, not proven free; say so if
   // this one happens to be taken rather than failing somewhere later.
@@ -556,11 +565,32 @@ test("a visitor fills, swaps and reaches the claim form by keyboard alone", asyn
     "the swapped Handle should be free in a fresh database",
   ).toBeVisible();
   await expect(suggestion).toHaveCount(0);
-  // Still on the slot once the suggestions have unmounted.
-  await expect(changedSlot).toBeFocused();
-  await expectFocusShown(page);
 
-  // On to the claim form, which follows the builder.
+  if (onPhone) {
+    const sheet = page.getByRole("dialog", { name: claimCopy.claimHeading });
+    const close = sheet.getByRole("button", { name: builderCopy.sheetClose });
+    await expect(close).toBeFocused();
+    await expectFocusShown(page);
+
+    // Escape gives focus back to the slot bar, and the sheet opens again from
+    // the keyboard.
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(slotButton(page, HANDLE_LENGTH - 1)).toBeFocused();
+    await moveFocusTo(
+      page,
+      page.getByRole("button", { name: builderCopy.sheetReopen }),
+      "Tab",
+    );
+    await page.keyboard.press("Enter");
+    await expect(close).toBeFocused();
+  } else {
+    // Still on the slot once the suggestions have unmounted.
+    await expect(changedSlot).toBeFocused();
+    await expectFocusShown(page);
+  }
+
+  // On to the claim form: step 2 of the composer, or the phone's sheet.
   const email = page.getByRole("textbox", { name: claimCopy.claimEmailLabel });
   await moveFocusTo(page, email, "Tab");
   await page.keyboard.type("keyboard-only@example.com");

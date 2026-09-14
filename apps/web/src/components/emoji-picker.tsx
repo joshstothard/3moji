@@ -25,6 +25,13 @@ import en from "../../../../packages/shared/messages/en.json";
  * them to a tablist would change their keyboard behaviour (arrow keys, one tab
  * stop), which is its own decision, not a side effect of removing search.
  *
+ * **Inside the composer** ([#263](https://github.com/joshstothard/3moji/issues/263)).
+ * The picker is part of the builder's card rather than a block of its own, so
+ * its heading is for assistive technology only. On a phone the row of tabs
+ * sticks under the Handle bar while the grid scrolls, scrolls sideways rather
+ * than wrapping, and runs edge to edge; from `md` it sits in the card and
+ * wraps. The pressed tab is ink, as the connected layout draws it.
+ *
  * Each emoji button is named by its **curated display name**, and the glyph
  * inside it is `aria-hidden`. Without that, a screen reader reads the code
  * point rather than the word, which is the failure #78's accessibility
@@ -56,47 +63,57 @@ export function EmojiPicker({ onPick, full }: EmojiPickerProps) {
   const shown = inCategory(category);
 
   return (
-    <section aria-labelledby="emoji-picker-heading" className="mt-12">
-      <h2
-        id="emoji-picker-heading"
-        className="font-display text-[32px] leading-none font-extrabold tracking-[-0.04em] text-ink sm:text-5xl"
-      >
+    <section aria-labelledby="emoji-picker-heading">
+      <h3 id="emoji-picker-heading" className="sr-only">
         {copy.pickerHeading}
-      </h2>
-      <p aria-live="polite" className="text-sm text-muted mt-1 min-h-5">
+      </h3>
+
+      {/* On a phone this row sticks straight under the Handle bar: the header
+          is 4rem (5rem from `sm`) and the bar 78px, each overlapping the one
+          above by a pixel so no sliver of the page shows between them. It is
+          opaque paper and runs the full width of the screen. */}
+      <div
+        data-picker-tabs=""
+        className="z-[5] bg-paper pt-0.5 pb-1.5 max-md:sticky max-md:top-[calc(8.875rem-2px)] max-md:mx-[calc(50%-50vw)] max-md:border-b max-md:border-line max-md:px-4 max-md:shadow-[0_10px_24px_-18px_rgb(26_21_35/0.4)] sm:max-md:top-[calc(9.875rem-2px)] sm:max-md:px-8 md:bg-transparent md:px-10 md:pt-6 md:pb-0"
+      >
+        <div
+          role="group"
+          aria-label={copy.pickerCategoriesLabel}
+          className="flex gap-2 max-md:-mx-1 max-md:overflow-x-auto max-md:p-1 max-md:[scrollbar-width:none] md:flex-wrap"
+        >
+          {RELEASED_CATEGORIES.map((released) => (
+            <button
+              key={released}
+              type="button"
+              // Pressed only when the grid below is this category's content.
+              aria-pressed={released === category}
+              onClick={() => {
+                setCategory(released);
+              }}
+              // The border is the builder's (#243): the white fill is about
+              // 1.04:1 on paper, so the border is what identifies the control.
+              // Pressed, the tab is ink (#263) and the border takes the fill's
+              // colour: the ink fill is the cue, 16.87:1 on paper.
+              className="inline-flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-medium border border-control bg-card text-body hover:bg-violet-tint hover:border-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet aria-pressed:bg-ink aria-pressed:border-ink aria-pressed:text-white aria-pressed:hover:bg-ink"
+            >
+              {released}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <p
+        aria-live="polite"
+        className="min-h-5 pt-2 text-sm text-muted md:px-10"
+      >
         {full ? copy.pickerFull : ""}
       </p>
-
-      <div
-        role="group"
-        aria-label={copy.pickerCategoriesLabel}
-        className="mt-4 flex flex-wrap gap-2"
-      >
-        {RELEASED_CATEGORIES.map((released) => (
-          <button
-            key={released}
-            type="button"
-            // Pressed only when the grid below is this category's content.
-            aria-pressed={released === category}
-            onClick={() => {
-              setCategory(released);
-            }}
-            // The border is the builder's (#243): the white fill is about
-            // 1.04:1 on paper, so the border is what identifies the control.
-            // Pressed, it takes the fill's colour, because nothing is 3:1
-            // against both `violet` and the page; the violet fill is the cue.
-            className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium border border-control bg-card text-body hover:bg-violet-tint hover:border-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet aria-pressed:bg-violet aria-pressed:border-violet aria-pressed:text-white aria-pressed:hover:bg-violet"
-          >
-            {released}
-          </button>
-        ))}
-      </div>
 
       {shown.length === 0 ? null : (
         // Five equal columns on a phone (about 56px cells at 390px), and from
         // `sm` as many columns of at least 4rem as fit, so the leftover width
         // is shared out rather than left as a gap on the right (#253).
-        <ul className="mt-6 grid grid-cols-5 gap-2 rounded-card border border-line bg-card p-3.5 sm:grid-cols-[repeat(auto-fill,minmax(4rem,1fr))] sm:gap-2.5 sm:rounded-card-lg sm:p-7">
+        <ul className="mt-2 grid grid-cols-5 gap-2 max-md:px-2 sm:grid-cols-[repeat(auto-fill,minmax(4rem,1fr))] sm:gap-2.5 md:px-10 md:pb-8">
           {shown.map((entry) => (
             // Keyed by code point, which is unique across the curated set, so
             // switching category re-orders the buttons rather than remounting

@@ -17,8 +17,6 @@
     "claimHandle": "Claim a Handle"
   },
   "Home": {
-    "eyebrowEmoji": "🧊🧊🧊",
-    "eyebrow": "“three ice cubes” is a web address",
     "heading": "Your web address, in {accent}",
     "headingAccent": "three emoji.",
     "tagline": "Claim three emoji, put your links behind them, and share your page by saying it out loud."
@@ -57,7 +55,14 @@
     "swapHeading": "Try one of these instead",
     "swapSuggestion": "Use {spoken}",
     "rareBadge": "Rare find",
-    "rareAnnouncement": "A rare find: all three emoji match, and this three-of-a-kind Handle is available."
+    "rareAnnouncement": "A rare find: all three emoji match, and this three-of-a-kind Handle is available.",
+    "pickTwoMore": "Pick two more",
+    "pickOneMore": "Pick one more",
+    "stepLabel": "Step 2",
+    "stepLocked": "Opens when all three are picked and the Handle is free.",
+    "sheetAvailable": "Available",
+    "sheetClose": "Close",
+    "sheetReopen": "Make this Handle yours"
   },
   "HandlePage": {
     "unclaimed": "Nobody has this Handle yet.",

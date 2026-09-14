@@ -18,6 +18,8 @@ export interface ClaimFormProps {
   /** The percent-encoded canonical segment of the Handle being claimed. */
   readonly handle: string;
   readonly claim: SubmitClaim;
+  /** A short line above the heading, such as the composer's "Step 2" (#263). */
+  readonly eyebrow?: string | undefined;
 }
 
 type Rejection = Exclude<ClaimFormState["state"], "idle">;
@@ -94,7 +96,7 @@ const FIELD =
  * and describe the submit button instead — marking the email invalid for "this
  * Handle is taken" would send a screen reader user to fix the wrong thing.
  */
-export function ClaimForm({ handle, claim }: ClaimFormProps) {
+export function ClaimForm({ handle, claim, eyebrow }: ClaimFormProps) {
   const [state, formAction] = useActionState(claim, IDLE);
   /**
    * The email is kept across a rejection, so nobody retypes it to try another
@@ -124,18 +126,28 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
   return (
     <section
       aria-labelledby={HEADING_ID}
-      className="mt-12 mx-auto max-w-md rounded-card bg-card p-6 shadow-card border border-line"
+      className="md:grid md:grid-cols-[15rem_minmax(0,1fr)] md:items-start md:gap-x-10"
       id={SECTION_ID}
     >
-      <h2 className="text-xl font-semibold text-ink mb-2" id={HEADING_ID}>
-        {copy.claimHeading}
-      </h2>
-      <p className="text-base text-muted mb-6">{copy.claimBody}</p>
+      <div>
+        {eyebrow === undefined ? null : (
+          <p className="mb-1.5 text-xs font-semibold tracking-[0.08em] text-muted uppercase">
+            {eyebrow}
+          </p>
+        )}
+        <h2
+          className="mb-2 font-display text-2xl leading-tight font-bold tracking-[-0.02em] text-ink"
+          id={HEADING_ID}
+        >
+          {copy.claimHeading}
+        </h2>
+        <p className="mb-5 text-[15px] text-body md:mb-0">{copy.claimBody}</p>
+      </div>
 
       <form
         action={formAction}
         aria-labelledby={HEADING_ID}
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-4 md:grid md:grid-cols-2 md:items-start md:gap-x-5"
       >
         {/* The public canonical segment of the Handle, not anything about the
             person. The action canonicalises it again; nothing here is trusted. */}
@@ -216,7 +228,7 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
         </div>
 
         <p
-          className="min-h-6 text-base font-medium text-red-800"
+          className="min-h-6 text-base font-medium text-red-800 md:col-span-2"
           id={MESSAGE_ID}
           role="alert"
         >
@@ -227,7 +239,7 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
           aria-describedby={
             message !== "" && !fieldsAtFault ? MESSAGE_ID : undefined
           }
-          className="self-start rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+          className="self-stretch rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet md:col-span-2 md:justify-self-start"
           type="submit"
         >
           {copy.claimSubmit}

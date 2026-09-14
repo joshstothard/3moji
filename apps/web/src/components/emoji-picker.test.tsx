@@ -307,9 +307,11 @@ describe("the emoji picker's accessibility and picking", () => {
           "border",
           "border-control",
           "hover:border-violet",
-          // Selected, the border takes the fill's colour: nothing is 3:1
-          // against both `violet` and the page, so the fill is the cue.
-          "aria-pressed:border-violet",
+          // Selected, the tab is ink, as the connected layout draws it
+          // (#263), and the border takes the fill's colour: the fill is the
+          // cue, 16.87:1 on the paper page.
+          "aria-pressed:bg-ink",
+          "aria-pressed:border-ink",
         ]),
       );
     }

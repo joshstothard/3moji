@@ -29,7 +29,7 @@ import {
   measureBorderContrast,
   measureContrast,
 } from "./support/contrast";
-import { categoryTabs, pickEmoji } from "./support/picker";
+import { categoryTabs, dismissClaimSheet, pickEmoji } from "./support/picker";
 import { seedClaimedHandle } from "./support/seed";
 
 /**
@@ -290,6 +290,9 @@ test("the picker's category and emoji button borders meet non-text contrast", as
     await emojiButtons.nth(pick).click();
   }
   await expect(emojiButtons.first()).toHaveAttribute("aria-disabled", "true");
+  // If those three are free, a phone opens the claim sheet over the grid
+  // (#263); the buttons being measured are behind it, so close it.
+  await dismissClaimSheet(page);
   await page.mouse.move(0, 0);
   await expectBorderIdentifiesControl(
     emojiButtons.first(),
