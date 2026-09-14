@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
 import { Navbar } from "../components/navbar";
 import { Footer } from "../components/footer";
+import { SiteAnalytics } from "../components/site-analytics";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <div className="flex-1">{children}</div>
           <Footer />
         </div>
-        <Analytics />
+        <SiteAnalytics />
       </body>
     </html>
   );
