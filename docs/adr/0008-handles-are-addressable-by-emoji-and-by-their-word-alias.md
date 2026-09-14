@@ -1,7 +1,9 @@
 # ADR-0008: Handles are addressable by emoji and by their word alias
 
-**Status:** Accepted
+**Status:** Accepted, partially superseded by ADR-0011
 **Date:** 2026-09-12
+
+> Decision 3's canonical alias source, and decision 4's `none` row for an alias with more than one candidate, superseded by [ADR-0011: Every canonical word alias names exactly one Handle, and an ambiguous unclaimed alias lists what can be claimed](./0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md) on 2026-09-14. The rest of this ADR still applies.
 
 ## Context
 
