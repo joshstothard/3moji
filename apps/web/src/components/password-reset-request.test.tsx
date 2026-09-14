@@ -67,6 +67,17 @@ jest.mock("next/server", () => ({
 /** Better Auth's HTTP limit: what the form must not exceed. */
 const HTTP_MAX = AUTH_RATE_LIMITS.requestPasswordReset.max;
 
+/**
+ * The limiter's clock, pinned
+ * ([#268](https://github.com/joshstothard/3moji/issues/268)), as every other
+ * limiter suite pins its own. The limit is a fixed one-hour window, and each
+ * submission really waits out the 500 ms floor: on the real clock, a test's six
+ * submissions could straddle a UTC hour boundary, start the count again, and
+ * admit a sixth request. The floor keeps the real clock, below: it is measured
+ * in real time.
+ */
+const LIMITER_NOW = new Date("2026-09-13T12:30:00.000Z");
+
 const CLIENT = "203.0.113.7";
 const REGISTERED = "owner@example.com";
 const UNREGISTERED = "nobody@example.com";
@@ -96,7 +107,7 @@ const freshWorld = (): World => {
           ? Promise.reject(new DatabaseQueryFailed("ECONNREFUSED", undefined))
           : store.record(hits, forgetBefore),
     },
-    clock: { now: () => new Date() },
+    clock: { now: () => LIMITER_NOW },
     secret: "s".repeat(32),
   });
   return world;
