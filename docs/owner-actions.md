@@ -152,6 +152,7 @@ Items are grouped by when they have to happen:
     8. **Governing law:** the terms now say England and Wales. **This is an assumption for you to confirm**, or change to Scotland or Northern Ireland. The "last updated" dates are set to 14 September 2026.
     9. **Limitation of liability wording:** short plain wording is drafted in [#242](https://github.com/joshstothard/3moji/issues/242). It does not exclude liability for death or personal injury caused by negligence, for fraud, or for anything the law does not allow to be excluded. Legal advice on it is still recommended.
     10. **The "within one month" reply** to rights requests, the UK GDPR default: confirm you can meet it.
+  - **Follow-up once nightly backups go live** ([#206](https://github.com/joshstothard/3moji/issues/206), PR [#250](https://github.com/joshstothard/3moji/pull/250)): the privacy notice must name Cloudflare R2 as the backup store, with 30-day retention. This is for your review, and isn't yet in the copy.
   - **Why it matters:** the pages are an agent's plain-English draft, and nobody with legal training has reviewed them. The footer and claim form now link to them from every page ([#198](https://github.com/joshstothard/3moji/issues/198)).
   - **Options:** answer each yourself, or take the list to a legal review.
   - **Recommendation:** none recorded beyond the item above.
