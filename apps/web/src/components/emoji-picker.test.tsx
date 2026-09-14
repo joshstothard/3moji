@@ -308,6 +308,46 @@ describe("the emoji picker's accessibility and picking", () => {
     ).toContain("focus-visible:outline-indigo-600");
   });
 
+  /**
+   * The border is what identifies each button as a control
+   * ([#243](https://github.com/joshstothard/3moji/issues/243)): the white fill
+   * and `shadow-sm` are about 1.05:1 on the `slate-50` page. jsdom evaluates no
+   * CSS, so this pins the classes, one token at a time so `border` cannot be
+   * satisfied by `border-slate-500`; `accessibility.spec.ts` measures them.
+   */
+  it("gives every category and emoji button the builder's border", () => {
+    renderPicker();
+    const tokens = (element: HTMLElement) => element.className.split(/\s+/);
+
+    for (const tab of within(categoryGroup()).getAllByRole("button")) {
+      expect(tokens(tab)).toEqual(
+        expect.arrayContaining([
+          "border",
+          "border-slate-500",
+          "hover:border-indigo-600",
+          // Selected, the border takes the fill's colour: nothing is 3:1
+          // against both `indigo-600` and the page, so the fill is the cue.
+          "aria-pressed:border-indigo-600",
+        ]),
+      );
+    }
+
+    const grid = screen.getByRole("list");
+    const emojiButtons = within(grid).getAllByRole("button");
+    expect(emojiButtons.length).toBeGreaterThan(0);
+    for (const button of emojiButtons) {
+      expect(tokens(button)).toEqual(
+        expect.arrayContaining([
+          "border",
+          "border-slate-500",
+          "hover:border-indigo-600",
+          // A full Handle takes the hover affordance away, border included.
+          "aria-disabled:hover:border-slate-500",
+        ]),
+      );
+    }
+  });
+
   it("reports the code point of the emoji that was picked", async () => {
     const { onPick, user } = renderPicker();
 
