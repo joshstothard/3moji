@@ -18,19 +18,24 @@ const PORT = Number(process.env["PRODUCTION_SMOKE_PORT"] ?? "3107");
 const ORIGIN = `http://localhost:${String(PORT)}`;
 
 /**
- * The E2E job's environment, for a production server. `TEST_EMAIL_SENDER` and
- * `TEST_ERROR_ROUTE` are dropped because production refuses the first and
- * ignores the second, and the auth base URL follows the port.
+ * The E2E job's environment, for a production server.
+ *
+ * **`TEST_EMAIL_SENDER` and `TEST_ERROR_ROUTE` are set empty, not left out.**
+ * The server still receives the runner's own environment, so a key missing
+ * here arrives anyway. In CI's E2E job that meant `TEST_EMAIL_SENDER=recording`
+ * reached `next start`, `lib/services.ts` refused it under
+ * `NODE_ENV=production`, and every database read on `/` and the Profile
+ * degraded. `services.ts` treats an empty value as unset, and so does
+ * `lib/test-error-route.ts`. The auth base URL follows the port.
  */
 const serverEnv: Record<string, string> = {
   ...Object.fromEntries(
     Object.entries(process.env).filter(
-      (entry): entry is [string, string] =>
-        entry[1] !== undefined &&
-        entry[0] !== "TEST_EMAIL_SENDER" &&
-        entry[0] !== "TEST_ERROR_ROUTE",
+      (entry): entry is [string, string] => entry[1] !== undefined,
     ),
   ),
+  TEST_EMAIL_SENDER: "",
+  TEST_ERROR_ROUTE: "",
   NODE_ENV: "production",
   BETTER_AUTH_URL: ORIGIN,
 };
