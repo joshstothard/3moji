@@ -141,14 +141,25 @@ export function aliasTermSlugs(): readonly string[] {
 }
 
 /**
- * The one canonical alias of the Handle made of `codepoints`: its three
- * `displayName` slugs, joined by dots — 🧊🧊🧊 is
- * `ice-cube.ice-cube.ice-cube`.
+ * The one canonical alias of the Handle made of `codepoints`, and a name for
+ * **exactly that one Handle** — 🧊🧊🧊 is `ice-cube.ice-cube.ice-cube`.
  *
- * This is what the product publishes, copies and prints (decision 3). It is
- * built from the **curated** display name rather than the CLDR one, which is
- * why 🍆 gives `aubergine` and not `eggplant` — and why ADR-0008 records that a
- * curated rename is a breaking URL change.
+ * This is what the product publishes, copies and prints (ADR-0008 decision 3).
+ * Each position is the **curated** display name's slug, which is why 🍆 gives
+ * `aubergine` and not `eggplant`, and why a curated rename is a breaking URL
+ * change.
+ *
+ * **Unless that slug also names another emoji**
+ * ([ADR-0011](../../../../docs/adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md)
+ * decision 1). `bat` names both 🦇 and 🏓, so `bat.bat.bat` names eight
+ * Handles, and a share link built from it would become a listing the moment
+ * another of them was claimed. Such a position takes the emoji's curated
+ * `aliasName` instead: 🦇🦇🦇 is `bats.bats.bats`. No shorter word is preferred
+ * anywhere else (decision 4).
+ *
+ * A clashing slug with no `aliasName` falls back to the slug rather than to
+ * `undefined`, which callers read as "not a claimable emoji". The curation test
+ * in `alias.test.ts` is what makes that fallback unreachable.
  *
  * Returns `undefined` if any code point is not a claimable emoji: there is no
  * alias for a Handle that cannot exist, and a partial one would be worse than
@@ -167,9 +178,21 @@ export function canonicalAliasOf(
     if (entry === undefined) {
       return undefined;
     }
-    terms.push(slugify(entry.displayName));
+    terms.push(canonicalTermOf(entry));
   }
   return terms.join(ALIAS_SEPARATOR);
+}
+
+/** The term one emoji contributes to a canonical alias (ADR-0011 decision 1). */
+function canonicalTermOf(entry: CuratedEmoji): string {
+  const display = slugify(entry.displayName);
+  if (
+    (byTerm.get(display)?.length ?? 0) <= 1 ||
+    entry.aliasName === undefined
+  ) {
+    return display;
+  }
+  return slugify(entry.aliasName);
 }
 
 /**

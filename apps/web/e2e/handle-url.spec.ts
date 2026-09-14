@@ -1,6 +1,31 @@
 import { expect, test } from "@playwright/test";
+import {
+  isReservedHandle,
+  resolveAlias,
+  type AliasCandidate,
+} from "@template/core";
 import en from "../../../packages/shared/messages/en.json";
 import { UNCLAIMED_SEVERAL_ALIAS } from "./support/aliases";
+
+/** Every Handle `alias` names, in the resolver's order. */
+function candidatesOf(alias: string): readonly AliasCandidate[] {
+  const resolution = resolveAlias(alias);
+  if (!resolution.ok) throw new Error(`${alias} no longer resolves.`);
+  return resolution.candidates;
+}
+
+/** The candidates no Reserved Handle rule forbids, which nobody may seed. */
+function claimableCandidatesOf(alias: string): readonly AliasCandidate[] {
+  return candidatesOf(alias).filter(
+    (candidate) => !isReservedHandle(candidate.key),
+  );
+}
+
+function reservedCandidatesOf(alias: string): readonly AliasCandidate[] {
+  return candidatesOf(alias).filter((candidate) =>
+    isReservedHandle(candidate.key),
+  );
+}
 
 /**
  * End-to-end proof of the Phase 2 outcome: a URL containing emoji resolves to
@@ -222,18 +247,32 @@ test("an alias page declares the emoji path as canonical", async ({
   expect(body).toContain(`${ICE}${ICE}${ICE}`);
 });
 
-test("an alias naming more than one Handle says so and lists nothing", async ({
+test("an alias naming several Handles, none claimed, lists the ones that can be claimed", async ({
   request,
 }) => {
-  // An alias naming eight Handles, none of them claimed, so there is nothing to
-  // list and the page says so. No spec may seed it; see support/aliases.ts.
+  // ADR-0011 decision 5, over HTTP and so with no JavaScript at all. The alias
+  // names eight Handles and no spec may claim any of them (support/aliases.ts);
+  // 🍎🍎🍎 is Reserved ("Brand-like: Apple"), so it is the one left out. The
+  // rows follow the resolver's order and link to each emoji path.
+  const expected = claimableCandidatesOf(UNCLAIMED_SEVERAL_ALIAS);
+  const reserved = reservedCandidatesOf(UNCLAIMED_SEVERAL_ALIAS);
+  expect(expected).toHaveLength(7);
+  expect(reserved).toHaveLength(1);
+
   const response = await request.get(`/${UNCLAIMED_SEVERAL_ALIAS}`, {
     maxRedirects: 0,
   });
 
   expect(response.status()).toBe(200);
   const body = await response.text();
-  expect(body).toContain(copy.aliasSeveral);
+  expect(body).toContain(`aria-label="${copy.aliasClaimListingLabel}"`);
+  const hrefs = [...body.matchAll(/<a[^>]* href="\/((?:%[0-9A-F]{2})+)"/g)].map(
+    (match) => match[1],
+  );
+  expect(hrefs).toEqual(expected.map((candidate) => candidate.encoded));
+  for (const candidate of reserved) {
+    expect(body).not.toContain(`href="/${candidate.encoded}"`);
+  }
   expect(body).not.toContain(builderCopy.builderHeading);
   expect(body).not.toContain(`rel="canonical"`);
 });
