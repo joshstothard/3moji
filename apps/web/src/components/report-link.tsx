@@ -18,10 +18,11 @@ export function ReportLink({ encoded }: { readonly encoded: string }) {
   if (href === undefined) return null;
 
   return (
-    <p className="mt-10 text-center text-sm">
+    <p className="mt-4 text-center text-sm">
+      {/* Muted, 4.75:1 on paper, and underlined: it is quiet, not hidden. */}
       <a
         href={href}
-        className="text-slate-600 underline hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        className="inline-flex min-h-11 items-center text-muted underline underline-offset-4 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
       >
         {en.HandlePage.report}
       </a>

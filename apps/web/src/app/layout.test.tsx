@@ -1,8 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 // next/font/google runs a build-time font loader that cannot execute under Jest.
+// Each loader answers with the class that defines its CSS variable, which is
+// what the root layout has to put on `<html>` (#251).
 jest.mock("next/font/google", () => ({
-  Inter: () => ({ className: "font-inter" }),
+  Inter: () => ({ className: "font-inter", variable: "font-inter-variable" }),
+  Bricolage_Grotesque: () => ({
+    className: "font-bricolage",
+    variable: "font-display-variable",
+  }),
+  Geist: () => ({ className: "font-geist", variable: "font-sans-variable" }),
+  Geist_Mono: () => ({
+    className: "font-geist-mono",
+    variable: "font-mono-variable",
+  }),
 }));
 
 // The navbar's signed-in indicator reads the current path to know when to ask
@@ -57,6 +68,26 @@ describe("RootLayout", () => {
 
   it("renders the product name from the navbar", () => {
     expect(shell()).toContain("3moji");
+  });
+
+  /**
+   * #251. The brand's three typefaces are self-hosted by `next/font` and reach
+   * the page as CSS variables, which the `@theme` block in `globals.css` reads.
+   * They are declared on `<html>`, so every element, the body's own font
+   * included, resolves them. Inter is gone.
+   */
+  it("puts the brand's display, body and mono font variables on <html>, and no Inter", () => {
+    const html = /<html[^>]*class="([^"]*)"/.exec(shell())?.[1] ?? "";
+    const classes = html.split(/\s+/);
+
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        "font-display-variable",
+        "font-sans-variable",
+        "font-mono-variable",
+      ]),
+    );
+    expect(shell()).not.toMatch(/font-inter/);
   });
 
   it("titles the document with the product name", () => {

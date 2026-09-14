@@ -69,10 +69,10 @@ export default async function FindPage({ searchParams }: FindPageProps) {
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <h1 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">
+      <h1 className="text-3xl font-bold text-ink mb-3 tracking-tight">
         {copy.notFoundHeading}
       </h1>
-      <p className="text-base text-slate-700">{copy.notFound}</p>
+      <p className="text-base text-body">{copy.notFound}</p>
 
       <HandleLookup defaultValue={typed} />
     </main>

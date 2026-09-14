@@ -68,30 +68,30 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
 
   return (
     <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+      <h1 className="text-3xl font-bold text-ink tracking-tight">
         {copy.heading}
       </h1>
 
       {summary.state === "owner" && (
-        <p className="mt-4 text-lg text-slate-700">
+        <p className="mt-4 text-lg text-body">
           {copy.yourHandle} <span className="text-2xl">{summary.key}</span>
         </p>
       )}
 
       <section
         aria-labelledby="delete-account-heading"
-        className="mt-10 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        className="mt-10 rounded-card border border-line bg-card p-6 shadow-card"
       >
         <h2
           id="delete-account-heading"
-          className="text-2xl font-semibold text-slate-900"
+          className="text-2xl font-semibold text-ink"
         >
           {copy.deleteHeading}
         </h2>
-        <p className="mt-3 text-base text-slate-700">{copy.deleteIntro}</p>
+        <p className="mt-3 text-base text-body">{copy.deleteIntro}</p>
         <ul
           id="delete-account-consequences"
-          className="mt-3 list-disc pl-6 text-base text-slate-900"
+          className="mt-3 list-disc pl-6 text-base text-ink"
         >
           <li>{copy.consequenceHandle}</li>
           <li>{copy.consequenceProfile}</li>
@@ -100,7 +100,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
 
         {error !== undefined && (
           <p
-            className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-base text-red-800"
+            className="mt-6 rounded-2xl bg-red-50 px-4 py-3 text-base text-red-800"
             role="alert"
           >
             {error}
@@ -110,19 +110,17 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
         <form action={deleteAccountAction} className="mt-6 flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <label
-              className="text-base font-medium text-slate-700"
+              className="text-base font-medium text-body"
               htmlFor="delete-account-confirmation"
             >
               {copy.confirmLabel}{" "}
-              <strong className="font-mono text-slate-900">
-                {copy.confirmWord}
-              </strong>
+              <strong className="font-mono text-ink">{copy.confirmWord}</strong>
             </label>
             <input
               aria-describedby="delete-account-consequences"
               autoCapitalize="none"
               autoComplete="off"
-              className="rounded-xl border border-slate-500 px-4 py-3 text-base text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="rounded-2xl border border-control px-4 py-3 text-base text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
               id="delete-account-confirmation"
               name="confirmation"
               required
@@ -132,7 +130,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           </div>
 
           <button
-            className="self-start rounded-xl bg-red-700 px-5 py-3 text-base font-semibold text-white hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="self-start rounded-full bg-red-700 px-5 py-3 text-base font-semibold text-white hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
             type="submit"
           >
             {copy.submit}

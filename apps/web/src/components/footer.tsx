@@ -14,22 +14,27 @@ const copy = en.Footer;
 const TWEMOJI_URL = "https://github.com/jdecked/twemoji";
 const LICENCE_URL = "https://creativecommons.org/licenses/by/4.0/";
 
-/**
- * The footer's own links. `min-h-6` meets WCAG 2.5.8's 24px target, and the
- * outline is the focus indicator the keyboard-only spec looks for.
- */
-const NAV_LINK =
-  "inline-flex min-h-6 items-center text-slate-700 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+const FOCUS =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet";
 
-/** Links inside the credit sentence, which WCAG 2.5.8 exempts as inline. */
-const INLINE_LINK =
-  "underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+/**
+ * The footer's own links. `min-h-11` gives each a 44px target, and the outline
+ * is the focus indicator the keyboard-only spec looks for. Muted text is
+ * 4.75:1 on paper.
+ */
+const NAV_LINK = `inline-flex min-h-11 items-center text-muted underline-offset-4 hover:text-ink hover:underline ${FOCUS}`;
+
+/**
+ * Links inside the credit sentence, which WCAG 2.5.8 exempts as inline. They
+ * stay underlined: inside a sentence, colour alone would not set them apart.
+ */
+const INLINE_LINK = `underline hover:text-ink ${FOCUS}`;
 
 /**
  * The footer on every page
  * ([#198](https://github.com/joshstothard/3moji/issues/198)): the privacy
  * notice, the terms of use, a way to report a page, the Twemoji credit, and the
- * UI version.
+ * UI version. Since #251 it signs off with the wordmark and the tagline.
  *
  * **A server component that reads configuration and nothing else.** It is
  * rendered by the root layout, so a request header or cookie read here would
@@ -46,30 +51,38 @@ export function Footer() {
   const reportHref = siteReportLink();
 
   return (
-    <footer className="bg-white border-t border-slate-200">
-      <div className="max-w-5xl mx-auto flex flex-col items-center gap-3 px-4 py-6 text-center sm:px-6 lg:px-8">
-        <nav aria-label={copy.legalNavLabel}>
-          <ul className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
-            <li>
-              <Link className={NAV_LINK} href="/privacy">
-                {copy.privacy}
-              </Link>
-            </li>
-            <li>
-              <Link className={NAV_LINK} href="/terms">
-                {copy.terms}
-              </Link>
-            </li>
-            {reportHref !== undefined && (
+    <footer className="border-t border-line">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-7 text-center sm:px-8 sm:text-left lg:px-12">
+        <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
+          <p className="flex flex-wrap items-baseline justify-center gap-x-2.5 text-sm text-muted">
+            <span className="font-display text-lg font-extrabold tracking-[-0.03em] text-ink">
+              {en.Brand.wordmark}
+            </span>
+            <span>{copy.tagline}</span>
+          </p>
+          <nav aria-label={copy.legalNavLabel}>
+            <ul className="flex flex-wrap justify-center gap-x-6 text-sm">
               <li>
-                <a className={NAV_LINK} href={reportHref}>
-                  {copy.report}
-                </a>
+                <Link className={NAV_LINK} href="/privacy">
+                  {copy.privacy}
+                </Link>
               </li>
-            )}
-          </ul>
-        </nav>
-        <p className="max-w-prose text-xs leading-5 text-slate-600">
+              <li>
+                <Link className={NAV_LINK} href="/terms">
+                  {copy.terms}
+                </Link>
+              </li>
+              {reportHref !== undefined && (
+                <li>
+                  <a className={NAV_LINK} href={reportHref}>
+                    {copy.report}
+                  </a>
+                </li>
+              )}
+            </ul>
+          </nav>
+        </div>
+        <p className="text-xs leading-5 text-muted">
           <LinkedSentence
             links={{
               twemoji: (
@@ -86,7 +99,7 @@ export function Footer() {
             text={copy.emojiCredit}
           />
         </p>
-        <p className="text-xs text-slate-600">{uiLabel}</p>
+        <p className="text-xs text-muted">{uiLabel}</p>
       </div>
     </footer>
   );

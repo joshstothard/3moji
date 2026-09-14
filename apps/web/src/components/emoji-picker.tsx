@@ -92,11 +92,11 @@ export function EmojiPicker({ onPick, full }: EmojiPickerProps) {
     <section aria-labelledby="emoji-picker-heading" className="mt-12">
       <h2
         id="emoji-picker-heading"
-        className="text-sm font-semibold text-slate-900 uppercase tracking-wide"
+        className="font-display text-[32px] leading-none font-extrabold tracking-[-0.04em] text-ink sm:text-5xl"
       >
         {copy.pickerHeading}
       </h2>
-      <p aria-live="polite" className="text-sm text-slate-500 mt-1 min-h-5">
+      <p aria-live="polite" className="text-sm text-muted mt-1 min-h-5">
         {full ? copy.pickerFull : ""}
       </p>
 
@@ -114,7 +114,7 @@ export function EmojiPicker({ onPick, full }: EmojiPickerProps) {
           onChange={(event) => {
             setQuery(event.target.value);
           }}
-          className="w-full max-w-sm rounded-xl bg-white border border-slate-500 shadow-sm px-4 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="min-h-11 w-full max-w-sm rounded-full bg-card border border-control px-5 text-[15px] text-ink placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
         />
       </div>
 
@@ -133,23 +133,23 @@ export function EmojiPicker({ onPick, full }: EmojiPickerProps) {
             onClick={() => {
               openCategory(released);
             }}
-            // The border is the builder's (#243): the white fill is 1.05:1 on
-            // the page, so the border is what identifies the control. Pressed,
-            // it takes the fill's colour, because nothing is 3:1 against both
-            // `indigo-600` and the page; the indigo fill is the cue there.
-            className="rounded-xl px-3 py-1.5 text-sm font-medium border border-slate-500 shadow-sm bg-white text-slate-600 hover:bg-slate-100 hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-pressed:bg-indigo-600 aria-pressed:border-indigo-600 aria-pressed:text-white aria-pressed:hover:bg-indigo-600"
+            // The border is the builder's (#243): the white fill is about
+            // 1.04:1 on paper, so the border is what identifies the control.
+            // Pressed, it takes the fill's colour, because nothing is 3:1
+            // against both `violet` and the page; the violet fill is the cue.
+            className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium border border-control bg-card text-body hover:bg-violet-tint hover:border-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet aria-pressed:bg-violet aria-pressed:border-violet aria-pressed:text-white aria-pressed:hover:bg-violet"
           >
             {released}
           </button>
         ))}
       </div>
 
-      <p aria-live="polite" className="mt-4 text-sm text-slate-500 min-h-5">
+      <p aria-live="polite" className="mt-4 text-sm text-muted min-h-5">
         {status}
       </p>
 
       {shown.length === 0 ? null : (
-        <ul className="mt-2 flex flex-wrap gap-1">
+        <ul className="mt-2 flex flex-wrap gap-1.5 rounded-card border border-line bg-card p-3 sm:rounded-card-lg sm:p-6">
           {shown.map((entry) => (
             // Keyed by code point, which is unique across the curated set, so
             // filtering re-orders the buttons rather than remounting them.
@@ -170,7 +170,7 @@ export function EmojiPicker({ onPick, full }: EmojiPickerProps) {
                 // A full Handle removes the hover affordance rather than fading
                 // the grid out: dimming it reads as breakage, and the state is
                 // already announced by `aria-disabled` and said in words above.
-                className="text-2xl leading-none rounded-xl p-2 bg-white border border-slate-500 shadow-sm hover:bg-slate-100 hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-white aria-disabled:hover:border-slate-500"
+                className="text-2xl leading-none rounded-2xl p-2 bg-paper border border-control hover:bg-violet-tint hover:border-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet aria-disabled:cursor-not-allowed aria-disabled:hover:bg-paper aria-disabled:hover:border-control"
               >
                 <span aria-hidden="true">{entry.emoji}</span>
               </button>

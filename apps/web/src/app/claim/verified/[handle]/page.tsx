@@ -54,21 +54,21 @@ export default async function VerifiedPage({ params }: VerifiedPageProps) {
           </span>
         </p>
 
-        <h1 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">
+        <h1 className="text-3xl font-bold text-ink mb-3 tracking-tight">
           {copy.verifiedHeading}
         </h1>
 
         {spoken !== undefined && (
-          <p className="text-lg text-slate-500 mb-2">
+          <p className="text-lg text-muted mb-2">
             {copy.spoken.replace("{spoken}", spoken)}
           </p>
         )}
 
-        <p className="text-lg text-slate-500">{copy.verifiedBody}</p>
+        <p className="text-lg text-muted">{copy.verifiedBody}</p>
 
         <p className="mt-8">
           <a
-            className="inline-block rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="inline-block rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
             href={`/${result.encoded}`}
           >
             {copy.verifiedLink}

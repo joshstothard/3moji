@@ -35,13 +35,13 @@ export default function NotFound() {
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
       <div className="text-center">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
           {copy.heading}
         </h1>
-        <p className="mt-4 text-lg text-slate-600">{copy.body}</p>
+        <p className="mt-4 text-lg text-body">{copy.body}</p>
         <Link
           href="/"
-          className="mt-8 inline-block rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="mt-8 inline-block rounded-full bg-violet px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
         >
           {copy.home}
         </Link>

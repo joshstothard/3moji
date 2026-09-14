@@ -85,31 +85,51 @@ export function ShareLinkControl({ href }: ShareLinkControlProps) {
         : "";
 
   return (
-    <section
-      aria-labelledby={labelId}
-      className="mt-10 rounded-xl bg-white px-5 py-4 text-center shadow-sm"
-    >
-      <p id={labelId} className="text-base font-semibold text-slate-900">
+    <section aria-labelledby={labelId} className="mt-8">
+      {/* The region's name. The brand's dark pill needs no visible heading:
+          the link and the button say what it is (#251). */}
+      <p id={labelId} className="sr-only">
         {copy.shareHeading}
       </p>
-      <p id={linkId} className="mt-2 break-all font-mono text-slate-700">
-        {href}
-      </p>
-      <button
-        type="button"
-        aria-describedby={linkId}
-        onClick={() => {
-          void copyLink();
-        }}
-        className="mt-3 rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-      >
-        {copy.shareCopy}
-      </button>
+      <div className="flex flex-col gap-3 rounded-card-lg bg-ink p-3 sm:flex-row sm:items-center sm:rounded-full sm:py-2 sm:pr-2 sm:pl-5">
+        {/* 12.23:1 on ink. */}
+        <p
+          id={linkId}
+          className="min-w-0 flex-1 px-2 font-mono text-[15px] break-all text-ink-soft sm:px-0"
+        >
+          {href}
+        </p>
+        <button
+          type="button"
+          aria-describedby={linkId}
+          onClick={() => {
+            void copyLink();
+          }}
+          // A white focus ring: violet is 2.92:1 on the ink around it.
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-violet px-[18px] text-[15px] font-semibold text-white hover:bg-violet-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        >
+          <svg
+            aria-hidden="true"
+            className="size-4"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+          >
+            <rect height="11" rx="2" width="11" x="9" y="9" />
+            <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+          </svg>
+          {copy.shareCopy}
+        </button>
+      </div>
       {state === "manual" && (
         <div className="mt-4 text-left">
           <label
             htmlFor={fieldId}
-            className="block text-sm font-medium text-slate-900"
+            className="block text-sm font-medium text-ink"
           >
             {copy.shareManualLabel}
           </label>
@@ -122,14 +142,14 @@ export function ShareLinkControl({ href }: ShareLinkControlProps) {
             onFocus={(event) => {
               event.currentTarget.select();
             }}
-            className="mt-1 block w-full rounded-xl border border-slate-500 px-3 py-2 font-mono text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="mt-1 block w-full rounded-2xl border border-control bg-card px-4 py-3 font-mono text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
           />
         </div>
       )}
       <p
         role="status"
         aria-live="polite"
-        className="mt-3 text-sm text-slate-600"
+        className="mt-3 text-center text-sm text-body"
       >
         {announcement}
       </p>

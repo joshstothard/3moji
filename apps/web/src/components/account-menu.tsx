@@ -177,7 +177,7 @@ export function AccountMenu() {
     return (
       <Link
         href="/sign-in"
-        className="rounded-xl px-3 py-2 text-base font-semibold text-indigo-700 underline hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        className="inline-flex min-h-11 items-center rounded-full px-4 text-[15px] font-medium text-ink hover:text-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
       >
         {copy.signIn}
       </Link>
@@ -197,7 +197,7 @@ export function AccountMenu() {
         onClick={() => {
           setOpenedOn(open ? undefined : pathname);
         }}
-        className="flex items-center gap-2 rounded-xl border border-slate-500 bg-white px-3 py-2 text-base font-semibold text-slate-900 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        className="flex min-h-11 items-center gap-2 rounded-full border border-control bg-card px-4 text-[15px] font-semibold text-ink hover:bg-violet-tint focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
       >
         {shown.state === "owner" && (
           // The Profile link below names the Handle's page for assistive
@@ -210,7 +210,7 @@ export function AccountMenu() {
       {open && (
         <div
           id={listId}
-          className="absolute right-0 mt-2 min-w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-sm"
+          className="absolute right-0 z-20 mt-2 min-w-56 rounded-card border border-line bg-card p-2 shadow-card"
         >
           {shown.state === "owner" ? (
             <ul className="flex flex-col">
@@ -230,9 +230,7 @@ export function AccountMenu() {
               </li>
             </ul>
           ) : (
-            <p className="px-3 py-2 text-base text-slate-700">
-              {copy.noHandle}
-            </p>
+            <p className="px-3 py-2 text-base text-body">{copy.noHandle}</p>
           )}
           <SignOutForm />
         </div>
@@ -270,11 +268,11 @@ function SignOutForm() {
   return (
     <form
       action={signOutAndAskAgain}
-      className="mt-2 border-t border-slate-200 pt-2"
+      className="mt-2 border-t border-line pt-2"
     >
       <button
         type="submit"
-        className="block w-full rounded-lg px-3 py-2 text-left text-base text-slate-900 underline hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-base text-ink underline hover:bg-violet-tint focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
       >
         {copy.signOut}
       </button>
@@ -292,7 +290,7 @@ function AccountLink({
   return (
     <Link
       href={href}
-      className="block rounded-lg px-3 py-2 text-base text-slate-900 underline hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      className="flex min-h-11 items-center rounded-2xl px-3 text-base text-ink underline hover:bg-violet-tint focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
     >
       {children}
     </Link>
