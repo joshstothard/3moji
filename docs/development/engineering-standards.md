@@ -102,13 +102,35 @@ Every schema change requires a versioned migration file committed in the same PR
 
 ### Styling
 
-This project uses **Tailwind CSS v4** (CSS-first, no `tailwind.config.ts` needed). The PostCSS plugin is `@tailwindcss/postcss`. Global styles live in `apps/web/src/app/globals.css`: the `@import "tailwindcss"` directive, and one `@theme` block registering the Handle builder's rare three-of-a-kind animations, `animate-rare-pop` and `animate-rare-hop` ([#202](https://github.com/joshstothard/3moji/issues/202)).
+This project uses **Tailwind CSS v4** (CSS-first, no `tailwind.config.ts` needed). The PostCSS plugin is `@tailwindcss/postcss`. Global styles live in `apps/web/src/app/globals.css`: the `@import "tailwindcss"` directive, a `@theme` block holding the brand tokens ([#251](https://github.com/joshstothard/3moji/issues/251)) and the Handle builder's rare three-of-a-kind animations, `animate-rare-pop` and `animate-rare-hop` ([#202](https://github.com/joshstothard/3moji/issues/202)), and a `@theme inline` block mapping the font utilities to the `next/font` variables.
 
 **Motion is opt-in and brief.** Apply an animation only through the `motion-safe:` variant, so `prefers-reduced-motion: reduce` gets none and a static equivalent carries the meaning; run it once (never `infinite`) and within about a second; and animate `transform` rather than `opacity`, so text rests fully opaque and its contrast can be measured. A CSS animation replays when its element is inserted, so to play one again, remount the element with a `key` rather than toggling a class on a permanent control.
 
-Design tokens in use: `slate` for neutrals, `indigo-600` for the primary accent, `rounded-xl` cards, `shadow-sm` elevation, `bg-slate-50` page background. Keep new UI consistent with these.
+**Design tokens: the 3moji brand** ([#251](https://github.com/joshstothard/3moji/issues/251)). `@theme` adds these to Tailwind's palette, so each is an ordinary utility. Use them for new UI, not `slate` or `indigo`:
 
-Font: Inter loaded via `next/font/google` in `apps/web/src/app/layout.tsx`.
+| Token                                               | Value                                                                  | Use                                                                                                                     |
+| --------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `paper`                                             | `#FBF8F4`                                                              | Page background (`bg-paper` on `<body>`)                                                                                |
+| `card`                                              | `#FFFFFF`                                                              | Cards, fields, pills                                                                                                    |
+| `ink`                                               | `#1A1523`                                                              | Headings and primary text, the dark pill (16.87:1 on paper)                                                             |
+| `body`                                              | `#4A4453`                                                              | Running text (8.84:1 on paper)                                                                                          |
+| `muted`                                             | `#736C7E`                                                              | Secondary text: 4.75:1 on paper, 5.03:1 on white. **Never on `violet-tint`** (4.35:1)                                   |
+| `ink-soft`                                          | `#D9D3E3`                                                              | Text on `ink` (12.23:1)                                                                                                 |
+| `line`                                              | `#ECE6DD`                                                              | Decorative edges only: card outlines, dividers (1.17:1, identifies nothing)                                             |
+| `control`                                           | `#8C8497`                                                              | A border that identifies a control: 3.38:1 on paper, 3.58:1 on white, 3.10:1 on `violet-tint`                           |
+| `violet` / `violet-hover` / `violet-tint`           | `#5B3DF5` / `#3F24C9` / `#F0ECFF`                                      | The one accent: primary buttons, links, focus rings. White on violet is 6.12:1                                          |
+| `sunshine`                                          | `#FFC53D`                                                              | Rare Handles only (ink on it is 11.32:1)                                                                                |
+| `coral`                                             | `#E5484D`                                                              | Remove only. White on it is 3.91:1, so it carries an icon, never small text                                             |
+| `available` / `available-tint` / `available-ink`    | `#1F9D55` / `#E6F6EC` / `#16723F`                                      | The available state (the ink is 5.34:1 on the tint)                                                                     |
+| `rounded-slot` / `rounded-card` / `rounded-card-lg` | 24px / 28px / 32px                                                     | Slots and Link rows / cards / large cards. Buttons and pills are `rounded-full`, fields `rounded-2xl` or `rounded-full` |
+| `shadow-card`                                       | `0 1px 2px rgb(26 21 35 / .04), 0 16px 32px -16px rgb(26 21 35 / .22)` | The one soft shadow                                                                                                     |
+| `tracking-display`                                  | `-0.045em`                                                             | Display headings                                                                                                        |
+
+Two values differ from the design canvas, both for WCAG AA: **muted** is darkened from `#7A7385`, which is 4.29:1 on paper, and **`control`** replaces the canvas's control border `#E4DDD2`, which is 1.27:1 on paper and cannot identify a control under WCAG 1.4.11. `accessibility.spec.ts` measures every control border against 3:1, so a border that identifies a control is `border-control`, never `border-line`.
+
+**Typefaces**, loaded through `next/font/google` in `apps/web/src/app/layout.tsx`, which downloads them at build time and serves them from this origin, so the Content Security Policy's `font-src 'self'` holds and no page asks Google for anything. Each is a CSS variable on `<html>`: **Bricolage Grotesque** (`font-display`, 700/800, tight tracking) for display type, **Geist** (`font-sans`, the default, 400/500/600) for everything you read, and **Geist Mono** (`font-mono`) for URLs.
+
+**No inline styles and no decorative layers behind text.** The production policy refuses a `style` attribute, so a visual effect is a class. And axe works out stacking for itself: a purely decorative element behind text — even `aria-hidden` with `pointer-events: none` — made it report that text's contrast as incomplete, which `accessibility.spec.ts` refuses. That is why the landing page has no radial glow.
 
 ### Data Fetching
 

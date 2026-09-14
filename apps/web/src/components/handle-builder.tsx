@@ -334,10 +334,13 @@ export function HandleBuilder({
 
   return (
     <>
-      <section aria-labelledby="handle-builder-heading" className="mt-12">
+      <section
+        aria-labelledby="handle-builder-heading"
+        className="mt-12 rounded-card border border-line bg-card p-5 shadow-card sm:rounded-card-lg sm:p-10"
+      >
         <h2
           id="handle-builder-heading"
-          className="text-sm font-semibold text-slate-900 uppercase tracking-wide text-center"
+          className="scroll-mt-28 text-[13px] font-semibold text-muted uppercase tracking-[0.08em]"
         >
           {copy.builderHeading}
         </h2>
@@ -345,7 +348,7 @@ export function HandleBuilder({
         <div
           role="group"
           aria-label={copy.slotsLabel}
-          className="mt-4 flex justify-center gap-3"
+          className="mt-5 grid grid-cols-3 gap-2.5 sm:gap-4"
         >
           {slots.map((emoji, index) => (
             // The index is the key on purpose: a slot is a fixed position, not
@@ -377,7 +380,7 @@ export function HandleBuilder({
                   clear(index);
                 }
               }}
-              className="w-20 h-20 text-4xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-500 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-disabled:border-dashed aria-disabled:hover:border-slate-500"
+              className="aspect-square w-full text-5xl sm:text-7xl leading-none flex items-center justify-center rounded-slot bg-paper border border-control hover:border-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet aria-disabled:border-dashed aria-disabled:hover:border-control"
             >
               {/* Keyed on the rarity so the glyph, never the button, remounts:
                   the hop replays on every return to a rare triple, and the
@@ -402,14 +405,14 @@ export function HandleBuilder({
 
         <p
           aria-live="polite"
-          className="mt-6 text-center text-lg text-slate-900"
+          className="mt-6 font-display text-xl leading-tight font-bold tracking-[-0.02em] text-ink sm:text-[28px]"
         >
           {spoken === undefined
             ? copy.spokenEmpty
             : format(copy.spoken, { spoken })}
         </p>
 
-        <p className="mt-2 text-center text-sm text-slate-500">
+        <p className="mt-1.5 text-sm text-muted sm:text-[15px]">
           <span className="sr-only">{copy.urlLabel}</span>
           <span className="font-mono">{copy.urlHost}</span>
           {path === "" ? null : (
@@ -421,7 +424,7 @@ export function HandleBuilder({
 
         <p
           aria-live="polite"
-          className="mt-6 text-center text-sm font-medium text-indigo-600 min-h-5"
+          className="mt-5 text-sm font-medium text-violet min-h-5"
         >
           {availability === undefined ? "" : AVAILABILITY_COPY[availability]}
         </p>
@@ -437,12 +440,8 @@ export function HandleBuilder({
         {rare ? (
           // Hidden from assistive technology, which has the sentence above;
           // keyed on the Handle so a new rare triple plays the pop afresh.
-          <div
-            key={segment}
-            aria-hidden="true"
-            className="mt-3 flex justify-center"
-          >
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-sm font-semibold text-white shadow-sm motion-safe:animate-rare-pop">
+          <div key={segment} aria-hidden="true" className="mt-3 flex">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sunshine px-3 py-1 text-sm font-semibold text-ink motion-safe:animate-rare-pop">
               <span>{"✨"}</span>
               <span>{copy.rareBadge}</span>
             </span>
@@ -451,16 +450,13 @@ export function HandleBuilder({
 
         {suggestions.length === 0 ? null : (
           <div className="mt-6">
-            <h3
-              id="handle-swaps-heading"
-              className="text-center text-sm text-slate-500"
-            >
+            <h3 id="handle-swaps-heading" className="text-sm text-muted">
               {copy.swapHeading}
             </h3>
             <div
               role="group"
               aria-labelledby="handle-swaps-heading"
-              className="mt-3 flex justify-center gap-3"
+              className="mt-3 flex flex-wrap gap-3"
             >
               {suggestions.map((suggestion) => (
                 <button
@@ -472,7 +468,7 @@ export function HandleBuilder({
                   onClick={() => {
                     applySwap(suggestion);
                   }}
-                  className="px-3 h-12 text-2xl leading-none flex items-center justify-center rounded-xl bg-white border border-slate-500 shadow-sm hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  className="px-4 h-12 text-2xl leading-none flex items-center justify-center rounded-full bg-card border border-control hover:border-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
                 >
                   <span aria-hidden="true">{suggestion.handle.key}</span>
                 </button>

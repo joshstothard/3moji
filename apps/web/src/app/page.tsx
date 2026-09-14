@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { HandleBuilder } from "../components/handle-builder";
 import { HandleLookup } from "../components/handle-lookup";
+import { LinkedSentence } from "../components/linked-sentence";
 import { checkAvailability } from "../components/availability-action";
 import { claimFormAction } from "../components/claim-action";
 import { genericMetadataOf } from "../lib/og/metadata";
 import { siteOrigin } from "../lib/share-link";
 import en from "../../../../packages/shared/messages/en.json";
+
+const copy = en.Home;
 
 /**
  * The home page's link preview
@@ -37,23 +40,55 @@ export function generateMetadata(): Metadata {
  * Nothing here touches `lib/services.ts`, so the page still renders on a clone
  * with no environment at all; the read is attempted only once a visitor has
  * filled three slots.
+ *
+ * **The composition is the brand's** (#251): the hero beside the builder's card
+ * on a wide screen, stacked on a phone, and the picker across the full width
+ * below. `HandleBuilder` renders its card, the claim form and the picker as
+ * siblings, so they are this grid's own children: the first two take a column
+ * each, and everything after them spans both. That is done with a child
+ * selector here rather than by reaching into the builder, whose markup other
+ * issues own. The lookup stays in the hero until the header search replaces it
+ * ([#254](https://github.com/joshstothard/3moji/issues/254)).
+ *
+ * **No radial glow.** The design has soft glows behind the hero. Drawn as an
+ * `aria-hidden`, `pointer-events: none` element behind the builder's card, axe
+ * still reported the card's heading, spoken line and URL as `color-contrast`
+ * incomplete ("overlapped by another element"), and `accessibility.spec.ts`
+ * refuses an incomplete result. Removing the element cleared it, so the page
+ * goes without.
  */
 export default function Home() {
   return (
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-slate-900 mb-3 tracking-tight">
-          {en.Home.heading}
-        </h1>
-        <p className="text-lg text-slate-500">{en.Home.tagline}</p>
+    <main>
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 pt-6 pb-16 sm:px-8 sm:pt-12 lg:grid-cols-2 lg:items-center lg:gap-x-16 lg:gap-y-12 lg:px-12 lg:pt-16 [&>*]:mt-0 lg:[&>*:nth-child(n+3)]:col-span-2">
+        <div className="flex flex-col gap-5 *:mt-0 sm:gap-7">
+          <p className="hidden min-h-[34px] items-center gap-2 self-start rounded-full border border-line bg-card px-3.5 text-sm text-body sm:inline-flex">
+            <span aria-hidden="true" className="text-base">
+              {copy.eyebrowEmoji}
+            </span>
+            {copy.eyebrow}
+          </p>
+          <h1 className="font-display text-[52px] leading-[0.94] font-extrabold tracking-[-0.05em] text-balance text-ink sm:text-7xl lg:text-[88px] lg:leading-[0.92] xl:text-[96px]">
+            <LinkedSentence
+              links={{
+                accent: (
+                  <span className="text-violet">{copy.headingAccent}</span>
+                ),
+              }}
+              text={copy.heading}
+            />
+          </h1>
+          <p className="max-w-[520px] text-[17px] leading-normal text-pretty text-body sm:text-[21px]">
+            {copy.tagline}
+          </p>
+          <HandleLookup />
+        </div>
+
+        <HandleBuilder
+          checkAvailability={checkAvailability}
+          claim={claimFormAction}
+        />
       </div>
-
-      <HandleLookup />
-
-      <HandleBuilder
-        checkAvailability={checkAvailability}
-        claim={claimFormAction}
-      />
     </main>
   );
 }

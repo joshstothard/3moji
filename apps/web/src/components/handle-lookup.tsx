@@ -23,9 +23,10 @@ const HINT_ID = "handle-lookup-hint";
  * wrapper is a plain `<div>` rather than a labelled `<section>`, so the page
  * does not gain two landmarks with the same name.
  *
- * The field's border is `slate-500`, like every text field here: it is the only
- * cue that identifies the field on `slate-50`, and `slate-400` misses WCAG
- * 1.4.11's 3:1 ([#182](https://github.com/joshstothard/3moji/issues/182)).
+ * The field's border is `control`, like every text field here: it is the only
+ * cue that identifies the field on paper, so it has to meet WCAG 1.4.11's 3:1
+ * ([#182](https://github.com/joshstothard/3moji/issues/182)), and the brand's
+ * lighter control border does not (#251).
  */
 export function HandleLookup({
   defaultValue,
@@ -36,7 +37,7 @@ export function HandleLookup({
   return (
     <div className="mt-12">
       <h2
-        className="text-sm font-semibold text-slate-900 uppercase tracking-wide"
+        className="text-[13px] font-semibold text-muted uppercase tracking-[0.08em]"
         id={HEADING_ID}
       >
         {copy.heading}
@@ -49,14 +50,14 @@ export function HandleLookup({
         role="search"
       >
         <div className="flex w-full max-w-sm flex-col gap-1">
-          <label className="text-sm text-slate-700" htmlFor={FIELD_ID}>
+          <label className="text-sm text-body" htmlFor={FIELD_ID}>
             {copy.label}
           </label>
           <input
             aria-describedby={HINT_ID}
             autoCapitalize="none"
             autoComplete="off"
-            className="rounded-xl bg-white border border-slate-500 shadow-sm px-4 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="min-h-11 rounded-full bg-card border border-control px-5 text-[15px] text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
             defaultValue={defaultValue}
             id={FIELD_ID}
             name="q"
@@ -66,13 +67,13 @@ export function HandleLookup({
           />
         </div>
         <button
-          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="min-h-11 rounded-full bg-violet px-5 text-[15px] font-semibold text-white hover:bg-violet-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
           type="submit"
         >
           {copy.submit}
         </button>
       </form>
-      <p className="mt-2 text-sm text-slate-500" id={HINT_ID}>
+      <p className="mt-2 text-sm text-muted" id={HINT_ID}>
         {copy.hint}
       </p>
     </div>

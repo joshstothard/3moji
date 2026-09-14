@@ -60,7 +60,7 @@ export default async function EditProfilePage({
           {result.key}
         </span>
       </h1>
-      <p className="mt-4 text-center text-lg text-slate-500">{copy.heading}</p>
+      <p className="mt-4 text-center text-lg text-muted">{copy.heading}</p>
 
       {draft === undefined ? (
         /*

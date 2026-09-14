@@ -63,10 +63,10 @@ const MESSAGE_ID = "claim-message";
 
 /** The privacy and terms links in the sentence under the email field. */
 const LEGAL_LINK =
-  "font-medium text-indigo-700 underline hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+  "font-medium text-violet underline hover:text-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet";
 
 const FIELD =
-  "rounded-xl border border-slate-500 px-4 py-3 text-base text-slate-900 aria-invalid:border-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600";
+  "rounded-2xl border border-control px-4 py-3 text-base text-ink aria-invalid:border-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet";
 
 /**
  * The claim form: an email address and a password, for the Handle in the
@@ -124,13 +124,13 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
   return (
     <section
       aria-labelledby={HEADING_ID}
-      className="mt-12 mx-auto max-w-md rounded-xl bg-white p-6 shadow-sm"
+      className="mt-12 mx-auto max-w-md rounded-card bg-card p-6 shadow-card border border-line"
       id={SECTION_ID}
     >
-      <h2 className="text-xl font-semibold text-slate-900 mb-2" id={HEADING_ID}>
+      <h2 className="text-xl font-semibold text-ink mb-2" id={HEADING_ID}>
         {copy.claimHeading}
       </h2>
-      <p className="text-base text-slate-500 mb-6">{copy.claimBody}</p>
+      <p className="text-base text-muted mb-6">{copy.claimBody}</p>
 
       <form
         action={formAction}
@@ -143,7 +143,7 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
 
         <div className="flex flex-col gap-2">
           <label
-            className="text-base font-medium text-slate-700"
+            className="text-base font-medium text-body"
             htmlFor="claim-email"
           >
             {copy.claimEmailLabel}
@@ -166,7 +166,7 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
           {/* Before submission, beside the address it is about (#198). In a
               new tab, because the Handle lives in this page's client state and
               following a link in place would lose it. */}
-          <p className="text-sm leading-6 text-slate-700">
+          <p className="text-sm leading-6 text-body">
             <LinkedSentence
               links={{
                 privacy: (
@@ -197,7 +197,7 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
 
         <div className="flex flex-col gap-2">
           <label
-            className="text-base font-medium text-slate-700"
+            className="text-base font-medium text-body"
             htmlFor="claim-password"
           >
             {copy.claimPasswordLabel}
@@ -227,7 +227,7 @@ export function ClaimForm({ handle, claim }: ClaimFormProps) {
           aria-describedby={
             message !== "" && !fieldsAtFault ? MESSAGE_ID : undefined
           }
-          className="self-start rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="self-start rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
           type="submit"
         >
           {copy.claimSubmit}

@@ -299,7 +299,7 @@ describe("the claim form", () => {
     renderForm(answering({ state: "idle" }));
 
     for (const control of [emailField(), passwordField(), submitButton()]) {
-      expect(control.className).toMatch(/focus-visible:outline-indigo-600/);
+      expect(control.className).toMatch(/focus-visible:outline-violet/);
     }
   });
 

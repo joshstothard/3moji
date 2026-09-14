@@ -77,13 +77,13 @@ export default async function SetNewPasswordPage({
 
   return (
     <main className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <h1 className="text-3xl font-bold text-slate-900 mb-8 tracking-tight">
+      <h1 className="text-3xl font-bold text-ink mb-8 tracking-tight">
         {copy.setHeading}
       </h1>
 
       {error !== undefined && (
         <p
-          className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-base text-red-800"
+          className="mb-6 rounded-2xl bg-red-50 px-4 py-3 text-base text-red-800"
           role="alert"
         >
           {error}
@@ -95,7 +95,7 @@ export default async function SetNewPasswordPage({
 
         <div className="flex flex-col gap-2">
           <label
-            className="text-base font-medium text-slate-700"
+            className="text-base font-medium text-body"
             htmlFor="reset-new-password"
           >
             {copy.newPasswordLabel}
@@ -103,7 +103,7 @@ export default async function SetNewPasswordPage({
           <input
             aria-describedby="reset-new-password-hint"
             autoComplete="new-password"
-            className="rounded-xl border border-slate-500 px-4 py-3 text-base text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="rounded-2xl border border-control px-4 py-3 text-base text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
             id="reset-new-password"
             maxLength={PASSWORD_MAX_LENGTH}
             minLength={PASSWORD_MIN_LENGTH}
@@ -111,13 +111,13 @@ export default async function SetNewPasswordPage({
             required
             type="password"
           />
-          <p className="text-base text-slate-700" id="reset-new-password-hint">
+          <p className="text-base text-body" id="reset-new-password-hint">
             {withLengths(copy.newPasswordHint)}
           </p>
         </div>
 
         <button
-          className="self-start rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="self-start rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
           type="submit"
         >
           {copy.setSubmit}
@@ -126,7 +126,7 @@ export default async function SetNewPasswordPage({
 
       <p className="mt-8 text-base">
         <Link
-          className="font-medium text-indigo-700 underline hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="font-medium text-violet underline hover:text-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
           href="/sign-in"
         >
           {en.PasswordReset.backToSignIn}
