@@ -205,6 +205,14 @@ test("the Handle builder's slot and swap-suggestion borders meet non-text contra
       slot,
       `filled slot ${String(position + 1)}`,
     );
+    // Hovering a filled slot turns its border coral, the remove cue (#252):
+    // 3.70:1 on the slot's paper fill, so it still identifies the control.
+    // Under Mobile Chrome nothing hovers, and the border is measured unchanged.
+    await slot.hover();
+    await expectBorderIdentifiesControl(
+      slot,
+      `filled slot ${String(position + 1)}, hovered`,
+    );
   }
 
   const suggestions = page
