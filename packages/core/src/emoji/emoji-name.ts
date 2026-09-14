@@ -22,6 +22,11 @@ export interface CuratedEmoji extends EmojiSetEntry {
   readonly synonyms: readonly string[];
   /** Which indefinite article `displayName` takes, if any. */
   readonly article: EmojiArticle;
+  /**
+   * The canonical word alias's term for this emoji where its `displayName`
+   * slug also names another emoji (ADR-0011). Absent everywhere else.
+   */
+  readonly aliasName?: string;
 }
 
 /**
@@ -49,6 +54,10 @@ function toCurated(entry: EmojiSetEntry): CuratedEmoji | undefined {
     plural: curation.plural,
     synonyms: curation.synonyms ?? [],
     article: curation.article ?? defaultArticle(displayName),
+    // Spread only when set, so the other 302 entries carry no `aliasName` key.
+    ...(curation.aliasName === undefined
+      ? {}
+      : { aliasName: curation.aliasName }),
   };
 }
 

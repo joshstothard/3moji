@@ -182,12 +182,12 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 - [x] A held Handle reveals nothing about who holds it, and shows no expiry timestamp. Met by #80 and pinned by two regression assertions in `apps/web/src/app/[handle]/page.test.tsx` — one on the emoji path and one on the alias path.
 - [x] Limits are enforced in `packages/core`: 30, 160, 10, and 40 characters, with `http` and `https` URLs only. Done by [#103](https://github.com/joshstothard/3moji/issues/103); at most ten Links is also a database `CHECK`.
 - [x] A mutation revalidates the cache before redirecting, so the change is visible immediately. Done by [#106](https://github.com/joshstothard/3moji/issues/106): `revalidatePath` precedes `redirect` in `apps/web/src/components/profile-edit-action.ts`, and `profile-edit-action.test.ts` pins that order by recording the calls.
-- [ ] A dot-separated word alias resolves: one claimed match renders that Profile **in place** rather than redirecting, several render the listing, none renders the claim call to action. **Two of three met** — one claimed match in place ([#108](https://github.com/joshstothard/3moji/issues/108)), several as a listing ([#109](https://github.com/joshstothard/3moji/issues/109)). The third is met only when the alias names a single Handle: with several candidates and none claimed there is no one Handle to offer a claim for, and ADR-0008 omits unclaimed Handles from listings. Left unticked and carried by [#121](https://github.com/joshstothard/3moji/issues/121), which needs a new ADR.
+- [x] A dot-separated word alias resolves: one claimed match renders that Profile **in place** rather than redirecting, several render the listing, none renders the claim call to action. One claimed match in place ([#108](https://github.com/joshstothard/3moji/issues/108)), several as a listing ([#109](https://github.com/joshstothard/3moji/issues/109)). With none claimed, a single candidate renders the claim call to action, and several render a claim listing of the candidates that can be claimed, each linking to its own call to action ([ADR-0011](../adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md), [#248](https://github.com/joshstothard/3moji/issues/248), closing [#121](https://github.com/joshstothard/3moji/issues/121)).
 - [ ] Dotted path segments survive the deployed environment, not only `next dev` — ADR-0008's evidence for this was measured locally only, and Vercel's CDN may treat a dotted segment as a static-file request. **Not verifiable yet**: there is no deployment. Carried by [#32](https://github.com/joshstothard/3moji/issues/32), blocked on [#19](https://github.com/joshstothard/3moji/issues/19).
 
 **Dependencies:** Phase 3. [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) accepted.
 
-**Status:** Done — epic [#101](https://github.com/joshstothard/3moji/issues/101) and all eight issues closed. **Two acceptance criteria are carried forward rather than met**, and are left unticked above on purpose: the several-candidates, none-claimed alias case ([#121](https://github.com/joshstothard/3moji/issues/121), needs an ADR) and dotted segments on the deployed site ([#32](https://github.com/joshstothard/3moji/issues/32), needs a deployment).
+**Status:** Done — epic [#101](https://github.com/joshstothard/3moji/issues/101) and all eight issues closed. **One acceptance criterion is carried forward rather than met**, and is left unticked above on purpose: dotted segments on the deployed site ([#32](https://github.com/joshstothard/3moji/issues/32), needs a deployment). The several-candidates, none-claimed alias case was carried forward too, and is met by [#248](https://github.com/joshstothard/3moji/issues/248) under ADR-0011.
 
 **The storage layer is built** — [#102](https://github.com/joshstothard/3moji/issues/102): the `profile` and `link` tables, their migration, and the read port that resolves a canonical `HandleKey` to a Profile. A Profile is keyed on the Account, so Release takes it and its Links with it; Links carry an explicit order, and "at most ten" is enforced by the schema rather than by the write path. "Claimed but unedited" is a named state rather than an empty object. See [`data-model.md` § Profile](../architecture/data-model.md#profile). The field limits themselves are [#103](https://github.com/joshstothard/3moji/issues/103)'s and the write path is [#106](https://github.com/joshstothard/3moji/issues/106)'s.
 
@@ -353,7 +353,7 @@ _Site hygiene:_
 
 _Operations:_
 
-- [ ] A scheduled GitHub Actions job takes a nightly logical backup of the production database to a private, non-public destination, echoes no secret, and commits no dump to this public repository. Planning picks the destination (Open questions). **Not met:** blocked on #32.
+- [ ] A scheduled GitHub Actions job takes a nightly logical backup of the production database to a private, non-public destination, echoes no secret, and commits no dump to this public repository. The destination is an age-encrypted dump in a private Cloudflare R2 bucket (Decision log, 2026-09-14). **Not met:** the workflow is built (#206); the owner's setup, first green run and test restore are outstanding.
 - [ ] An uptime check watches `/` and one Profile. **Not met:** waits on #32.
 - [x] Runbooks exist in `docs/runbooks/` for "site down", "email not arriving" and "restore from backup".
 - [x] Error tracking is recorded as waiting on the Vercel Pro upgrade.
@@ -370,7 +370,7 @@ _Operations:_
 - #203 Add branded not-found and error pages — done: the pages merged in PR #228, and server-side render-error logging through `onRequestError` in PR #232
 - #204 Add a favicon, robots.txt, sitemap and home-page preview metadata — done
 - #205 Send security headers on every response — done: four headers merged in PR #223, and the nonce CSP (option 1) in PR #235
-- #206 Back up the production database nightly — blocked on #32
+- #206 Back up the production database nightly — in progress: the workflow and the restore runbook are in review; closes after the owner's setup, first green run and a test restore ([owner actions](../owner-actions.md))
 - #207 Add uptime checks and the operations runbooks — blocked on #32: the runbooks merged in PRs #224 and #227, and the uptime check waits on #32
 - #233 Render the Handle route's 404 on the server so it works without JavaScript — deferred to Backlog: a Next.js 16.3.5 limitation (a thrown `notFound()` renders the `__next_error__` shell without JavaScript); the only fix is proxy routing, not worth it for the MVP; revisit if Next.js changes or post-launch traffic shows no-JS visitors hitting it ([deferral comment](https://github.com/joshstothard/3moji/issues/233#issuecomment-5660657064))
 
@@ -398,7 +398,7 @@ Every decision and action only the repo owner can take, including the questions 
 - Which order do later category drops go in, and what triggers one? ADR-0007 defers Objects and schedules nothing else.
 - Are 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 the right platform-owned Reserved Handles? They were chosen while implementing [#52](https://github.com/joshstothard/3moji/issues/52) and have never been confirmed as a product decision. 🧊🧊🧊 is deliberately not among them, because ADR-0004 decision 2 names it freely claimable.
 - How is launch-day email volume handled? Resend's free plan caps email at 100 a day — one verification email per claim, plus resends and collision notices — so on launch day claimant 101 gets no email and their hold expires. The owner is undecided. **Recommendation:** launch quietly on Free, log the daily send count, and upgrade to Resend Pro ($20/month, 50,000 emails) together with Vercel Pro before any public announcement.
-- Where do nightly database backups live? Phase 8 needs a private, non-public destination, and planning must pick it.
+- Where do nightly database backups live? **Decided 2026-09-14:** an age-encrypted dump in a private Cloudflare R2 bucket (Decision log).
 
 ## Decision log
 
@@ -428,6 +428,7 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — #233 (server-rendered Handle-route 404 without JavaScript) deferred as a Next.js limitation. Decided by the orchestrator, for owner review.
 - 2026-09-14 — The terms set a minimum age of 16 to claim a Handle, because Profiles are public, carry arbitrary outbound links and have no moderation team. The owner had no view; decided by the orchestrator, and the owner can change it ([#242](https://github.com/joshstothard/3moji/issues/242)).
 - 2026-09-14 — Canonical word aliases always name exactly one Handle: `displayName` slugs stay, and a curated `aliasName` is used for the five display names that also name another emoji, not the shortest term everywhere, which would publish wrong names. An alias with several candidates and none claimed lists the Handles that can be claimed. Accepted by the repo owner ([ADR-0011](../adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md))
+- 2026-09-14 — Nightly database backups are an age-encrypted `pg_dump` in a private Cloudflare R2 bucket, kept 30 days by a bucket lifecycle rule. The dump is encrypted to an age public key held as a repository variable; the private key stays only in the owner's password manager and never goes to GitHub. A private GitHub repository was the alternative, and Actions artifacts were ruled out as public. Decided by the orchestrator at the owner's request ([#206](https://github.com/joshstothard/3moji/issues/206)).
 - 2026-09-14 — The header search lists claimed Handles with the owner's display name: 5 Handles and 8 emoji per query, 60 searches per client address per 10 minutes, no popularity ranking, and names shown but not searchable. Accepted by the repo owner ([ADR-0012](../adr/0012-header-search-lists-claimed-handles-with-display-names-capped-and-rate-limited.md))
 
 ## Changelog
@@ -525,4 +526,5 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — CSP: nonce on every page (option 1). Decided by the repo owner.
 - 2026-09-14 — Synced after PR #235: #201, #203 and #205 done (PRs #234, #232, #235), the security-headers criterion ticked, #233 appended and deferred to Backlog, and four decisions logged (HSTS without `preload`, Chromium-only CSP smoke test, `next start` for the smoke test, #233 deferral). #206 and #207 stay blocked on #32; Phase 8 stays In progress.
 - 2026-09-14 — ADR-0011 accepted: it partially supersedes ADR-0008 decisions 3 and 4, and removes the shorter-synonym open question. Implementation is a follow-up issue; the Phase 4 alias criterion stays unticked until it lands.
+- 2026-09-14 — ADR-0011 built (#248): five curated `aliasName` values make every canonical word alias name one Handle, and an alias with several candidates and none claimed lists the ones that can be claimed. The Phase 4 word-alias criterion is ticked and #121 closes.
 - 2026-09-14 — ADR-0012 accepted for the header search (#254); architecture docs mark it planned.

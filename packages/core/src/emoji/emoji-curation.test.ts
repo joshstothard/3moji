@@ -144,6 +144,27 @@ describe("the curated layer", () => {
     expect(overridden.length / RELEASED_TOTAL).toBeLessThan(0.15);
   });
 
+  it("sets an alias name for exactly the five emoji ADR-0011 names", () => {
+    // ADR-0011 decision 2. Each of these display names also names a second
+    // emoji (🦇/🏓 `bat`, 🐋/🐳 `whale`, 🦗/🏏 `cricket`, 🌼/🌸 `blossom`,
+    // 🍨/🍦 `ice cream`), so its canonical alias position needs another word.
+    // Pinned as a whole map: an alias name added anywhere else changes a
+    // published URL, which is a decision rather than a curation tweak.
+    const aliasNames = Object.fromEntries(
+      curatedEmojiSet.flatMap((entry) =>
+        entry.aliasName === undefined ? [] : [[entry.emoji, entry.aliasName]],
+      ),
+    );
+
+    expect(aliasNames).toEqual({
+      "🦇": "bats",
+      "🐋": "whales",
+      "🦗": "grasshopper",
+      "🌼": "flower",
+      "🍨": "sundae",
+    });
+  });
+
   it("leaves no colon in any display name", () => {
     // One of the three shapes the curation pass exists to fix. Zero in the
     // released set is the answer for this drop, not a reason to drop the check:
