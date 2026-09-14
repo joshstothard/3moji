@@ -1,6 +1,17 @@
 @import "tailwindcss";
 
 /*
+ * Hover capability, as variants (#252). Tailwind v4 already gates `hover:` on
+ * `(hover: hover)`, but not `focus-visible:`, so a cue that a pointer shows on
+ * hover and a keyboard shows on focus spells the focus half
+ * `can-hover:group-focus-visible:`. A touch screen, where nothing hovers, gets
+ * its own always-visible affordance through `no-hover:` instead. The Handle
+ * builder's remove X and its touch badge are the first users.
+ */
+@custom-variant can-hover (@media (hover: hover));
+@custom-variant no-hover (@media (hover: none));
+
+/*
  * The 3moji brand (#251): warm paper, ink type, one violet accent, sunshine
  * for rare Handles only and coral for remove only. The values are the design
  * canvas's, except where WCAG AA needed them darker, and each such change is

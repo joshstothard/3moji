@@ -54,6 +54,28 @@ describe("the Handle builder, checked by axe", () => {
     );
   });
 
+  it("reports no violations with one slot filled, its remove marks rendered (#252)", async () => {
+    // A partial Handle asks nothing, so no read is needed to settle.
+    const { container } = render(
+      <HandleBuilder checkAvailability={jest.fn()} initialEmoji={[PIZZA]} />,
+    );
+    // The filled slot, named by what activating it does, and carrying the X
+    // and the Remove label inside it: without them axe would be checking the
+    // same markup as the empty case above.
+    const filled = screen.getByRole("button", {
+      name: "Remove pizza from slot 1",
+    });
+    expect(filled.querySelectorAll("svg").length).toBeGreaterThanOrEqual(2);
+
+    const report = await checkAccessibility(container);
+
+    expect(report.violations).toEqual([]);
+    expect(report.incomplete).toEqual([]);
+    expect(report.passed).toEqual(
+      expect.arrayContaining(["button-name", "aria-allowed-attr"]),
+    );
+  });
+
   /**
    * Each row also says what makes that state's DOM different — the claim form
    * for an available Handle, three swap suggestions for a refused one — and

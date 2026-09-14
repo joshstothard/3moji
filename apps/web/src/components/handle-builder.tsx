@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   canonicalise,
-  findCuratedEmoji,
   HANDLE_LENGTH,
   spokenHandle,
   swapSuggestions,
   type SwapSuggestion,
 } from "@template/core/browser";
 import { EmojiPicker } from "./emoji-picker";
+import { HandleSlot } from "./handle-slot";
 import type { AvailabilityState } from "./availability-state";
 import { ClaimForm, type SubmitClaim } from "./claim-form";
 import en from "../../../../packages/shared/messages/en.json";
@@ -127,11 +127,6 @@ function format(
 function spokenOf(entries: readonly { readonly emoji: string }[]): string {
   const emoji = entries.map((entry) => entry.emoji);
   return spokenHandle(emoji) ?? emoji.join("");
-}
-
-/** The curated display name of an emoji, or the glyph if it has none. */
-function nameOf(emoji: string): string {
-  return findCuratedEmoji(emoji)?.displayName ?? emoji;
 }
 
 function isFilled(slot: string | undefined): slot is string {
@@ -354,7 +349,7 @@ export function HandleBuilder({
             // The index is the key on purpose: a slot is a fixed position, not
             // a list entry that moves, and keying by content would remount the
             // button — the focus loss this component exists to avoid.
-            <button
+            <HandleSlot
               key={index}
               ref={(node) => {
                 if (node === null) {
@@ -363,43 +358,13 @@ export function HandleBuilder({
                   slotControls.current.set(index, node);
                 }
               }}
-              type="button"
-              aria-disabled={emoji === undefined}
-              aria-label={
-                emoji === undefined
-                  ? format(copy.slotEmpty, {
-                      position: String(index + 1),
-                    })
-                  : format(copy.slotFilled, {
-                      position: String(index + 1),
-                      name: nameOf(emoji),
-                    })
-              }
-              onClick={() => {
-                if (emoji !== undefined) {
-                  clear(index);
-                }
+              position={index + 1}
+              emoji={emoji}
+              rare={rare}
+              onClear={() => {
+                clear(index);
               }}
-              className="aspect-square w-full text-5xl sm:text-7xl leading-none flex items-center justify-center rounded-slot bg-paper border border-control hover:border-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet aria-disabled:border-dashed aria-disabled:hover:border-control"
-            >
-              {/* Keyed on the rarity so the glyph, never the button, remounts:
-                  the hop replays on every return to a rare triple, and the
-                  permanent control keeps its focus. */}
-              <span
-                key={rare ? "rare" : "plain"}
-                aria-hidden="true"
-                className={
-                  rare ? "inline-block motion-safe:animate-rare-hop" : undefined
-                }
-                style={
-                  rare
-                    ? { animationDelay: `${String(index * 120)}ms` }
-                    : undefined
-                }
-              >
-                {emoji ?? ""}
-              </span>
-            </button>
+            />
           ))}
         </div>
 
