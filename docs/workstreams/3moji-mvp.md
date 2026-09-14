@@ -427,6 +427,7 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — The production smoke test runs `next start`, not the Docker image's standalone server, because the site deploys to Vercel. Decided by the orchestrator.
 - 2026-09-14 — #233 (server-rendered Handle-route 404 without JavaScript) deferred as a Next.js limitation. Decided by the orchestrator, for owner review.
 - 2026-09-14 — Canonical word aliases always name exactly one Handle: `displayName` slugs stay, and a curated `aliasName` is used for the five display names that also name another emoji, not the shortest term everywhere, which would publish wrong names. An alias with several candidates and none claimed lists the Handles that can be claimed. Accepted by the repo owner ([ADR-0011](../adr/0011-canonical-word-aliases-name-one-handle-and-unclaimed-aliases-list-claimable-handles.md))
+- 2026-09-14 — The header search lists claimed Handles with the owner's display name: 5 Handles and 8 emoji per query, 60 searches per client address per 10 minutes, no popularity ranking, and names shown but not searchable. Accepted by the repo owner ([ADR-0012](../adr/0012-header-search-lists-claimed-handles-with-display-names-capped-and-rate-limited.md))
 
 ## Changelog
 
@@ -523,3 +524,4 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — CSP: nonce on every page (option 1). Decided by the repo owner.
 - 2026-09-14 — Synced after PR #235: #201, #203 and #205 done (PRs #234, #232, #235), the security-headers criterion ticked, #233 appended and deferred to Backlog, and four decisions logged (HSTS without `preload`, Chromium-only CSP smoke test, `next start` for the smoke test, #233 deferral). #206 and #207 stay blocked on #32; Phase 8 stays In progress.
 - 2026-09-14 — ADR-0011 accepted: it partially supersedes ADR-0008 decisions 3 and 4, and removes the shorter-synonym open question. Implementation is a follow-up issue; the Phase 4 alias criterion stays unticked until it lands.
+- 2026-09-14 — ADR-0012 accepted for the header search (#254); architecture docs mark it planned.
