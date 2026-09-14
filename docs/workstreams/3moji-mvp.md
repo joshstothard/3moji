@@ -56,8 +56,8 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 | 4     | A claimed Handle shows a real page its owner controls                        | #101       | Done        |
 | 5     | It survives real people                                                      | #149       | Done        |
 | 6     | A Profile can be shared as a link that survives bios and chat apps           | #159       | Done        |
-| 7     | Owners can come back, and it is lawful to launch                             | #191       | Planned     |
-| 8     | A listener can find a Handle, and the site is polished and operable          | #199       | Planned     |
+| 7     | Owners can come back, and it is lawful to launch                             | #191       | Done        |
+| 8     | A listener can find a Handle, and the site is polished and operable          | #199       | In progress |
 
 ### Phase 1 — Foundation and providers
 
@@ -278,41 +278,45 @@ A Handle's canonical key is its code-point sequence after decoding, NFC normalis
 
 _Password reset:_
 
-- [ ] Requesting a reset and setting a new password both work with JavaScript disabled.
-- [ ] The link in the claim-collision email resolves to the reset page rather than 404, and so does the URL Better Auth's `sendResetPassword` emails.
-- [ ] Requesting a reset gives the same response whether or not the address is registered, and the existing rate limits still apply to it.
-- [ ] A successful reset still revokes existing sessions (`revokeSessionsOnPasswordReset`), proven by a test.
-- [ ] The sign-in page links to "forgot your password".
+- [x] Requesting a reset and setting a new password both work with JavaScript disabled.
+- [x] The link in the claim-collision email resolves to the reset page rather than 404, and so does the URL Better Auth's `sendResetPassword` emails.
+- [x] Requesting a reset gives the same response whether or not the address is registered, and the existing rate limits still apply to it.
+- [x] A successful reset still revokes existing sessions (`revokeSessionsOnPasswordReset`), proven by a test.
+- [x] The sign-in page links to "forgot your password".
 
 _Account area:_
 
 - [x] A signed-in owner sees a signed-in state, with links to their Profile and to its edit page.
-- [ ] Signing out ends the session: a request carrying the old session cookie is treated as signed out.
-- [ ] An owner can delete their Account (Release) behind plain, explicit copy that says the Handle is given up and the Account deleted ([ADR-0004](../adr/0004-the-handle-model.md) decision 5, [ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)); afterwards the Handle is claimable.
+- [x] Signing out ends the session: a request carrying the old session cookie is treated as signed out.
+- [x] An owner can delete their Account (Release) behind plain, explicit copy that says the Handle is given up and the Account deleted ([ADR-0004](../adr/0004-the-handle-model.md) decision 5, [ADR-0009](../adr/0009-release-leaves-a-tombstone-and-the-cooldown-is-dropped-for-the-mvp.md)); afterwards the Handle is claimable.
 - [x] The public Profile stays cacheable and identical for every visitor: owner affordances do not vary the public page's cached response, proven by a test.
 
 _Privacy, terms and reporting:_
 
-- [ ] `/privacy` and `/terms` exist in plain English, drafted by the agent and clearly marked as needing owner or legal review before announcement.
-- [ ] Both are linked from the footer and from the claim form, where an email address is collected.
-- [ ] Every Profile offers a way to report it; a `mailto:` to a contact address read from an environment variable is enough.
-- [ ] A written takedown procedure exists in `docs/runbooks/`.
-- [ ] Whether the Online Safety Act's user-to-user duties apply is written down, citing Ofcom's guidance.
-- [ ] The footer links privacy, terms and reporting, and carries the Twemoji CC-BY 4.0 attribution.
+- [x] `/privacy` and `/terms` exist in plain English, drafted by the agent and clearly marked as needing owner or legal review before announcement. Met as worded by [#196](https://github.com/joshstothard/3moji/issues/196): both pages are **drafts pending owner review**. They show "Draft — pending owner review", and they are not final until the owner answers the questions in [owner actions](../owner-actions.md) and removes the marker.
+- [x] Both are linked from the footer and from the claim form, where an email address is collected.
+- [x] Every Profile offers a way to report it; a `mailto:` to a contact address read from an environment variable is enough.
+- [x] A written takedown procedure exists in `docs/runbooks/`.
+- [x] Whether the Online Safety Act's user-to-user duties apply is written down, citing Ofcom's guidance. It is in [`docs/runbooks/takedown.md`](../runbooks/takedown.md) § 6, as an assessment for the owner to confirm with Ofcom's Regulation Checker, not a conclusion.
+- [x] The footer links privacy, terms and reporting, and carries the Twemoji CC-BY 4.0 attribution.
 
 **Dependencies:** Phases 3 to 6. Verifying any item on the live site needs [#32](https://github.com/joshstothard/3moji/issues/32), which is blocked on [#19](https://github.com/joshstothard/3moji/issues/19).
 
 **Planned as epic [#191](https://github.com/joshstothard/3moji/issues/191).** Finding a Handle, the rare three-of-a-kind celebration, site hygiene and the operations minimum moved to Phase 8 at planning, keeping this phase to the launch-blocking owner return path and legal work. The footer's Twemoji CC-BY attribution criterion moved here from site hygiene, because [#198](https://github.com/joshstothard/3moji/issues/198) does it.
 
+**Status:** Done — epic [#191](https://github.com/joshstothard/3moji/issues/191) and all nine issues are closed, including #214 and #216, which were added after planning. Every acceptance criterion is ticked against its evidence, but **nothing is verified on a deployed site**: `3moji.me` is not live ([#32](https://github.com/joshstothard/3moji/issues/32), blocked on [#19](https://github.com/joshstothard/3moji/issues/19)). The privacy notice and terms are drafts pending owner review, and the report link shows nothing until `REPORT_CONTACT_EMAIL` is set.
+
 **Issues:**
 
-- #192 Add the password reset request and set-new-password pages
-- #193 Show a signed-in state with links to the owner's Profile and edit page
-- #194 Add sign-out
-- #195 Let an owner delete their Account and give up their Handle
-- #196 Draft the privacy notice and terms pages
-- #197 Add a report link to every Profile and a takedown runbook
-- #198 Link privacy, terms, reporting and the Twemoji credit from the footer
+- #192 Add the password reset request and set-new-password pages — done
+- #193 Show a signed-in state with links to the owner's Profile and edit page — done
+- #194 Add sign-out — done
+- #195 Let an owner delete their Account and give up their Handle — done
+- #196 Draft the privacy notice and terms pages — done (drafts pending owner review)
+- #197 Add a report link to every Profile and a takedown runbook — done
+- #198 Link privacy, terms, reporting and the Twemoji credit from the footer — done
+- #214 Stop storing client IP addresses in clear in Better Auth's rate-limit table — done
+- #216 Send non-enumerating emails after the response so timing can't reveal an address — done
 
 ### Phase 8 — Findable, polished and operable
 
@@ -329,30 +333,30 @@ _Privacy, terms and reporting:_
 
 _Finding a Handle:_
 
-- [ ] A "find a Handle" entry on the home page resolves typed words through `resolveAlias`.
-- [ ] The spoken form, with a number word and a plural (`/three-ice-cubes`), resolves to the Handle or to a listing rather than returning 404.
+- [x] A "find a Handle" entry on the home page resolves typed words through `resolveAlias`.
+- [ ] The spoken form, with a number word and a plural (`/three-ice-cubes`), resolves to the Handle or to a listing rather than returning 404. **Not met.** The spoken form resolves in `/find` (PR #217), but the path still 404s. Accepting it conflicts with ADR-0008 decision 2, so it needs either a new ADR or a reworded criterion, and that is the owner's call ([#201 comment](https://github.com/joshstothard/3moji/issues/201#issuecomment-5656238125)).
 
 _Rare three-of-a-kind:_
 
-- [ ] The animation plays only for an available three-of-a-kind Handle, never for a taken, held or reserved one, so it reveals no state the builder does not already show.
-- [ ] Under `prefers-reduced-motion` there is no motion, and a static rare indicator is shown instead.
-- [ ] It is announced once to assistive technology, without moving focus.
-- [ ] The existing axe and keyboard E2E checks still pass.
+- [x] The animation plays only for an available three-of-a-kind Handle, never for a taken, held or reserved one, so it reveals no state the builder does not already show.
+- [x] Under `prefers-reduced-motion` there is no motion, and a static rare indicator is shown instead.
+- [x] It is announced once to assistive technology, without moving focus.
+- [x] The existing axe and keyboard E2E checks still pass.
 
 _Site hygiene:_
 
-- [ ] Branded 404 and error pages.
-- [ ] A favicon.
-- [ ] `robots.txt`, and a sitemap of the static pages (not every Profile).
-- [ ] Home-page Open Graph metadata using the existing generic image.
-- [ ] Responses carry a Content Security Policy, HSTS, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy` and `X-Content-Type-Options`, verified by a test.
+- [x] Branded 404 and error pages. Merged in PR #228. [#203](https://github.com/joshstothard/3moji/issues/203) stays open for its own last criterion: a structured log line for a server-side render error. That waits on an owner decision about the tracing guard ([#148](https://github.com/joshstothard/3moji/issues/148); [#203 comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457)).
+- [x] A favicon.
+- [x] `robots.txt`, and a sitemap of the static pages (not every Profile).
+- [x] Home-page Open Graph metadata using the existing generic image.
+- [ ] Responses carry a Content Security Policy, HSTS, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy` and `X-Content-Type-Options`, verified by a test. **Not met.** HSTS, `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options` merged in PR #223. The Content Security Policy waits on an owner decision ([#205 comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)).
 
 _Operations:_
 
-- [ ] A scheduled GitHub Actions job takes a nightly logical backup of the production database to a private, non-public destination, echoes no secret, and commits no dump to this public repository. Planning picks the destination (Open questions).
-- [ ] An uptime check watches `/` and one Profile.
-- [ ] Runbooks exist in `docs/runbooks/` for "site down", "email not arriving" and "restore from backup".
-- [ ] Error tracking is recorded as waiting on the Vercel Pro upgrade.
+- [ ] A scheduled GitHub Actions job takes a nightly logical backup of the production database to a private, non-public destination, echoes no secret, and commits no dump to this public repository. Planning picks the destination (Open questions). **Not met:** blocked on #32.
+- [ ] An uptime check watches `/` and one Profile. **Not met:** waits on #32.
+- [x] Runbooks exist in `docs/runbooks/` for "site down", "email not arriving" and "restore from backup".
+- [x] Error tracking is recorded as waiting on the Vercel Pro upgrade.
 
 **Dependencies:** Phase 7 ([#191](https://github.com/joshstothard/3moji/issues/191)). The backup and uptime work needs [#32](https://github.com/joshstothard/3moji/issues/32), which is blocked on [#19](https://github.com/joshstothard/3moji/issues/19).
 
@@ -360,14 +364,14 @@ _Operations:_
 
 **Issues:**
 
-- #200 Add a "find a Handle" lookup to the home page
-- #201 Resolve the spoken form of a Handle in the path
-- #202 Celebrate an available three-of-a-kind Handle as rare
-- #203 Add branded not-found and error pages
-- #204 Add a favicon, robots.txt, sitemap and home-page preview metadata
-- #205 Send security headers on every response
-- #206 Back up the production database nightly
-- #207 Add uptime checks and the operations runbooks
+- #200 Add a "find a Handle" lookup to the home page — done
+- #201 Resolve the spoken form of a Handle in the path — open: the `/find` spoken form merged in PR #217, and the path form needs an owner ADR ([comment](https://github.com/joshstothard/3moji/issues/201#issuecomment-5656238125))
+- #202 Celebrate an available three-of-a-kind Handle as rare — done
+- #203 Add branded not-found and error pages — open: the pages merged in PR #228, and server-side render-error logging waits on an owner decision about the tracing guard, #148 ([comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457))
+- #204 Add a favicon, robots.txt, sitemap and home-page preview metadata — done
+- #205 Send security headers on every response — open: four headers merged in PR #223, and the CSP waits on an owner decision ([comment](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123))
+- #206 Back up the production database nightly — blocked on #32
+- #207 Add uptime checks and the operations runbooks — open: the runbooks merged in PRs #224 and #227, and the uptime check waits on #32
 
 ## Risks & mitigations
 
@@ -415,6 +419,7 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-13 — Error tracking uses Vercel's own logs, not a third-party vendor; the owner expects to move to Vercel Pro, which also lifts Hobby's non-commercial restriction. Decided by the repo owner.
 - 2026-09-13 — The agent drafts the privacy notice and terms; the owner reviews them before launch. Decided by the repo owner.
 - 2026-09-13 — Phase 7 is split: finding a Handle, the rare three-of-a-kind celebration, site hygiene and the operations minimum become Phase 8 — Findable, polished and operable, so Phase 7 holds only the launch-blocking owner return path and legal work. Decided by the repo owner when Phase 7 was planned.
+- 2026-09-14 — When an open dropdown covers page text, axe checks only the open menu panel, and the full page is still checked with the menu closed. On Mobile Chrome, the four-row account menu covered the Profile's own text, so axe could not judge that text's contrast. `checkPage` in `apps/web/e2e/support/axe.ts` gained an optional `include` selector, and every other caller is unchanged (PR [#225](https://github.com/joshstothard/3moji/pull/225)). Taken by the orchestrator overnight, for owner review.
 
 ## Changelog
 
@@ -506,3 +511,4 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-13 — Phase 7 added after an MVP gap review: owner return path (password reset, account area, sign-out, deletion), privacy/terms/reporting, finding a Handle by its spoken form, a rare three-of-a-kind celebration, site hygiene and an operations minimum. The claim-collision email's dead `/reset-password` link recorded as a live bug.
 - 2026-09-13 — Owner actions and decisions gathered into [`docs/owner-actions.md`](../owner-actions.md): setup only the owner can do, decisions due before launch, and decisions that can wait until after launch.
 - 2026-09-13 — Phase 7 planned: epic #191, issues #192–#198. Phase 8 planned: epic #199, issues #200–#207.
+- 2026-09-14 — Synced from GitHub: **Phase 7 Planned → Done** (epic #191 closed, all nine issues closed with #214 and #216 appended; privacy and terms are drafts pending owner review) and **Phase 8 Planned → In progress** (epic #199, 3 of 8 closed: #200, #202 and #204). #201, #203, #205 and #207 are partly merged and wait on owner decisions or #32, and #206 is blocked on #32. Nothing in either phase is verified on a live site, which waits on #32 (blocked on #19). The Decision log gains the overnight axe-scope call on #225.
