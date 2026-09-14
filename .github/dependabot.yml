@@ -27,6 +27,12 @@ updates:
       - dependency-name: typescript
         versions:
           - ">=7.0.0"
+      # @types/node tracks the Node runtime major pinned in .nvmrc (24), which is
+      # also what CI runs. A newer major describes APIs the runtime lacks, so only
+      # minor and patch bumps are taken. Revisit when the runtime moves to 26.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     labels:
       - dependencies
     open-pull-requests-limit: 5
