@@ -27,13 +27,16 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // The server's output is also written to `e2e-server.log` (git-ignored by
+    // The server's output is written to `e2e-server.log` (git-ignored by
     // `*.log`), so `request-error-log.spec.ts` can assert on the structured
-    // lines the app writes (#203). The pipe merges stderr into stdout, so
-    // `stdout: "pipe"` keeps the output in the job log, where stderr went before.
+    // lines the app writes (#203). The pipe sends it all to stdout, which
+    // Playwright discards, and **it must stay discarded**: `next dev` prints
+    // every request's URL, and `password-reset.spec.ts` opens a reset link whose
+    // token is in the path, which in this public repository's Actions log would
+    // be a live credential. For the same reason, never upload the file as an
+    // artifact.
     command: "npm run dev 2>&1 | tee e2e-server.log",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env["CI"],
-    stdout: "pipe",
   },
 });
