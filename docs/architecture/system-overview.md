@@ -348,7 +348,38 @@ Both grammars share the one root route, dispatching on the received segment: `ca
 
 ## Deployment
 
-**Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): Vercel on the Hobby plan, which forbids commercial use. Postgres is Neon via the Vercel Marketplace; transactional email is Resend, sending from a subdomain of `3moji.me`.
+Vercel on the Hobby plan, which forbids commercial use ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)). Postgres is Neon via the Vercel-managed Marketplace integration, which injects `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (direct); transactional email is Resend, sending from a subdomain of `3moji.me`. The Vercel project `3moji` is linked to the repository with `3moji.me` attached. **The build configuration below is in the repository; that a deployment built with it serves `3moji.me` is not yet verified** ([#32](https://github.com/joshstothard/3moji/issues/32)).
+
+### The build
+
+`apps/web/vercel.json` is the project's build configuration, read from the Root Directory `apps/web` (the dashboard settings it needs are in [owner actions](../owner-actions.md)). Both commands run from the repository root:
+
+- **Install:** `npm ci`, for the whole workspace.
+- **Build:** `node scripts/vercel-migrate.mjs`, then `turbo run build --filter=@template/web`. The `&&` between them means a failed migration fails the deployment and nothing is built.
+
+**Migrations run before `next build`, and only on a Vercel build.** `scripts/vercel-migrate.mjs` decides from the environment alone, and `scripts/vercel-migrate.test.mjs` covers every rule without a database:
+
+| Environment                                                    | What happens                                                                                                                                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No `VERCEL_ENV` (a local `npm run build`, CI's build job)      | Skipped. Neither runs the script anyway: it is in `vercel.json` only, not in any `package.json` `build` script and not a turbo task                                 |
+| `VERCEL_ENV` other than `production` or `preview`              | The build fails, rather than guessing which database is meant                                                                                                       |
+| No `DATABASE_URL_UNPOOLED`                                     | The build fails. `drizzle.config.ts` would otherwise fall back to the pooled `DATABASE_URL`, which on a preview with no Neon branch is not a branch                 |
+| `preview`, and `PRODUCTION_DATABASE_HOST` is unset             | The build fails: it cannot tell a branch from production                                                                                                            |
+| `preview`, and either connection string's host is production's | The build fails, so the preview never starts against production data. The pooled and direct host names of one Neon endpoint count as the same database              |
+| Otherwise                                                      | `drizzle-kit migrate` in `packages/core`, from the committed files in `packages/core/migrations/`. With nothing pending it applies nothing and the build carries on |
+
+- **Why a guard on previews.** The Neon integration creates a `preview/<git-branch>` database branch and injects its connection strings into that deployment only, overriding the Preview-scoped values, and no variable names the branch. So the only way to know a preview is not about to use production is to compare against production's host, which the owner sets as `PRODUCTION_DATABASE_HOST` (a host name, not a credential, and still never committed). Without it the build fails safe.
+- **Why outside turbo.** Turborepo's strict env mode passes a task only the variables `turbo.json` declares, and a remote cache hit would skip a migration task entirely. Run before turbo, the script sees the whole build environment and always runs.
+- **It prints no value.** Its lines, prefixed `[vercel-migrate]`, name variables and never a connection string or host; `drizzle-kit` prints the statements it applies.
+- **Concurrent deployments** migrating the same database rely on drizzle-kit's migrations table; two production builds at once are possible and not guarded against.
+
+**`turbo.json`'s `build` task declares what the build reads.** `BETTER_AUTH_URL`, `VERCEL_ENV` and `VERCEL_BRANCH_URL` are in `env`, because `robots.txt` and `sitemap.xml` are prerendered from the site origin (§ Site metadata files); under strict env mode they were not passed to the build at all. `VERCEL_URL`, different on every deployment, is in `passThroughEnv` so it does not defeat the cache.
+
+### Preview deployments
+
+**A preview's links point at the preview.** `BETTER_AUTH_URL` holds the production address in Preview as well as Production, so `lib/site-url.ts` (`configuredSiteUrl`) answers `https://` plus `VERCEL_BRANCH_URL` on `VERCEL_ENV=preview`, or `VERCEL_URL` when there is no branch URL, and `BETTER_AUTH_URL` everywhere else. Better Auth's base URL (`lib/services.ts`) and the site origin (`siteOrigin()` in `lib/share-link.ts`: the share link, the Open Graph URLs, `robots.txt` and the sitemap) both read it, so a verification link and a share link cannot disagree. A preview with neither variable refuses to build services rather than email production links, and a host carrying anything but letters, digits, dots and hyphens is refused. `BETTER_AUTH_URL` is still required everywhere. Better Auth's `trustedOrigins` is unchanged: its origin check runs only on HTTP requests to `/api/auth`, and the app's forms call `auth.api.*` server-side.
+
+**Not yet verified on a live deployment:** that the migration step runs and fails as described on Vercel, that previews get their Neon branch, that a transaction commits on a deployed preview ([ADR-0010](../adr/0010-use-one-postgres-driver-in-every-environment.md) decision 6), and how Vercel's CDN treats a dotted alias path.
 
 ### Error tracking
 
