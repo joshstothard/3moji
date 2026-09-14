@@ -36,6 +36,11 @@ jest.mock("../components/sign-out-action", () => ({
   signOutFormAction: (): Promise<void> => Promise.resolve(),
 }));
 
+import { redactAnalyticsEvent } from "../lib/analytics-redaction";
+import {
+  renderedAnalyticsProps,
+  resetRenderedAnalyticsProps,
+} from "../test-support/analytics-mock";
 import RootLayout, { dynamic, metadata } from "./layout";
 
 const shell = () =>
@@ -94,5 +99,20 @@ describe("RootLayout", () => {
    */
   it("renders every page per request, so each carries its request's CSP nonce", () => {
     expect(dynamic).toBe("force-dynamic");
+  });
+
+  /**
+   * PR #238. `/reset-password/<token>` holds a live reset token in its path,
+   * and Vercel Web Analytics records the URL of every page view. The shell
+   * must render analytics only with the redaction attached.
+   */
+  it("renders Vercel Web Analytics with the URL redaction attached", () => {
+    resetRenderedAnalyticsProps();
+
+    shell();
+
+    const rendered = renderedAnalyticsProps();
+    expect(rendered).toHaveLength(1);
+    expect(rendered[0]?.beforeSend).toBe(redactAnalyticsEvent);
   });
 });

@@ -14,6 +14,8 @@ const config = {
     // an acceptance criterion of #78, and a stubbed `spokenHandle` returning a
     // canned string would assert nothing about it.
     "^@template/core/browser$": "<rootDir>/../../packages/core/src/browser.ts",
+    // Mock @vercel/analytics for Jest since it's an ESM-only module
+    "^@vercel/analytics/next$": "<rootDir>/src/test-support/analytics-mock.ts",
   },
 };
 
