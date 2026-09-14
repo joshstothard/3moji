@@ -107,6 +107,11 @@ function combobox(): HTMLInputElement {
   return found;
 }
 
+/** The island's polite live region, which announces what the results say. */
+function liveRegion(): Element | null {
+  return document.querySelector('[aria-live="polite"]');
+}
+
 /** Let the debounce elapse and the answer settle. */
 async function pause(ms = SEARCH_DEBOUNCE_MS): Promise<void> {
   await act(async () => {
@@ -301,9 +306,11 @@ describe("HeaderSearch", () => {
     await user.type(combobox(), "ice-cube");
     await pause();
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      copy.rateLimited,
-    );
+    // Drawn in the results, and announced politely by the live region — not
+    // as a second `status` on the page, whose own message must stay the one.
+    await screen.findAllByText(copy.rateLimited);
+    expect(liveRegion()).toHaveTextContent(copy.rateLimited);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.queryByRole("option")).not.toBeInTheDocument();
   });
 
@@ -316,7 +323,8 @@ describe("HeaderSearch", () => {
     await user.type(combobox(), "wibble");
     await pause();
 
-    expect(await screen.findByRole("status")).toHaveTextContent(copy.noResults);
+    await screen.findAllByText(copy.noResults);
+    expect(liveRegion()).toHaveTextContent(copy.noResults);
   });
 
   it("never links a Handle whose path is not a percent-encoded segment, and drops a malformed answer", async () => {

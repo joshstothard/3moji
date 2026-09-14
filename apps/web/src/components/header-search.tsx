@@ -605,7 +605,12 @@ export function HeaderSearch() {
         )}
       </form>
 
-      <p role="status" className="sr-only">
+      {/*
+       * A polite live region, and deliberately not `role="status"`: the
+       * header is on every page, and a page's own status message (the reset
+       * forms', the claim's) must stay the one `status` on it.
+       */}
+      <p aria-live="polite" aria-atomic="true" className="sr-only">
         {status}
       </p>
     </div>

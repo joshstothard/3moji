@@ -167,8 +167,10 @@ test("the home page and its picker have no WCAG A or AA violations", async ({
 }) => {
   await openHome(page);
 
-  // `label` is the header lookup's field; the picker has none since #253.
-  expectAccessible(await checkPage(page), ["label", "button-name", "list"]);
+  // No `label`: the picker has no field since #253, the lookup left this page
+  // for the header search (#254), and a phone draws that field only inside
+  // its panel. `header-search.spec.ts` checks the search open, in both projects.
+  expectAccessible(await checkPage(page), ["button-name", "list"]);
   expectLandmarksContained(await checkLandmarks(page));
 });
 
@@ -718,8 +720,12 @@ test("the branded 404 has no WCAG A or AA violations (#203)", async ({
     await expect(
       page.getByRole("heading", { level: 1, name: en.NotFoundPage.heading }),
     ).toBeVisible();
-    // One search landmark: the lookup's, and nothing else claims the role.
-    await expect(page.getByRole("search")).toHaveCount(1);
+    // One lookup landmark. The header search (#254) is a second search
+    // landmark on a wide screen, named differently, which is what axe's
+    // `landmark-unique` asks of two.
+    await expect(
+      page.getByRole("search", { name: en.HandleLookup.heading }),
+    ).toHaveCount(1);
 
     expectAccessible(await checkPage(page), ["label", "button-name"]);
     expectLandmarksContained(await checkLandmarks(page));
