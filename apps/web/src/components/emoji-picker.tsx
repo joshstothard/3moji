@@ -133,7 +133,11 @@ export function EmojiPicker({ onPick, full }: EmojiPickerProps) {
             onClick={() => {
               openCategory(released);
             }}
-            className="rounded-xl px-3 py-1.5 text-sm font-medium shadow-sm bg-white text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-pressed:bg-indigo-600 aria-pressed:text-white aria-pressed:hover:bg-indigo-600"
+            // The border is the builder's (#243): the white fill is 1.05:1 on
+            // the page, so the border is what identifies the control. Pressed,
+            // it takes the fill's colour, because nothing is 3:1 against both
+            // `indigo-600` and the page; the indigo fill is the cue there.
+            className="rounded-xl px-3 py-1.5 text-sm font-medium border border-slate-500 shadow-sm bg-white text-slate-600 hover:bg-slate-100 hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-pressed:bg-indigo-600 aria-pressed:border-indigo-600 aria-pressed:text-white aria-pressed:hover:bg-indigo-600"
           >
             {released}
           </button>
@@ -166,7 +170,7 @@ export function EmojiPicker({ onPick, full }: EmojiPickerProps) {
                 // A full Handle removes the hover affordance rather than fading
                 // the grid out: dimming it reads as breakage, and the state is
                 // already announced by `aria-disabled` and said in words above.
-                className="text-2xl leading-none rounded-xl p-2 bg-white shadow-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-white"
+                className="text-2xl leading-none rounded-xl p-2 bg-white border border-slate-500 shadow-sm hover:bg-slate-100 hover:border-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-white aria-disabled:hover:border-slate-500"
               >
                 <span aria-hidden="true">{entry.emoji}</span>
               </button>
