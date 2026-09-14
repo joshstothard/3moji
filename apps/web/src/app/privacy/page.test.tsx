@@ -255,6 +255,8 @@ describe("the privacy notice", () => {
   it("says where the providers process data, and the UK transfer safeguard", () => {
     // Sources (#242): vercel.com/legal/dpa, resend.com/docs/dashboard/domains/regions,
     // neon.com/docs/introduction/regions and dataprivacyframework.gov/list.
+    // Neon (#257): neon.com/blog/gdpr-compliance-and-neon, databricks.com/legal/dpf
+    // and the DPF list entry for Databricks, Inc.
     render(<PrivacyPage />);
     const processors = sectionNamed(sections.processors.heading);
 
@@ -271,14 +273,18 @@ describe("the privacy notice", () => {
     expect(processors).toHaveTextContent(
       /under which Vercel and Resend are certified/,
     );
-    // Neon, LLC is named in Databricks' DPF notice, but whether that is what
-    // covers a Neon Free account was not verified, so the owner confirms it.
+    // The owner confirmed the production project's region on 2026-09-14.
     expect(processors).toHaveTextContent(
-      /The safeguard for transfers to Neon .* the owner/,
+      /Neon stores the database in the United States, in AWS US East 1 \(N\. Virginia\)/,
     );
-    // Neon's region is chosen when the project is created, so only the owner
-    // can say which one it is.
-    expect(processors).toHaveTextContent(/Which Neon region .* the owner/);
+    // The DPF list shows Databricks, Inc. active under the UK Extension, with
+    // Neon, LLC as a covered entity. Neon's contract terms were not shown to
+    // include the UK addendum, so the copy claims the certification only.
+    expect(processors).toHaveTextContent(
+      /Neon is covered through the certification of its parent company, Databricks/,
+    );
+    expect(processors).not.toHaveTextContent(/Which Neon region/);
+    expect(processors).not.toHaveTextContent(/safeguard for transfers to Neon/);
   });
 
   describe("the contact address", () => {
