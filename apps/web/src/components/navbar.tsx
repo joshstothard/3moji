@@ -2,11 +2,13 @@ import Link from "next/link";
 
 import en from "../../../../packages/shared/messages/en.json";
 import { AccountMenu } from "./account-menu";
+import { HeaderSearch } from "./header-search";
 import { LogoMark } from "./logo-mark";
 import { signOutFormAction } from "./sign-out-action";
 
 const copy = en.AccountMenu;
 const brand = en.Brand;
+const lookupCopy = en.HandleLookup;
 
 /** The focus ring every control in the shell shares. */
 const FOCUS =
@@ -33,11 +35,15 @@ const FOCUS =
  * by somebody already signed out, it lands on `/` and changes nothing.
  *
  * **The brand** (#251): the logo mark and wordmark, then "Claim a Handle", a
- * link to the builder on the home page, the same for everybody. The design's
- * header search sits between them; it is
- * [#254](https://github.com/joshstothard/3moji/issues/254), so nothing is
- * rendered there yet. On a phone the pill gives way, since the builder is the
- * first thing on the home page.
+ * link to the builder on the home page, the same for everybody. On a phone the
+ * pill gives way, since the builder is the first thing on the home page.
+ *
+ * **The header search sits between them**
+ * ([#254](https://github.com/joshstothard/3moji/issues/254), ADR-0012):
+ * `HeaderSearch`, a client island that asks `GET /api/search` after the page
+ * has arrived, so it reads nothing here either. From `md` it is a `GET` form to
+ * `/find`, which works without JavaScript; on a phone it opens from a button
+ * that needs JavaScript, so `<noscript>` links to `/find` instead.
  */
 export function Navbar() {
   return (
@@ -50,7 +56,15 @@ export function Navbar() {
           <LogoMark className="h-[23px] w-9 sm:h-7 sm:w-11" />
           {brand.wordmark}
         </Link>
-        {/* The header search (#254) goes here. */}
+        <HeaderSearch />
+        <noscript>
+          <Link
+            href="/find"
+            className={`inline-flex min-h-11 items-center rounded-full px-4 text-[15px] font-medium text-ink underline underline-offset-4 hover:text-violet-hover md:hidden ${FOCUS}`}
+          >
+            {lookupCopy.heading}
+          </Link>
+        </noscript>
         <div className="flex items-center gap-2">
           <AccountMenu />
           <noscript>

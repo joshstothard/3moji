@@ -83,42 +83,27 @@ describe("Home", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers a lookup for a Handle somebody heard (#200)", () => {
-    render(<Home />);
-
-    const lookup = screen.getByRole("search", {
-      name: en.HandleLookup.heading,
-    });
-    expect(lookup).toHaveAttribute("action", "/find");
-    expect(lookup).toHaveAttribute("method", "get");
-  });
-
   /**
-   * #263. The hero is the headline and the tagline alone, centred above the
-   * composer; Find a Handle leaves it and waits below the composer until the
-   * header search (#254) replaces it.
+   * #263, then #254. The hero is the headline and the tagline alone, centred
+   * above the composer. Find a Handle waited below the composer until the
+   * header search replaced it, so the page carries no lookup of its own: the
+   * header search is on every page, and `/find` is its no-JavaScript fallback.
    */
-  it("keeps Find a Handle out of the hero, below the composer", () => {
+  it("puts the composer below the hero, and leaves finding a Handle to the header search (#254)", () => {
     render(<Home />);
 
     const heading = screen.getByRole("heading", { level: 1 });
     const composer = screen.getByRole("region", {
       name: en.HandleBuilder.builderHeading,
     });
-    const lookup = screen.getByRole("search", {
-      name: en.HandleLookup.heading,
-    });
 
-    expect(heading.parentElement?.contains(lookup)).toBe(false);
-    expect(composer.contains(lookup)).toBe(false);
     expect(
       heading.compareDocumentPosition(composer) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      composer.compareDocumentPosition(lookup) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+      screen.queryByRole("search", { name: en.HandleLookup.heading }),
+    ).not.toBeInTheDocument();
   });
 
   it("mentions no OKR concepts", () => {

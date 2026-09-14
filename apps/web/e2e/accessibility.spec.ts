@@ -636,8 +636,9 @@ test("the Handle lookup's field border meets non-text contrast (#200)", async ({
 }) => {
   const field = page.getByRole("searchbox", { name: en.HandleLookup.label });
 
-  await openHome(page);
-  await expectBorderIdentifiesControl(field, "lookup field on /");
+  // A bare `/find`, where the home page's lookup went (#254).
+  await page.goto("/find");
+  await expectBorderIdentifiesControl(field, "lookup field on a bare /find");
 
   await page.goto(`/find?q=${encodeURIComponent("three wibbles")}`);
   await expectBorderIdentifiesControl(field, "lookup field on /find");

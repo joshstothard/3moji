@@ -82,8 +82,12 @@ function pathOf(words: string): string {
   return `/${lookup.alias}`;
 }
 
+/**
+ * From a bare `/find`, the lookup itself (#254): the home page no longer carries
+ * one, and the header search's no-JavaScript fallback on a phone is this page.
+ */
 async function lookUp(page: Page, words: string): Promise<void> {
-  await page.goto("/");
+  await page.goto("/find");
   await submitLookup(page, words);
 }
 
@@ -224,7 +228,8 @@ test("the lookup's answers over HTTP: a redirect to the alias, or a page, never 
     expect(await answer.text()).toContain(findCopy.notFoundHeading);
   }
 
+  // A bare `/find` is the lookup, empty (#254), not a redirect.
   const bare = await request.get("/find", { maxRedirects: 0 });
-  expect(bare.status()).toBe(307);
-  expect(bare.headers().location).toBe("/");
+  expect(bare.status()).toBe(200);
+  expect(await bare.text()).toContain(lookupCopy.label);
 });

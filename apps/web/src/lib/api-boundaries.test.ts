@@ -108,7 +108,12 @@ jest.mock("@template/core", () => ({
   canonicalise: (segment: string) => realCanonicalise.canonicalise(segment),
   viewerSummary: (input: unknown): unknown => viewerSummary(input),
   releaseHandle: (input: unknown): unknown => releaseHandle(input),
+  searchHandles: (input: unknown): unknown => searchHandles(input),
 }));
+
+/** The header search (ADR-0012, #254) and its per-client-address limiter. */
+const searchHandles = jest.fn();
+const searchAdmit = jest.fn();
 
 const releaseHandle = jest.fn();
 
@@ -169,6 +174,7 @@ import * as verifyRoute from "../app/claim/verify/route";
 import * as genericImageRoute from "../app/og-image/route";
 import * as handleImageRoute from "../app/[handle]/og-image/route";
 import * as viewerRoute from "../app/api/viewer/route";
+import * as searchRoute from "../app/api/search/route";
 import * as accountDeleteAction from "../components/account-delete-action";
 import * as availabilityAction from "../components/availability-action";
 import * as claimAction from "../components/claim-action";
@@ -207,7 +213,22 @@ function healthy(): void {
     signInClientRateLimiter: { admit: signInAdmit },
     resetRequestClientRateLimiter: {},
     passwordResetter: {},
+    handleSearch: {},
+    profiles: {},
+    searchClientRateLimiter: { admit: searchAdmit },
   }));
+  searchAdmit.mockResolvedValue({ state: "admitted" });
+  searchHandles.mockResolvedValue({
+    handles: [
+      {
+        key: ICE,
+        encoded: ENCODED,
+        alias: "ice-cube.ice-cube.ice-cube",
+        displayName: null,
+      },
+    ],
+    emoji: [],
+  });
   submitClaim.mockResolvedValue({
     state: "pending",
     handle: { key: ICE, encoded: ENCODED },
@@ -278,6 +299,18 @@ function authPostRequest(): Request {
     headers: requestHeaders(),
     body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
   });
+}
+
+/**
+ * A header search whose query text is personal data (#254): the email address
+ * and a token typed into the box. ADR-0012 decision 7 says the query is never
+ * logged, and `expectNoPersonalData` is what proves it.
+ */
+function searchRequest(): Request {
+  return new Request(
+    `http://localhost:3000/api/search?q=${encodeURIComponent(`${EMAIL} ${TOKEN}`)}&${query}`,
+    { headers: requestHeaders() },
+  );
 }
 
 function verifyRequest(): Request {
@@ -390,6 +423,20 @@ const CASES: readonly BoundaryCase[] = [
       return viewerRoute.GET();
     },
     logsFailure: false,
+  },
+  {
+    // The header search (ADR-0012). Its query carries an email address and a
+    // token, and neither may reach any log line, the boundary's included.
+    file: "app/api/search/route.ts",
+    exportName: "GET",
+    boundary: "search.read",
+    answer: () => searchRoute.GET(searchRequest()),
+    answered: "ok",
+    fail: () => {
+      searchHandles.mockRejectedValue(leakyError());
+      return searchRoute.GET(searchRequest());
+    },
+    logsFailure: true,
   },
   {
     file: "components/availability-action.ts",
@@ -805,6 +852,33 @@ describe("the password reset form actions (#192)", () => {
       expectNoPersonalData();
     },
   );
+});
+
+describe("the header search's per-client-address limit (ADR-0012)", () => {
+  it("logs a refusal as rate-limited, handing the limiter the client address but writing it, and the query, nowhere", async () => {
+    searchAdmit.mockResolvedValue({ state: "rate-limited" });
+
+    await insideRequest(() => searchRoute.GET(searchRequest()));
+
+    expect(searchAdmit.mock.calls).toEqual([[IP]]);
+    expect(searchHandles).not.toHaveBeenCalled();
+    expect(boundaryLines()).toEqual([
+      expect.objectContaining({
+        boundary: "search.read",
+        outcome: "rate-limited",
+      }),
+    ]);
+    expectNoPersonalData();
+  });
+
+  it("hands the query to the search as typed, and writes it nowhere when it answers", async () => {
+    await insideRequest(() => searchRoute.GET(searchRequest()));
+
+    expect(searchHandles).toHaveBeenCalledWith(
+      expect.objectContaining({ query: `${EMAIL} ${TOKEN}` }),
+    );
+    expectNoPersonalData();
+  });
 });
 
 describe("the auth route", () => {

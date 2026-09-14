@@ -58,8 +58,16 @@ export default async function FindPage({ searchParams }: FindPageProps) {
   const typed = typedWordsOf(query.q);
 
   if (typed.trim() === "") {
-    // Nothing to look up — a bare `/find`. The lookup lives on the home page.
-    redirect("/");
+    // Nothing to look up — a bare `/find`, which is where a phone's header
+    // sends a visitor without JavaScript (#254). The lookup, empty.
+    return (
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <h1 className="text-3xl font-bold text-ink mb-3 tracking-tight">
+          {copy.title}
+        </h1>
+        <HandleLookup />
+      </main>
+    );
   }
 
   const lookup = findHandleAlias(typed);

@@ -115,6 +115,35 @@ export {
 } from "./auth/adapters/background-email-sender";
 export type { BackgroundEmailSenderInput } from "./auth/adapters/background-email-sender";
 
+export type { HandleSearchIndex } from "./ports/handle-search-index";
+export { createDrizzleHandleSearchIndex } from "./adapters/drizzle-handle-search-index";
+export {
+  EMOJI_SUGGESTION_MIN_LENGTH,
+  SEARCH_EMOJI_LIMIT,
+  SEARCH_HANDLE_LIMIT,
+  SEARCH_MAX_TERMS,
+  SEARCH_QUERY_MAX_LENGTH,
+  SEARCH_READ_LIMIT,
+  searchHandles,
+  searchTermsOf,
+  suggestEmoji,
+} from "./handle/search-handles";
+export type {
+  FoundEmoji,
+  FoundHandle,
+  HandleSearch,
+  SearchHandlesInput,
+} from "./handle/search-handles";
+export {
+  SEARCH_CLIENT_RATE_LIMIT,
+  createSearchClientRateLimiter,
+  searchClientBucket,
+} from "./handle/search-rate-limit";
+export type {
+  SearchClientAdmission,
+  SearchClientRateLimiter,
+  SearchClientRateLimiterInput,
+} from "./handle/search-rate-limit";
 export type { HandleRepository } from "./ports/handle-repository";
 export { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
 export { ownershipOf } from "./handle/handle-ownership";
