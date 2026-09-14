@@ -14,6 +14,7 @@ push / PR
   ├── Stage 1 (parallel fast checks)
   │     lint · typecheck · unit-tests · integration-tests
   │     i18n-check · code-health · openapi · adr-sync · script-tests
+  │     workflow-lint
   │
   ├── Stage 2 (needs: all stage 1)
   │     build (artifact) · security (reusable workflow)
@@ -59,6 +60,21 @@ To restore a schedule, uncomment its `schedule:` block. `morlock.yml` was alread
 **`backup.yml` is the exception: its schedule is on** ([#206](https://github.com/joshstothard/3moji/issues/206)). A backup that has to be remembered is not a backup, the repository is now public so the minutes are free, and until the owner sets the `BACKUPS_ENABLED` variable to `true` every run is a green no-op that stops after one step. It runs only on `main` of `joshstothard/3moji`, never on a fork. Because this repository's logs and artifacts are public, the dump is piped from `pg_dump` straight into `age`, never uploaded as an artifact, and removed from `$RUNNER_TEMP` even on failure. The database password goes in a mode-600 libpq password file there, never on `pg_dump`'s command line. `scripts/backup-workflow-guard.test.mjs` fails the Script tests job if the workflow gains an artifact upload, `set -x`, an `echo` of a secret or variable name, or an expression pasted into a script. The decisions (skip, fail naming what is missing, object key, size checks) are `scripts/backup-plan.mjs`, tested in `scripts/backup-plan.test.mjs`. Restoring is [restore from backup § 5](../runbooks/restore-from-backup.md#5-restore-from-the-nightly-backup).
 
 **`neon-preview-cleanup.yml`'s hourly sweep is on too** ([#258](https://github.com/joshstothard/3moji/issues/258)), for the same reasons: until `NEON_CLEANUP_ENABLED` is `true` every run is a green no-op, and the repository is public, so the minutes are free. See § Neon preview cleanup.
+
+## Workflow lint
+
+**GitHub does not reject an invalid workflow file when it is pushed.** It accepts the push, then records a failed run of that workflow, with zero jobs and the message "This run likely failed because of a workflow file issue", on every push to every branch, whatever the workflow's triggers are. Its real triggers never fire, so a scheduled workflow never runs and **Run workflow** is not offered. `backup.yml` reached `main` in that state ([#266](https://github.com/joshstothard/3moji/issues/266)). Its job-level `env:` set `DUMP_FILE: ${{ runner.temp }}/...`, and GitHub rejected the file with `Unrecognized named-value: 'runner'`: the `runner` context exists only inside a step, so a job's `env:` cannot read it, though a step's `env:` can. Every push from 2026-09-14 recorded a failed "Nightly Database Backup" run, and the nightly backup could not have run once. Those failed runs stay in the Actions history. They are not a sign the problem is back.
+
+The `workflow-lint` job (Stage 1, **Workflow lint**) runs `scripts/actionlint.sh`, which checks every file in `.github/workflows` with [actionlint](https://github.com/rhysd/actionlint). That covers expression syntax, which contexts each key may read, `needs:` and `steps.*` references, action inputs, and cron syntax. The script downloads a pinned release, currently `1.7.12` for Linux x86_64, and runs it only if the archive's sha256 matches the one in the script. To upgrade, change the version and the checksum together. Take the checksum from the release's `checksums.txt`, and confirm it against GitHub's asset digest (`gh release view v<version> --repo rhysd/actionlint --json assets`).
+
+**Deliberate ignores.** Each one has a reason:
+
+- **Shellcheck info and style findings.** On `ubuntu-latest`, actionlint also runs `shellcheck` on each `run:` script, because the runner has shellcheck installed. The script sets `SHELLCHECK_OPTS=--severity=warning`, so only shellcheck warnings and errors fail the job. When the check was added it reported SC2086 (an unquoted variable) in `ci.yml` and `morlock.yml`, and SC2129 (redirects that could be grouped) in `morlock.yml`. These are style findings, and none of them makes a workflow invalid.
+- **`if: false` on the image push step in `ci.yml`.** actionlint reports a constant condition there. The step is disabled on purpose (§ Image push), so `.github/actionlint.yaml` ignores that message for `ci.yml` only.
+
+Add a new ignore to `.github/actionlint.yaml`, scoped to one file, with a comment giving the reason.
+
+**Locally**, `scripts/verify.sh` runs the same script. It uses an `actionlint` on your `PATH` if there is one (for example `brew install actionlint`, which may be a different version from CI's). If there is none, it prints a warning that the workflows were not validated and carries on, so CI's job is the gate. The script never downloads anything outside CI.
 
 ## Auto-merge
 
