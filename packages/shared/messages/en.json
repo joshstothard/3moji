@@ -248,8 +248,8 @@
           ],
           "closing": [
             "We do not sell your data, and we do not use it for advertising.",
-            "Vercel's main processing facilities are in the United States. Resend stores its account data, email records and logs in the United States, whichever region our emails are sent from. Neon stores the database in the region chosen when the database was created. [Which Neon region the database is in — the owner confirms this before launch]",
-            "Where your data is transferred to the United States, it is protected by the UK Extension to the EU-US Data Privacy Framework, under which Vercel and Resend are certified. Vercel's and Resend's data processing agreements also include the UK's addendum to the EU Standard Contractual Clauses. [The safeguard for transfers to Neon — the owner confirms this before launch]"
+            "Vercel's main processing facilities are in the United States. Resend stores its account data, email records and logs in the United States, whichever region our emails are sent from. Neon stores the database in the United States, in AWS US East 1 (N. Virginia).",
+            "Where your data is transferred to the United States, it is protected by the UK Extension to the EU-US Data Privacy Framework, under which Vercel and Resend are certified, and Neon is covered through the certification of its parent company, Databricks. Vercel's and Resend's data processing agreements also include the UK's addendum to the EU Standard Contractual Clauses."
           ]
         },
         "lawfulBasis": {
