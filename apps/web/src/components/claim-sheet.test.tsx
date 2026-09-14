@@ -168,7 +168,75 @@ describe("the claim sheet, on a phone", () => {
     const forms = document.querySelectorAll("form");
     expect(forms).toHaveLength(1);
     expect(dialog.contains(forms[0] ?? null)).toBe(true);
-    expect(composer().querySelector("[data-claim-step]")).toBeNull();
+    // Step 2 keeps its place in the page (#272), but holds no form there.
+    const step = composer().querySelector("[data-claim-step]");
+    expect(step).toHaveAttribute("data-claim-step", "sheet");
+    expect(step?.querySelector("form")).toBeNull();
+  });
+
+  describe("step 2 keeps its place in the page (#272)", () => {
+    it("is the locked panel before the Handle is available, as the server rendered it, so hydrating moves nothing", async () => {
+      const { user } = renderOnPhone("claimed");
+
+      expect(composer().querySelector("[data-claim-step]")).toHaveAttribute(
+        "data-claim-step",
+        "locked",
+      );
+
+      await pickIceCubes(user);
+      await screen.findByText(copy.stateClaimed);
+
+      expect(composer().querySelector("[data-claim-step]")).toHaveAttribute(
+        "data-claim-step",
+        "locked",
+      );
+    });
+
+    it("is the one #claim on the page, outside the sheet, whether the sheet is open or dismissed", async () => {
+      const { user } = renderOnPhone();
+
+      await pickIceCubes(user);
+      const dialog = await sheet();
+
+      const whileOpen = document.querySelectorAll("#claim");
+      expect(whileOpen).toHaveLength(1);
+      expect(dialog.contains(whileOpen[0] ?? null)).toBe(false);
+
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(dialog).not.toHaveAttribute("open");
+      });
+
+      const target = document.querySelectorAll("#claim");
+      expect(target).toHaveLength(1);
+      expect(target[0]?.closest("[data-claim-step]")).not.toBeNull();
+    });
+
+    it("holds the control that opens the sheet again, once it is dismissed", async () => {
+      const { user } = renderOnPhone();
+
+      await pickIceCubes(user);
+      const dialog = await sheet();
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(dialog).not.toHaveAttribute("open");
+      });
+
+      const step = composer().querySelector<HTMLElement>(
+        '[data-claim-step="sheet"]',
+      );
+      if (step === null) throw new Error("step 2 is not on the page");
+      const reopen = within(step).getByRole("button", {
+        name: copy.sheetReopen,
+      });
+      expect(screen.getAllByRole("button", { name: copy.sheetReopen })).toEqual(
+        [reopen],
+      );
+
+      await user.click(reopen);
+
+      expect(await sheet()).toHaveAttribute("open");
+    });
   });
 
   it("keeps Tab inside the sheet: on from the last control to the first, back from the first to the last", async () => {

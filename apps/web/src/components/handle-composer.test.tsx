@@ -207,6 +207,27 @@ describe("the composer (#263)", () => {
       );
     });
 
+    it("plays the unlock on step 2's own panel, never on a wrapper between it and the form, so the fields are usable at once (#272)", async () => {
+      const { user } = renderComposer("available");
+
+      await pick(user, "ice cube", "pizza", "ice cube");
+      await waitFor(() => {
+        expect(claimStep()).toHaveAttribute("data-claim-step", "open");
+      });
+
+      // The unlock's keyframes move nothing (a glow on the panel's edge, in
+      // `globals.css`), and jsdom cannot see keyframes, so what is pinned here
+      // is where the class sits: on the panel, and on nothing inside it that
+      // could carry motion to the fields. `e2e/composer.spec.ts` clicks the
+      // email field straight after the third pick.
+      const unlocking = Array.from(
+        composer().querySelectorAll(
+          '[class~="motion-safe:animate-step-unlock"]',
+        ),
+      );
+      expect(unlocking).toEqual([claimStep()]);
+    });
+
     it("does not play the unlock for the Handle the page opened on, which is open from the first paint", async () => {
       // `/[handle]` renders an unclaimed Handle with step 2 already open, and
       // without JavaScript. Nothing unlocked there, so nothing moves; and a

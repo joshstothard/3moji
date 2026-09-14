@@ -20,6 +20,13 @@ export interface ClaimFormProps {
   readonly claim: SubmitClaim;
   /** A short line above the heading, such as the composer's "Step 2" (#263). */
   readonly eyebrow?: string | undefined;
+  /**
+   * Whether this form is the `#claim` the unclaimed Handle's call to action
+   * links to. `true` by default. The phone's claim sheet passes `false`,
+   * because step 2 in the page keeps that id while the sheet holds the form,
+   * and a page must not have two (#272).
+   */
+  readonly anchor?: boolean;
 }
 
 type Rejection = Exclude<ClaimFormState["state"], "idle">;
@@ -96,7 +103,12 @@ const FIELD =
  * and describe the submit button instead — marking the email invalid for "this
  * Handle is taken" would send a screen reader user to fix the wrong thing.
  */
-export function ClaimForm({ handle, claim, eyebrow }: ClaimFormProps) {
+export function ClaimForm({
+  handle,
+  claim,
+  eyebrow,
+  anchor = true,
+}: ClaimFormProps) {
   const [state, formAction] = useActionState(claim, IDLE);
   /**
    * The email is kept across a rejection, so nobody retypes it to try another
@@ -127,7 +139,7 @@ export function ClaimForm({ handle, claim, eyebrow }: ClaimFormProps) {
     <section
       aria-labelledby={HEADING_ID}
       className="md:grid md:grid-cols-[15rem_minmax(0,1fr)] md:items-start md:gap-x-10"
-      id={SECTION_ID}
+      id={anchor ? SECTION_ID : undefined}
     >
       <div>
         {eyebrow === undefined ? null : (

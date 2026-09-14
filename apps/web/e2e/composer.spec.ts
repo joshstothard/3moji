@@ -1,18 +1,9 @@
-import { randomInt } from "node:crypto";
-
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import {
-  canonicalise,
-  curatedEmojiSet,
-  HANDLE_LENGTH,
-  isReservedHandle,
-  spokenHandle,
-  type CuratedEmoji,
-} from "@template/core";
+import { HANDLE_LENGTH, spokenHandle, type CuratedEmoji } from "@template/core";
 import en from "../../../packages/shared/messages/en.json";
-import { unclaimedSeveralHandleKeys } from "./support/aliases";
 import { checkPage, PAGE_RULES, type PageReport } from "./support/axe";
 import { categoryTabs, emojiGrid, pickEmoji } from "./support/picker";
+import { drawUnclaimedHandle, pathOf } from "./support/unclaimed-handle";
 
 /**
  * The connected layout, in the real browser
@@ -90,39 +81,6 @@ async function boxOf(
 async function bottomOf(locator: Locator): Promise<number> {
   const box = await boxOf(locator);
   return box.y + box.height;
-}
-
-/**
- * Three emoji nobody can have claimed: unreserved, not a three-of-a-kind (so no
- * celebration moves anything being measured), and none of the Handles
- * `handle-url.spec.ts` needs left unclaimed.
- */
-function drawUnclaimedHandle(): readonly CuratedEmoji[] {
-  const keep = unclaimedSeveralHandleKeys();
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const entries = Array.from(
-      { length: HANDLE_LENGTH },
-      () => curatedEmojiSet[randomInt(curatedEmojiSet.length)],
-    ).filter((entry): entry is CuratedEmoji => entry !== undefined);
-    const glyphs = entries.map((entry) => entry.emoji);
-    const result = canonicalise(glyphs.join(""));
-    if (
-      entries.length === HANDLE_LENGTH &&
-      new Set(glyphs).size > 1 &&
-      result.ok &&
-      !isReservedHandle(result.key) &&
-      !keep.has(result.key)
-    ) {
-      return entries;
-    }
-  }
-  throw new Error("Could not draw an unreserved Handle.");
-}
-
-function pathOf(entries: readonly CuratedEmoji[]): string {
-  const result = canonicalise(entries.map((entry) => entry.emoji).join(""));
-  if (!result.ok) throw new Error("the drawn Handle did not canonicalise");
-  return `/${result.encoded}`;
 }
 
 async function openHome(page: Page): Promise<void> {
@@ -523,6 +481,147 @@ test("keyboard focus moving through the grid is never hidden under the header or
     }
   }
   expect(checked, "focus stops checked").toBeGreaterThan(40);
+});
+
+test.describe("the moment step 2 unlocks (#272)", () => {
+  test.skip(
+    ({ isMobile }) => isMobile,
+    "On a phone the claim form opens in the sheet rather than in step 2.",
+  );
+
+  test("the email field can be clicked and focused straight after the third pick", async ({
+    page,
+  }) => {
+    await openHome(page);
+    const entries = drawUnclaimedHandle();
+    for (const entry of entries) {
+      await pickEmoji(page, entry);
+    }
+
+    const email = claimStep(page).getByRole("textbox", {
+      name: claimCopy.claimEmailLabel,
+    });
+    await expect(email).toBeAttached();
+
+    // Read the instant the field is there: nothing that holds it may be moving
+    // it, and its box must not change between frames. The unlock's motion is
+    // decorative, a glow on step 2's edge, so it never moves the controls.
+    const report = await email.evaluate(async (field) => {
+      const MOVES = [
+        "transform",
+        "translate",
+        "scale",
+        "rotate",
+        "top",
+        "left",
+        "right",
+        "bottom",
+        "margin",
+        "marginTop",
+        "marginLeft",
+        "height",
+        "width",
+      ];
+      const moving = document
+        .getAnimations()
+        .filter((animation) => {
+          if (
+            animation.playState !== "running" ||
+            !(animation.effect instanceof KeyframeEffect)
+          ) {
+            return false;
+          }
+          const holdsField = animation.effect.target?.contains(field) === true;
+          const moves = animation.effect
+            .getKeyframes()
+            .some((frame) => MOVES.some((property) => property in frame));
+          return holdsField && moves;
+        })
+        .map((animation) =>
+          animation instanceof CSSAnimation
+            ? animation.animationName
+            : animation.constructor.name,
+        );
+      const before = field.getBoundingClientRect();
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      });
+      const after = field.getBoundingClientRect();
+      return {
+        moving,
+        moved:
+          Math.abs(before.top - after.top) + Math.abs(before.left - after.left),
+      };
+    });
+    console.log(`step 2 at unlock: ${JSON.stringify(report)}`);
+    expect(report.moving, "animations moving the email field").toEqual([]);
+    expect(report.moved, "pixels the email field moved in two frames").toBe(0);
+
+    // Playwright clicks only a stable element, so a short timeout fails while
+    // the field is still sliding into place.
+    await email.click({ timeout: 150 });
+    await expect(email).toBeFocused();
+  });
+});
+
+test.describe("/#claim once the phone's sheet is dismissed (#272)", () => {
+  test.skip(
+    ({ isMobile }) => !isMobile,
+    "Only a phone moves the claim form into the sheet.",
+  );
+
+  test("following the page's own link to #claim, twice, reaches the claim again", async ({
+    page,
+  }) => {
+    await page.goto(pathOf(drawUnclaimedHandle()));
+    const dialog = sheet(page);
+    await expect(dialog).toBeVisible();
+
+    const action = page.getByRole("link", {
+      name: en.HandlePage.unclaimedAction,
+    });
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await page.evaluate(() => {
+        window.scrollTo(0, 0);
+      });
+
+      await action.click();
+
+      // Either the sheet opens again, or the fragment lands on something in
+      // view that the visitor can use to claim: never on nothing.
+      await expect
+        .poll(
+          async () =>
+            page.evaluate(() => {
+              if (document.querySelector("dialog[open]") !== null) {
+                return "the sheet opened";
+              }
+              const target = document.getElementById("claim");
+              if (target === null) return "no #claim target";
+              const rect = target.getBoundingClientRect();
+              if (rect.bottom <= 0 || rect.top >= window.innerHeight) {
+                return "#claim is out of view";
+              }
+              if (
+                target.closest("[inert]") !== null ||
+                target.querySelector("button, input") === null
+              ) {
+                return "#claim holds nothing usable";
+              }
+              return "#claim is in view and usable";
+            }),
+          { message: `attempt ${String(attempt)}` },
+        )
+        .toMatch(/^(the sheet opened|#claim is in view and usable)$/);
+    }
+  });
 });
 
 test.describe("without JavaScript", () => {
