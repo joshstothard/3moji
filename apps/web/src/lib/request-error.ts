@@ -6,24 +6,19 @@ import { CORRELATION_ID_HEADER } from "./correlation-id";
 import { logFailure } from "./log-error";
 
 /**
- * What should happen to an error nothing caught (#203). **Not wired yet.**
+ * What happens to an error nothing caught (#203).
  *
  * The branded `error.tsx` runs in the browser, so it cannot log on the server.
  * Next.js's own server-side report of the same error is `onRequestError`,
- * exported from `apps/web/src/instrumentation.ts`. A spike against 16.3.5
- * measured it: one call per failed request, made inside the request (the
- * request store answered the correlation id the proxy set), and no call for a
- * 404, a 308 or a word-alias miss. This function is the body that hook would
- * have.
+ * which `apps/web/src/instrumentation.ts` exports and which calls this. It is
+ * called once per failed request, inside the request, and not for a 404, a 308
+ * or a redirect: `e2e/request-error-log.spec.ts` asserts that on the server's
+ * own output.
  *
- * **Why it is not wired.** `scripts/tracing-guard.test.mjs` fails the build if
- * `apps/web` has an `instrumentation` file, because that file is where Next.js
- * registers tracing, and the tracing decision in `AGENTS.md` § Observability
- * (#148) is still the owner's to make. A file exporting only `onRequestError`
- * registers nothing, but whether the guard should narrow to allow one is that
- * decision, not this change's. Until it is made, an uncaught error while
- * rendering a page gets no `logFailure` line; route handlers and server actions
- * still get their `failed` line from `atBoundary`.
+ * **That file exports `onRequestError` and nothing else.** No `register()` and
+ * no tracing import: the tracing decision in `AGENTS.md` § Observability (#148)
+ * is still open, and `scripts/tracing-guard.test.mjs` fails the build if an
+ * instrumentation file exports anything else or imports a tracing module.
  *
  * What it does: one `logFailure` line under {@link REQUEST_FAILED_EVENT},
  * carrying the correlation id from the request's `x-correlation-id` header —

@@ -224,16 +224,6 @@ Items are grouped by when they have to happen:
   - **Blocks:** nothing.
   - **Detail:** [Authentication](architecture/auth.md#what-an-operator-sees-when-a-send-fails).
 
-- [ ] **Allow an instrumentation file that only logs request errors ([#203](https://github.com/joshstothard/3moji/issues/203), [#148](https://github.com/joshstothard/3moji/issues/148))**
-  - **What:** Add `apps/web/src/instrumentation.ts` exporting only Next's `onRequestError`, delegating to the handler already merged in `apps/web/src/lib/request-error.ts`. It has no `register()` and no tracing import. Today the file doesn't exist, because `scripts/tracing-guard.test.mjs` fails the build whenever it does, pending the tracing decision in #148.
-  - **Why it matters:** without it, a page that fails to render on the server writes no structured log line. The branded error page is shown, but nothing with a correlation id reaches the logs, so the failure can't be traced. `error.tsx` runs in the browser and can't do this job.
-  - **Options:**
-    1. **Allow it**, and tighten `scripts/tracing-guard.test.mjs` to forbid only `register()` and tracing imports. The guard's reason, that OpenTelemetry spans record drizzle's bound parameters, still holds, because neither is allowed.
-    2. **Wait for #148**, and leave server render errors unlogged until then.
-  - **Recommendation:** allow it. It's a three-line file plus a guard change, and it keeps the protection the guard exists for.
-  - **Blocks:** the last acceptance criterion of #203, which stays open until this is decided.
-  - **Detail:** [the #203 comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457), [system overview](architecture/system-overview.md) § Error tracking.
-
 - [ ] **Decide whether the Handle-path spoken form needs a new ADR ([#201](https://github.com/joshstothard/3moji/issues/201))**
   - **What:** Typing `3moji.me/three-ice-cubes` still 404s. The spoken form already works in the `/find` lookup (PR [#217](https://github.com/joshstothard/3moji/pull/217)), which needed no ADR.
   - **Why it matters:** accepting the spoken form in the path reverses ADR-0008 decision 2, which rejected a hyphen-joined address as ambiguous. Phase 8's acceptance criterion asks for the path form, so the criterion and the ADR disagree until you pick one.

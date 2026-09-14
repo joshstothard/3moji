@@ -27,8 +27,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev",
+    // The server's output is also written to `e2e-server.log` (git-ignored by
+    // `*.log`), so `request-error-log.spec.ts` can assert on the structured
+    // lines the app writes (#203). The pipe merges stderr into stdout, so
+    // `stdout: "pipe"` keeps the output in the job log, where stderr went before.
+    command: "npm run dev 2>&1 | tee e2e-server.log",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env["CI"],
+    stdout: "pipe",
   },
 });

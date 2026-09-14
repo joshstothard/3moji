@@ -5,12 +5,11 @@
 /**
  * What should happen to an error nothing caught (#203).
  *
- * `reportRequestError` is the body Next.js's server-side `onRequestError` hook
- * would have. The hook is not wired: its `instrumentation` file is blocked by
- * `scripts/tracing-guard.test.mjs` pending the tracing decision in `AGENTS.md`
- * § Observability (#148). So this proves the behaviour, not a live path: one
+ * `reportRequestError` is the body of Next.js's server-side `onRequestError`
+ * hook, which `src/instrumentation.ts` exports. This proves the behaviour: one
  * `logFailure` line, carrying the request's correlation id and never the
- * message, and nothing for `notFound()` or a redirect.
+ * message, and nothing for `notFound()` or a redirect. The live path, Next.js
+ * calling the hook on a real request, is `e2e/request-error-log.spec.ts`.
  */
 import "../test-support/next-async-local-storage";
 
