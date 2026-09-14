@@ -23,6 +23,7 @@ import {
   unclaimedSeveralHandleKeys,
 } from "./support/aliases";
 import {
+  contrastRatio,
   describeBorderContrast,
   describeContrast,
   measureBorderContrast,
@@ -82,6 +83,32 @@ async function expectBorderIdentifiesControl(
 
   expect
     .soft(measured.ratio, account)
+    .toBeGreaterThanOrEqual(NON_TEXT_CONTRAST);
+}
+
+/**
+ * A control whose **fill** is the cue: the selected picker category, whose
+ * `indigo-600` fill stands out from the page on its own. No border colour can
+ * reach 3:1 against both that fill and the `slate-50` page, so its border takes
+ * the fill's colour and both are measured against the surface around it
+ * ([#243](https://github.com/joshstothard/3moji/issues/243)). The border still
+ * has to be drawn, which `measureBorderContrast` checks.
+ */
+async function expectFillIdentifiesControl(
+  control: Locator,
+  subject: string,
+): Promise<void> {
+  await expect(control).toBeVisible();
+  const measured = await measureBorderContrast(control);
+  const fillAgainstSurface = contrastRatio(measured.fill, measured.surface);
+  const account = `${describeBorderContrast(subject, measured)}; fill ${fillAgainstSurface.toFixed(2)}:1 against the surface`;
+  console.log(account);
+
+  expect
+    .soft(measured.againstSurface, account)
+    .toBeGreaterThanOrEqual(NON_TEXT_CONTRAST);
+  expect
+    .soft(fillAgainstSurface, account)
     .toBeGreaterThanOrEqual(NON_TEXT_CONTRAST);
 }
 
@@ -230,6 +257,79 @@ test("the Handle builder's slot and swap-suggestion borders meet non-text contra
       `swap suggestion ${String(index + 1)} of ${String(count)}`,
     );
   }
+});
+
+test("the picker's category and emoji button borders meet non-text contrast", async ({
+  page,
+}) => {
+  // Like the builder's buttons (#185), the picker's wear a white fill and
+  // `shadow-sm` on `slate-50`, about 1.05:1, so the border identifies them
+  // (#243). Each state that changes the border or the fill is measured:
+  // default, hover, selected, and disabled once the Handle is full. Nothing
+  // here signs in or seeds a Handle.
+  await openHome(page);
+  const categories = page
+    .getByRole("group", { name: builderCopy.pickerCategoriesLabel })
+    .getByRole("button");
+  // Measuring no categories would pass for nothing.
+  await expect(categories.first()).toBeVisible();
+  const categoryCount = await categories.count();
+
+  for (let index = 0; index < categoryCount; index += 1) {
+    const category = categories.nth(index);
+    const name = (await category.textContent()) ?? "";
+    // The selected state's fill is `indigo-600`, and no border colour is 3:1
+    // against both that and the page, so the border takes the fill's colour
+    // and the button's edge is measured against the page instead.
+    await category.click();
+    await expect(category).toHaveAttribute("aria-pressed", "true");
+    await expectFillIdentifiesControl(category, `selected category ${name}`);
+
+    const other = categories.nth((index + 1) % categoryCount);
+    if (categoryCount > 1) {
+      await other.click();
+      await expect(category).toHaveAttribute("aria-pressed", "false");
+      await page.mouse.move(0, 0);
+      await expectBorderIdentifiesControl(category, `category ${name}`);
+      await category.hover();
+      await expectBorderIdentifiesControl(
+        category,
+        `category ${name}, hovered`,
+      );
+    }
+  }
+
+  await categories.first().click();
+  const emojiButtons = page.getByRole("list").getByRole("button");
+  await expect(emojiButtons.first()).toBeVisible();
+  const emojiCount = await emojiButtons.count();
+  await page.mouse.move(0, 0);
+  for (let index = 0; index < emojiCount; index += 1) {
+    await expectBorderIdentifiesControl(
+      emojiButtons.nth(index),
+      `emoji button ${String(index + 1)} of ${String(emojiCount)}`,
+    );
+  }
+  await emojiButtons.first().hover();
+  await expectBorderIdentifiesControl(
+    emojiButtons.first(),
+    "emoji button 1, hovered",
+  );
+
+  for (let pick = 0; pick < HANDLE_LENGTH; pick += 1) {
+    await emojiButtons.nth(pick).click();
+  }
+  await expect(emojiButtons.first()).toHaveAttribute("aria-disabled", "true");
+  await page.mouse.move(0, 0);
+  await expectBorderIdentifiesControl(
+    emojiButtons.first(),
+    "emoji button 1, disabled",
+  );
+  await emojiButtons.first().hover();
+  await expectBorderIdentifiesControl(
+    emojiButtons.first(),
+    "emoji button 1, disabled and hovered",
+  );
 });
 
 test("the claim form's field borders meet non-text contrast", async ({
