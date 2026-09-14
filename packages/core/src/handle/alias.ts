@@ -141,6 +141,22 @@ export function aliasTermSlugs(): readonly string[] {
 }
 
 /**
+ * The emoji one **complete** term names, in candidate-list order, or
+ * `undefined` when the word is not a term we know.
+ *
+ * The same index `resolveAlias` reads, one word at a time, for the header
+ * search ([ADR-0012](../../../../docs/adr/0012-header-search-lists-claimed-handles-with-display-names-capped-and-rate-limited.md)
+ * decision 3): `apple` names 🍎 and 🍏, `appl` names nothing. The word is
+ * slugged by the alias rule first, so `Ice Cube` and `ice-cube` are one term.
+ */
+export function emojiNamedBy(
+  word: string,
+): readonly CuratedEmoji[] | undefined {
+  const term = slugify(word);
+  return term === "" ? undefined : byTerm.get(term);
+}
+
+/**
  * The one canonical alias of the Handle made of `codepoints`, and a name for
  * **exactly that one Handle** — 🧊🧊🧊 is `ice-cube.ice-cube.ice-cube`.
  *

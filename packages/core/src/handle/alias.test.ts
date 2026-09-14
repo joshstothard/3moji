@@ -4,6 +4,7 @@ import {
   ALIAS_SEPARATOR,
   aliasTermSlugs,
   canonicalAliasOf,
+  emojiNamedBy as curatedNamedBy,
   resolveAlias,
 } from "./alias";
 
@@ -56,6 +57,27 @@ function keysOf(alias: string): readonly string[] {
   }
   return result.candidates.map((candidate) => candidate.key);
 }
+
+describe("emojiNamedBy", () => {
+  const named = (word: string) =>
+    curatedNamedBy(word)?.map((entry) => entry.emoji);
+
+  it("answers every emoji one complete term names", () => {
+    expect(named("apple")).toEqual(
+      expect.arrayContaining([RED_APPLE, GREEN_APPLE]),
+    );
+  });
+
+  it("slugs the word first, so case and spacing do not matter", () => {
+    expect(named("Ice Cube")).toEqual([ICE]);
+  });
+
+  it("answers nothing for part of a term, or for nothing", () => {
+    expect(named("appl")).toBeUndefined();
+    expect(named("")).toBeUndefined();
+    expect(named("!!!")).toBeUndefined();
+  });
+});
 
 describe("canonicalAliasOf", () => {
   it("joins the display-name slugs with dots", () => {

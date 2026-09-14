@@ -77,13 +77,25 @@ describe("the find page", () => {
     expect(findHandleAlias).toHaveBeenCalledWith("wibble wobble wubble");
   });
 
+  /**
+   * #254. The home page no longer carries the lookup: the header search does,
+   * and without JavaScript a phone's header links here. So a bare `/find` is
+   * the lookup itself, empty, rather than a redirect to a page without one.
+   */
   it.each([{}, { q: "" }, { q: "   " }])(
-    "sends a visitor with nothing typed back to the home page (%p)",
+    "offers the lookup, empty, to a visitor with nothing typed (%p)",
     async (query) => {
-      await expect(renderPage(query)).rejects.toThrow("NEXT_REDIRECT");
+      await renderPage(query);
 
-      expect(redirect).toHaveBeenCalledWith("/");
+      expect(redirect).not.toHaveBeenCalled();
       expect(findHandleAlias).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("heading", { level: 1, name: copy.title }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(copy.notFound)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("searchbox", { name: lookupCopy.label }),
+      ).toHaveValue("");
     },
   );
 

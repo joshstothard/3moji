@@ -11,6 +11,11 @@ jest.mock("./account-menu", () => ({
   AccountMenu: () => <div data-testid="account-menu" />,
 }));
 
+// The header search (#254), a client island with its own suites.
+jest.mock("./header-search", () => ({
+  HeaderSearch: () => <div data-testid="header-search" />,
+}));
+
 import { Navbar } from "./navbar";
 
 describe("Navbar", () => {
@@ -46,14 +51,34 @@ describe("Navbar", () => {
   });
 
   /**
-   * #251. The mockup's header search is #254's; until then nothing in the
-   * navbar is a search, so the page keeps exactly one search landmark.
+   * #254. The header search sits between the brand and the account controls,
+   * on every page, as a client island like the signed-in indicator.
    */
-  it("renders no search yet", () => {
+  it("carries the header search inside the navigation landmark, after the brand", () => {
     render(<Navbar />);
 
-    expect(screen.queryByRole("search")).not.toBeInTheDocument();
-    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    const search = screen.getByTestId("header-search");
+    expect(screen.getByRole("navigation")).toContainElement(search);
+    expect(
+      screen
+        .getByRole("link", { name: "3moji" })
+        .compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  /**
+   * #254. On a phone the search opens from a button that needs JavaScript, so
+   * without it the header links to `/find`, the lookup the ADR keeps as the
+   * fallback. The same markup for every visitor.
+   */
+  it("offers a phone without JavaScript the /find lookup", () => {
+    const markup = renderToStaticMarkup(<Navbar />);
+
+    expect(markup).toMatch(
+      new RegExp(
+        `<noscript><a[^>]*href="/find"[^>]*>${en.HandleLookup.heading}</a></noscript>`,
+      ),
+    );
   });
 
   it("offers no links to the removed OKR sections", () => {

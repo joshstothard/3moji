@@ -67,6 +67,13 @@ test("/ is rendered per request, hydrates, runs the builder and passes axe, with
   const report = await checkPage(page);
   expect(report.violations).toEqual([]);
 
+  // The header search (#254) asks its route from the page and draws the
+  // answer: emoji suggestions need no seeded Handle.
+  await page.getByRole("combobox", { name: en.HeaderSearch.label }).fill("ice");
+  await expect(
+    page.getByRole("option", { name: /ice cube/i }).first(),
+  ).toBeVisible();
+
   await expectNoViolations(page, watch);
 });
 

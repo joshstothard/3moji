@@ -27,6 +27,12 @@ import { createDrizzleClaimFinaliser } from "./adapters/drizzle-claim-finaliser"
 import { createDrizzleClaimRateLimitStore } from "./adapters/drizzle-claim-rate-limit-store";
 import { createDrizzleClaimStore } from "./adapters/drizzle-claim-store";
 import { createDrizzleHandleRepository } from "./adapters/drizzle-handle-repository";
+import { createDrizzleHandleSearchIndex } from "./adapters/drizzle-handle-search-index";
+import {
+  createSearchClientRateLimiter,
+  type SearchClientRateLimiter,
+} from "./handle/search-rate-limit";
+import type { HandleSearchIndex } from "./ports/handle-search-index";
 import { createDrizzleProfileRepository } from "./adapters/drizzle-profile-repository";
 import { createDrizzleProfileStore } from "./adapters/drizzle-profile-store";
 import { createDrizzleReleaseStore } from "./adapters/drizzle-release-store";
@@ -94,6 +100,19 @@ export interface CoreServices {
    */
   readonly verificationMailer: VerificationMailer;
   readonly handles: HandleRepository;
+  /**
+   * The header search's read of claimed Handles
+   * ([ADR-0012](../../../docs/adr/0012-header-search-lists-claimed-handles-with-display-names-capped-and-rate-limited.md)).
+   * Read-only, and separate from {@link handles}, which answers about one key
+   * and never finds keys.
+   */
+  readonly handleSearch: HandleSearchIndex;
+  /**
+   * The header search's per-client-address limit (ADR-0012 decision 6), on
+   * the Claim's counter table under its own bucket kind, bound like the others
+   * so the route never holds the secret.
+   */
+  readonly searchClientRateLimiter: SearchClientRateLimiter;
   /**
    * The Profile behind a Handle, for the page a visitor lands on. Read-only for
    * the reason {@link handles} is: editing a Profile rewrites the row and its
@@ -261,6 +280,12 @@ export function createCoreServices(deps: CoreDependencies): CoreServices {
     auth,
     verificationMailer: createBetterAuthVerificationMailer(auth),
     handles: createDrizzleHandleRepository(deps.db),
+    handleSearch: createDrizzleHandleSearchIndex(deps.db),
+    searchClientRateLimiter: createSearchClientRateLimiter({
+      store: rateLimitStore,
+      clock: deps.clock,
+      secret: deps.auth.secret,
+    }),
     profiles: createDrizzleProfileRepository(deps.db),
     // A plain transaction, like the Release's: an edit writes no Better Auth
     // row and sends no email, so there is nothing to rebind and nothing to

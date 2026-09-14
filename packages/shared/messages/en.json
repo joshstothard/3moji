@@ -207,11 +207,11 @@
             "Your email address. We use it to verify your account, to let you sign in, and to send you emails about your account, such as verification and password reset emails. It is never shown on your Profile. We keep it until your account is deleted.",
             "Your password, as a hash. We never store your password itself, only a scrambled version that can check the password you type but cannot be turned back into it. We keep it until your account is deleted, and replace it if you reset your password.",
             "Your Handle. The three emoji you claim are your public web address, and they are also stored as your account's name. While a Handle is held waiting for you to verify your email, we store when the hold ends; once you verify, we store when your claim became final. We keep it until your account is deleted.",
-            "Your Profile: the display name, bio and Links you choose to add, where each Link is a title and a web address, and when you last saved them. Your Profile is public: anyone who visits your Handle can see it. Saving replaces what was there before, and we do not keep old versions. We keep it until you change it or your account is deleted.",
+            "Your Profile: the display name, bio and Links you choose to add, where each Link is a title and a web address, and when you last saved them. Your Profile is public: anyone who visits your Handle can see it. Once your Handle is claimed, anyone can also find it and your display name through the site's search. Saving replaces what was there before, and we do not keep old versions. We keep it until you change it or your account is deleted.",
             "Sign-in sessions. Each time you sign in, we store a session with your IP address, your browser's user agent (a short description of your browser and device) and when the session expires. This keeps you signed in and helps us keep accounts secure. A session expires after 7 days without use, and using the site renews it at most once a day. It is deleted when you sign out, when you reset your password, when your account is deleted, or when it is next used after it has expired.",
             "Verification email records. For each verification email we send, we store a fingerprint of the link (never the link itself) and when it was sent, so that only the newest link works and we can limit how many are sent. We keep these until your account is deleted.",
             "Password reset tokens. When you ask to reset your password, we store a single-use token that works for 1 hour. It is deleted when it is used, and an expired one is cleared the next time the site checks a token.",
-            "Rate-limit counters. To stop abuse, we count recent attempts to claim a Handle, to sign in and to resend emails. Every counter holds a keyed hash of your IP address or email address, never the address itself, and the hash cannot be turned back into the address without our secret key. They hold about an hour of history, and older counts are cleared as new attempts arrive.",
+            "Rate-limit counters. To stop abuse, we count recent attempts to claim a Handle, to sign in, to resend emails and to search. Every counter holds a keyed hash of your IP address or email address, never the address itself, and the hash cannot be turned back into the address without our secret key. They hold about an hour of history, and older counts are cleared as new attempts arrive.",
             "Released Handles. When an account is deleted, we record which Handle was released and when, and nothing else. That record does not name you or link to your account. We keep it indefinitely."
           ]
         },
@@ -402,6 +402,21 @@
     "setTooShort": "That password is too short. Use at least {min} characters.",
     "setTooLong": "That password is too long. Use at most {max} characters.",
     "setFailed": "We could not set your password just now. Try again in a moment."
+  },
+  "HeaderSearch": {
+    "label": "Search Handles",
+    "placeholder": "Search Handles and emoji",
+    "open": "Search",
+    "close": "Close search",
+    "handlesHeading": "Handles",
+    "emojiHeading": "Emoji",
+    "noName": "No name yet",
+    "claimedOnly": "Showing claimed Handles only",
+    "openHint": "open",
+    "noResults": "No claimed Handles or emoji match that.",
+    "results": "{handles} Handles and {emoji} emoji. Use the arrow keys to choose one.",
+    "rateLimited": "Too many searches. Try again in a few minutes.",
+    "unavailable": "Search is not working right now."
   },
   "AccountMenu": {
     "signIn": "Sign in",
