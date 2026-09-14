@@ -15,7 +15,7 @@ Items are grouped by when they have to happen:
 
 ## Do before launch
 
-- [ ] **Create the hosting, database, email and DNS accounts**
+- [x] **Create the hosting, database, email and DNS accounts** (done: confirmed by the owner on 2026-09-14, and [#19](https://github.com/joshstothard/3moji/issues/19) is closed)
   - **What:** Create a Vercel project linked to `joshstothard/3moji` (Hobby for now, Pro expected). Add Neon Postgres through the Vercel Marketplace, and check the Free plan can actually be picked in the install dialog. Set up Resend to send from a subdomain of `3moji.me`, not the bare domain. At GoDaddy, add the records Vercel gives you for `3moji.me` and `www`, and the SPF, DKIM and DMARC records for the Resend subdomain. Then note where the credentials are kept, but never the credentials themselves, and never in the repo or an issue.
   - **Why it matters:** nothing can go live until these accounts exist, and no agent can create them.
   - **Options:** for DMARC, `p=none` with reporting (you get reports and nothing is blocked), or `p=quarantine`/`p=reject` straight away (stricter, but a misconfiguration silently loses real verification emails).
@@ -27,7 +27,7 @@ Items are grouped by when they have to happen:
     - `BETTER_AUTH_SECRET`: at least 32 random characters. Generate it, never make one up.
     - `RESEND_API_KEY`: from Resend.
     - `RESEND_FROM`: the sender, on the Resend subdomain.
-    - `REPORT_CONTACT_EMAIL`: optional. Unset, or anything but one plain address, means no report link is shown. See the report mailbox item below.
+    - `REPORT_CONTACT_EMAIL`: the report alias (a placeholder form is `reports@example.com`). Unset, or anything but one plain address, means no report link is shown. See "Create the abuse report alias" below.
     - `NEXT_PUBLIC_APP_VERSION` is supplied by the build and needs nothing from you. **Never set `TEST_EMAIL_SENDER` on Vercel**: it's test-only, and the app refuses to start with it set there.
     - `PRODUCTION_DATABASE_HOST`: **set it for Preview** ([#32](https://github.com/joshstothard/3moji/issues/32)). The host name of the production database, the part after `@` and before `/` in Production's `DATABASE_URL_UNPOOLED` (the pooled host works too). Copy it from the Vercel or Neon dashboard, never into the repo, an issue or a chat. Every preview build compares its own database against it and **fails if it is production, or if this is unset**, so a preview can never migrate or use production data. It's a host name, not a password, but treat it as private.
     - Vercel's own `VERCEL_ENV`, `VERCEL_URL` and `VERCEL_BRANCH_URL` need "Automatically expose System Environment Variables" left on. A preview builds its verification and reset links from them, because `BETTER_AUTH_URL` holds the production address.
@@ -51,29 +51,37 @@ Items are grouped by when they have to happen:
   - **Blocks:** [#55](https://github.com/joshstothard/3moji/issues/55), the agent work that applies your verdict. #55 must land before the site is open to anyone.
   - **Detail:** [#23](https://github.com/joshstothard/3moji/issues/23) (the list and how to do it).
 
-- [ ] **Turn on secret scanning with push protection**
-  - **What:** In the repo's Settings → Code security, turn on secret scanning and push protection. Both are off today.
+- [x] **Turn on secret scanning with push protection** (done: confirmed by the owner on 2026-09-14)
+  - **What:** In the repo's Settings → Code security, turn on secret scanning and push protection. Both were off until 2026-09-14.
   - **Why it matters:** the repo is public, so a leaked key is compromised the moment it's pushed, and push protection is the one guard a missing local hook or `--no-verify` can't skip.
   - **Options:** turn it on, or rely only on the local `secretlint` hook (which a fresh worktree can silently lack).
   - **Recommendation:** turn it on. It's free for public repositories.
   - **Blocks:** nothing directly, but it covers the risk that [#126](https://github.com/joshstothard/3moji/issues/126) only narrows.
   - **Detail:** [#126](https://github.com/joshstothard/3moji/issues/126) § Notes, `docs/development/local-setup.md`, `AGENTS.md` § This Repository Is Public.
 
-- [ ] **Protect `main` and make the Format check required**
-  - **What:** `main` has no branch protection and no ruleset today. Create one and add the CI `Format` job as a required check.
+- [x] **Protect `main` and make the Format check required** (done: confirmed by the owner on 2026-09-14)
+  - **What:** `main` had no branch protection and no ruleset until 2026-09-14. Create one and add the CI `Format` job as a required check.
   - **Why it matters:** the auto-merge gate already waits for the whole CI run, but nothing stops a hand merge with unformatted code, which is how `main` went red before.
   - **Options:** a classic branch protection rule, or a repository ruleset. Either needs a settings change only you can make.
   - **Recommendation:** add it. [ADR-0003](adr/0003-auto-merge-pull-requests-on-green-ci.md) chose a workflow gate because protection was unavailable while the repo was private. The repo is public now, but it isn't confirmed whether that makes protection available on your plan, and native protection would need a new ADR.
   - **Blocks:** nothing.
   - **Detail:** PR [#122](https://github.com/joshstothard/3moji/pull/122), which added the `Format` job to `.github/workflows/ci.yml`.
 
-- [ ] **Enable Web Analytics in Vercel**
+- [x] **Enable Web Analytics in Vercel** (done: confirmed by the owner on 2026-09-14)
   - **What:** In the Vercel project, open Analytics and select Enable. The `<Analytics />` component is already in the root layout, but Vercel records nothing until it is enabled there.
   - **Why it matters:** without it, the page-view analytics the privacy notice describes never starts.
   - **Options:** enable it, or leave it off (the component then does nothing).
   - **Recommendation:** enable it with the first deploy.
   - **Blocks:** nothing.
   - **Detail:** PR [#238](https://github.com/joshstothard/3moji/pull/238), [Vercel Web Analytics quickstart](https://vercel.com/docs/analytics/quickstart).
+
+- [ ] **Create the abuse report alias and point `REPORT_CONTACT_EMAIL` at it**
+  - **What:** Create a dedicated forwarding alias on `3moji.me` that forwards to you. It is shown here only as the placeholder `reports@example.com`, and the real address never goes in the repo or an issue. Then set `REPORT_CONTACT_EMAIL` in Vercel (Production) to that one plain address, and redeploy: prerendered pages read it at build time.
+  - **Why it matters:** the report link on every Profile and in the footer shows nothing until the variable is set. The takedown runbook now commits to acknowledging a report within 48 hours.
+  - **Options:** none left open. The alias was decided on 2026-09-14 (below).
+  - **Recommendation:** set it up with the first deploy, then send yourself a test report from a Profile to check the alias forwards.
+  - **Blocks:** the report link going live ([#197](https://github.com/joshstothard/3moji/issues/197), [#198](https://github.com/joshstothard/3moji/issues/198)), and so the public announcement.
+  - **Detail:** [takedown runbook](runbooks/takedown.md) § 1, `apps/web/.env.example`.
 
 - [ ] **Optional: register the sending domain with Google Postmaster Tools, and check Microsoft SNDS**
   - **What:** The first live verification email landed in Outlook's Junk folder ([#240](https://github.com/joshstothard/3moji/issues/240)). Every email is now multipart text and HTML, which should help. To see how providers rate the domain:
@@ -102,24 +110,6 @@ Items are grouped by when they have to happen:
   - **Recommendation:** upgrade with Resend Pro, before announcing. Pro is expected to add log drains and longer log retention, but **that needs confirming against Vercel's current docs**. It hasn't been verified here.
   - **Blocks:** error tracking (it uses Vercel's own logs, and waits on this), and any paid feature.
   - **Detail:** [workstream](workstreams/3moji-mvp.md) Phase 8, deliverable 4; [hosting and email report](reports/2026-09-11-hosting-and-email.md) § 4.
-
-- [ ] **Pick the mailbox abuse reports go to**
-  - **What:** Every Profile will have a "report" link that opens an email to a contact address. The address is read from an environment variable, proposed as `REPORT_CONTACT_EMAIL`.
-  - **Why it matters:** reports about phishing or abuse need to reach someone promptly, and the address is shown publicly.
-  - **Options:** a dedicated alias (for example on `3moji.me`), or a personal inbox.
-  - **Recommendation:** a dedicated alias that forwards to you, not a personal inbox. It can change hands later and keeps your own address private.
-  - **Blocks:** the report link going live. It is built ([#197](https://github.com/joshstothard/3moji/issues/197)) and shows nothing until the variable is set.
-  - **Detail:** [takedown runbook](runbooks/takedown.md), [workstream](workstreams/3moji-mvp.md) Phase 7, deliverable 3.
-
-- [ ] **Confirm the report response targets, and whether a mailto is enough**
-  - **What:** Two calls about handling reports:
-    - **Response targets.** The takedown runbook proposes acknowledging a report within 2 working days, and acting the same day on anything in its "act now" triage row. These are starting values, not yet a commitment.
-    - **A web form.** Reporting is a `mailto:` link, which needs a mail client. The runbook's Online Safety Act table marks "let users easily report illegal content" as only partly met, because a web form may be expected later.
-  - **Why it matters:** a target you can't meet is worse than none once it's published. A reporter with no mail client set up has no way to report.
-  - **Options:** accept the targets or change them. Keep the mailto for launch, or ask for a report form before launch.
-  - **Recommendation:** none recorded.
-  - **Blocks:** publishing any response time. A form would be a new issue.
-  - **Detail:** PR [#211](https://github.com/joshstothard/3moji/pull/211), [takedown runbook](runbooks/takedown.md) § 1 and § 6.
 
 - [ ] **Where nightly database backups are stored**
   - **What:** Neon's free plan can only restore to a point in the last 6 hours or so. A mistake noticed the next day, such as a bad migration or an accidental deletion, would lose every Handle, Account and Profile. A nightly copy kept somewhere else fixes that.
@@ -157,98 +147,6 @@ Items are grouped by when they have to happen:
   - **Recommendation:** none recorded beyond the item above.
   - **Blocks:** removing the draft marker, and so the public announcement.
   - **Detail:** PR [#210](https://github.com/joshstothard/3moji/pull/210) § Questions the owner must answer; `packages/shared/messages/en.json` `Legal` namespace.
-
-- [ ] **Confirm the rate-limit starting values**
-  - **What:** The limits below are in code today. Each was flagged as a starting value for you to confirm. Changing one is a one-line constant, so this isn't a one-way door.
-    - **Claiming a Handle:** 3 an hour per email address, 10 an hour per client IP address (`CLAIM_RATE_LIMITS`).
-    - **Sign-in:** 10 in 15 minutes per client (`AUTH_RATE_LIMITS.signInEmail`; the sign-in form uses the same numbers).
-    - **Password reset email and verification email:** 5 an hour per client each (`AUTH_RATE_LIMITS`).
-    - **Resending a verification link:** 10 an hour per client IP address (`RESEND_CLIENT_RATE_LIMIT`), plus 3 an hour per Account with at least 60 seconds between them, the sign-up email included (`RESEND_LIMITS`).
-    - **The password reset request form:** 5 an hour per client (`RESET_REQUEST_CLIENT_RATE_LIMIT`), taken from `AUTH_RATE_LIMITS.requestPasswordReset` rather than set separately ([#192](https://github.com/joshstothard/3moji/issues/192)).
-    - **Every other Better Auth endpoint:** 100 in 10 seconds per client (Better Auth's own default, stated explicitly).
-  - **Why it matters:** too tight and real people get locked out on launch day; too loose and someone can use the site to spam inboxes or guess passwords.
-  - **Options:** accept them as they are, or change individual values.
-  - **Recommendation:** accept them for launch, then tune them from the logs.
-  - **Blocks:** nothing.
-  - **Detail:** [auth architecture](architecture/auth.md) § Resend, and its limits, § Better Auth's rate limit, § The Claim's rate limit; `packages/core/src/handle/claim-rate-limit.ts`, `packages/core/src/auth/`.
-
-- [ ] **How the password reset pages trade enumeration safety against honesty**
-  - **What:** Three calls left open when the reset pages were built:
-    1. **The answer when a send fails.** If Resend is down, a registered address gets "failed" while an unregistered one still gets "sent", so an outage reveals which addresses have accounts. Resend and Better Auth's own endpoint behave the same way. The alternative is to always answer "sent" and only log the failure, which hides the outage from the person waiting for the email.
-    2. **Sending in the background.** The 500 ms floor pads fast answers, but a real send that takes longer is still measurably slower. Sending with `waitUntil` would close that gap, at the cost of never learning that a send failed.
-    3. **No limit on the set-new-password form.** It guards a 24-character random token that expires in an hour, and bypasses Better Auth's HTTP limiter. Should it get its own limit?
-  - **Why it matters:** each choice trades not revealing who has an account against telling a real person that something went wrong.
-  - **Options:** keep the behaviour as built, or change any of the three.
-  - **Recommendation:** none recorded.
-  - **Blocks:** nothing technical.
-  - **Detail:** PR [#215](https://github.com/joshstothard/3moji/pull/215) § Open questions for the owner, [auth architecture](architecture/auth.md) § Password reset.
-
-- [ ] **Emoji picker buttons with no border**
-  - **What:** The picker's category buttons and emoji buttons have a white fill on a near-white page (about 1.05:1 contrast) and no border.
-  - **Why it matters:** WCAG AA asks for 3:1 on whatever identifies a control, unless something else (here the text label or the emoji itself) does that job.
-  - **Options:** accept that the label or glyph identifies each button, and record why. Or add the same `slate-500` border the other controls now have.
-  - **Recommendation:** none recorded. It's a design call. Note the builder's slots were given a border rather than relying on the glyph.
-  - **Blocks:** nothing, though AA is a stated success criterion.
-  - **Detail:** PR [#186](https://github.com/joshstothard/3moji/pull/186) § For the owner to decide, `apps/web/src/components/emoji-picker.tsx`.
-
-- [ ] **Do the "letters" and "shapes" emoji groups stay in the set?**
-  - **What:** Two groups describe text or shapes rather than a picture. One is `Symbols/alphanum`, such as 🆎 "AB button". The other is `Symbols/geometric`, such as "red circle" vs "red square". Excluding both takes the full set from 1,053 to 994.
-  - **Why it matters:** these are hard to say aloud, and saying a Handle out loud is the product.
-  - **Options:** keep both, drop one, or drop both.
-  - **Recommendation:** none recorded. This doesn't need the phones.
-  - **Blocks:** freezing the Emoji Set. Neither group is in a released category yet, so this must be settled before any category containing them is released.
-  - **Detail:** [#23](https://github.com/joshstothard/3moji/issues/23) § Two whole subgroups, [workstream](workstreams/3moji-mvp.md) Open questions.
-
-- [ ] **Should 🍑 and 🍆 stay claimable?**
-  - **What:** Both were left in, on the grounds that context is what makes them rude. Food & Drink is now a launch category, so they're prominent rather than buried.
-  - **Why it matters:** removing them after someone has claimed a Handle with one is the same one-way door as the render check.
-  - **Options:** keep them claimable, or add them to the blocked list.
-  - **Recommendation:** none recorded.
-  - **Blocks:** nothing technical, but it must be settled before claims open.
-  - **Detail:** [#18](https://github.com/joshstothard/3moji/issues/18), [workstream](workstreams/3moji-mvp.md) Open questions.
-
-- [ ] **Should the shareable word address prefer a shorter name?**
-  - **What:** Each Handle has one canonical word address built from display names, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` already works when typed, but it matches eight Handles.
-  - **Why it matters:** once people have shared a link in bios and chats, changing its canonical spelling makes old links redirect or break.
-  - **Options:** keep the display-name form, or prefer a shorter synonym where it matches only one Handle.
-  - **Recommendation:** none recorded.
-  - **Blocks:** nothing technical, but links shared after launch fix the spelling.
-  - **Detail:** [ADR-0008](adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3, [workstream](workstreams/3moji-mvp.md) Open questions.
-
-- [ ] **Are 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 the right Handles to keep for the platform?**
-  - **What:** These three were reserved for 3moji itself while the Reserved Handle list was built, but they were never confirmed as a product decision. 🧊🧊🧊 is deliberately not reserved.
-  - **Why it matters:** a platform Handle someone else has claimed can't be taken back.
-  - **Options:** confirm them, swap some, or add more.
-  - **Recommendation:** none recorded.
-  - **Blocks:** nothing technical, but it must be settled before claims open.
-  - **Detail:** [#52](https://github.com/joshstothard/3moji/issues/52), [workstream](workstreams/3moji-mvp.md) Open questions.
-
-- [ ] **What a word address shows when it matches several unclaimed Handles**
-  - **What:** `apple.apple.apple` can mean several Handles. If none is claimed, there's no single Handle to offer a claim for, and the current ADR doesn't say what to show.
-  - **Why it matters:** visitors will type these addresses, and today the behaviour is an unrecorded deviation.
-  - **Options:**
-    1. A listing of the unclaimed candidates, each with a claim button.
-    2. Offer the claim for the canonical candidate and mention the others.
-    3. An honest "this could mean several Handles" page, which in practice becomes option 1.
-  - **Recommendation:** the issue leans to option 1. It needs a new ADR (run `/adr`), because ADR-0008 can't be edited.
-  - **Blocks:** one of Phase 4's acceptance criteria, which stays unticked until then.
-  - **Detail:** [#121](https://github.com/joshstothard/3moji/issues/121).
-
-- [ ] **Accept that a failed email no longer tells the person it failed**
-  - **What:** Since [#216](https://github.com/joshstothard/3moji/issues/216), reset links, verification links and "you already have an account" notices are sent after the page has answered. If the email provider fails, the person still sees "a link is on its way", and the failure shows up only in the logs, as `auth_email_send_failed`, `claim_collision_email_failed` or `claim_verification_email_failed`.
-  - **Why it matters:** before, a provider outage showed "something went wrong", but only for registered addresses, which told anyone who asked that the address had an account. Now nobody is told, including the real owner, who waits for an email that never comes.
-  - **Options:** accept it and read the logs when someone reports a missing email; or alert on those three events once error tracking exists.
-  - **Recommendation:** accept it, and alert on those three events when Phase 8's error tracking lands. Every one of those emails can be asked for again from the page the person is already on.
-  - **Blocks:** nothing.
-  - **Detail:** [Authentication](architecture/auth.md#what-an-operator-sees-when-a-send-fails).
-
-- [ ] **Review: how axe checks the open account menu ([#225](https://github.com/joshstothard/3moji/pull/225))**
-  - **What:** The orchestrator took this call overnight. When an open dropdown covers page text, axe checks only the open menu panel, and the whole page is still checked with the menu closed. It uses a new optional `include` on `checkPage` in `apps/web/e2e/support/axe.ts`, and every other caller is unchanged.
-  - **Why it matters:** on Mobile Chrome the four-row account menu covers the Profile's own text, so axe can't judge that text's contrast while the menu is open. The scoped check still fails on violations and on anything axe can't decide.
-  - **Options:** confirm it, or overrule it and change the menu's mobile layout so it covers no page text.
-  - **Recommendation:** confirm it. It was observed failing on a deliberate contrast break and passing once the break was reverted.
-  - **Blocks:** nothing.
-  - **Detail:** PR [#225](https://github.com/joshstothard/3moji/pull/225) follow-up comments, [workstream](workstreams/3moji-mvp.md) Decision log, 2026-09-14.
 
 ## Decide after launch
 
@@ -301,3 +199,40 @@ Recorded in the Decision log on 2026-09-14:
 - **The spoken form isn't resolved in the path** ([#201](https://github.com/joshstothard/3moji/issues/201)). `/three-ice-cubes` stays a 404 and ADR-0008 stands. Spoken input works in the Find a Handle lookup, which the home page and the 404 page both offer. Revisit if post-launch logs show 404s on spoken-looking paths.
 - **The Content Security Policy is a per-request nonce on every page** (option 1 of [#205](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)). `/`, `/privacy`, `/terms` and the 404 render per request and lose CDN caching in exchange for a strict policy with no `unsafe-inline` script. See [Security headers](architecture/system-overview.md#security-headers).
 - **Vercel Web Analytics was added at your request** (PR [#238](https://github.com/joshstothard/3moji/pull/238)). It is cookieless, and the privacy notice's processors section was updated to say what it records, from Vercel's own docs. Its URL recording would have included the set-new-password page, whose address holds a reset token, so **every URL is redacted before it is sent**: `/reset-password/<token>` becomes `/reset-password/[token]`, every query string and fragment is dropped, and a URL that cannot be parsed is not sent at all. See `apps/web/src/lib/analytics-redaction.ts`, tested in `apps/web/src/lib/analytics-redaction.test.ts`, and wired in by `SiteAnalytics` (asserted in `apps/web/src/components/site-analytics.test.tsx` and `apps/web/src/app/layout.test.tsx`).
+
+Accepted by the owner on 2026-09-14, from the recommendations this page made ([#244](https://github.com/joshstothard/3moji/issues/244)), and recorded in the Decision log the same day:
+
+- **Abuse reports go to a dedicated forwarding alias, not a personal inbox.** It can change hands later, and it keeps your own address private. `REPORT_CONTACT_EMAIL` in Vercel points at it. Creating the alias is still to do, under Do before launch. Detail: [takedown runbook](runbooks/takedown.md), [workstream](workstreams/3moji-mvp.md) Phase 7, deliverable 3.
+- **Reports are acknowledged within 48 hours, and "act now" reports are acted on within 24 hours.** "Act now" is the takedown runbook's triage row for child sexual abuse material, terrorism content, credible threats, and live phishing or malware Links. A `mailto:` link is enough for launch, and no web form is needed before launch. The [takedown runbook](runbooks/takedown.md) states this as the commitment in § 1, § 2b and § 6. Detail: PR [#211](https://github.com/joshstothard/3moji/pull/211).
+- **The rate limits keep their current starting values for launch**, and are tuned from the logs afterwards. Each one is a one-line constant:
+  - Claiming a Handle: 3 an hour per email address and 10 an hour per client IP address (`CLAIM_RATE_LIMITS`).
+  - Sign-in: 10 in 15 minutes per client (`AUTH_RATE_LIMITS.signInEmail`).
+  - Password reset and verification emails: 5 an hour per client each (`AUTH_RATE_LIMITS`).
+  - Resending a verification link: 10 an hour per client IP address (`RESEND_CLIENT_RATE_LIMIT`), plus 3 an hour per Account at least 60 seconds apart (`RESEND_LIMITS`).
+  - The password reset request form: 5 an hour per client (`RESET_REQUEST_CLIENT_RATE_LIMIT`).
+  - Every other Better Auth endpoint: 100 in 10 seconds per client.
+  - Detail: [auth architecture](architecture/auth.md) § Resend, and its limits, § Better Auth's rate limit, § The Claim's rate limit; `packages/core/src/handle/claim-rate-limit.ts`, `packages/core/src/auth/`.
+- **Password reset stays privacy-safe, and the code already works this way.** Checked against `main` on 2026-09-14, so no code change is needed:
+  - **The request page says the same thing whether or not the send succeeds.** `requestPasswordReset` in `packages/core/src/auth/password-reset.ts` answers `sent` for a registered address and an unregistered one alike, before any email goes out. The page shows that as "If that address belongs to an account, a reset link is on its way" (`PasswordReset.requestSent` in `packages/shared/messages/en.json`). It shows "We could not send a reset link just now" (`?notice=failed`) only when the request fails before any email is handed off, for example when the rate limiter or the database can't be reached (`apps/web/src/components/password-reset-action.ts`). A failed send never produces it.
+  - **The email is sent in the background, and a failure is only logged.** The auth instance's sender is `createBackgroundEmailSender` (`packages/core/src/auth/adapters/background-email-sender.ts`, wired in `packages/core/src/composition-root.ts`). `createAfterBackgroundTasks` (`apps/web/src/lib/after-background-tasks.ts`) runs the send with Next.js's `after()` and logs a failure as `auth_email_send_failed`, and that's all ([#216](https://github.com/joshstothard/3moji/issues/216)).
+  - **The set-new-password form has no limit of its own.** `setNewPassword` in `password-reset.ts` checks no limiter. What it guards is a random 24-character token that expires in an hour.
+  - Detail: PR [#215](https://github.com/joshstothard/3moji/pull/215) § Open questions for the owner, [auth architecture](architecture/auth.md) § Password reset.
+- **A failed email no longer tells the person it failed.** They can ask again from the page they're already on. Alerting on `auth_email_send_failed`, `claim_collision_email_failed` and `claim_verification_email_failed` waits for Phase 8's error tracking. Detail: [Authentication](architecture/auth.md#what-an-operator-sees-when-a-send-fails).
+- **The emoji picker's category and emoji buttons get the `slate-500` border** the builder's slots have, rather than relying on the label or the emoji to identify each button. It's being built under its own issue. Detail: PR [#186](https://github.com/joshstothard/3moji/pull/186) § For the owner to decide, `apps/web/src/components/emoji-picker.tsx`.
+- **The "letters" (`Symbols/alphanum`) and "shapes" (`Symbols/geometric`) groups stay in the Emoji Set**, so the full set stays at 1,053. Detail: [#23](https://github.com/joshstothard/3moji/issues/23) § Two whole subgroups.
+- **🍑 and 🍆 stay claimable.** Misuse is handled through reports ([takedown runbook](runbooks/takedown.md)). Detail: [#18](https://github.com/joshstothard/3moji/issues/18).
+- **🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 are the platform's Reserved Handles.** 🧊🧊🧊 stays claimable. Detail: [#52](https://github.com/joshstothard/3moji/issues/52).
+- **Axe's check on the open account menu stays scoped.** When an open dropdown covers page text, axe checks only the open menu panel, and it still checks the whole page with the menu closed (`checkPage`'s optional `include` in `apps/web/e2e/support/axe.ts`). Detail: PR [#225](https://github.com/joshstothard/3moji/pull/225) follow-up comments, [workstream](workstreams/3moji-mvp.md) Decision log.
+
+Accepted by the owner on 2026-09-14 ([#244](https://github.com/joshstothard/3moji/issues/244)), and **awaiting ADR**. [ADR-0008](adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) is Accepted and can't be edited, so nothing changes until you run the `/adr` command below, which drafts a new ADR that partially supersedes it. Tick each item once its ADR is accepted. Run them one at a time. The first one marks ADR-0008 as partially superseded, and the `adr` skill stops when the ADR it supersedes isn't plain Accepted. When it stops, tell it the second ADR supersedes a different decision in ADR-0008.
+
+- [ ] **The shareable word address prefers a shorter synonym where it matches only one Handle** (awaiting ADR)
+  - **What:** today 🍎🍎🍎's canonical word address is `red-apple.red-apple.red-apple`, built from display names. This changes ADR-0008 decision 3.
+  - **Run:** `/adr Prefer a shorter unambiguous synonym for a Handle's canonical word address --supersedes 0008`
+  - **Blocks:** nothing technical, but links shared after launch fix the spelling, so it's worth doing before launch.
+  - **Detail:** [ADR-0008](adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3, [workstream](workstreams/3moji-mvp.md) Open questions.
+- [ ] **A word address that matches several unclaimed Handles shows a listing of them, each with a claim button** (option 1; awaiting ADR)
+  - **What:** fills the gap in ADR-0008 decision 4 when none of the Handles an alias names is claimed.
+  - **Run:** `/adr Show a listing of unclaimed candidates when a word address matches several Handles and none is claimed --supersedes 0008`
+  - **Blocks:** one of Phase 4's acceptance criteria, which stays unticked until then.
+  - **Detail:** [#121](https://github.com/joshstothard/3moji/issues/121), where the decision is recorded as a comment.

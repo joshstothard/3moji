@@ -391,13 +391,9 @@ _Operations:_
 
 Every decision and action only the repo owner can take, including the questions below, is gathered with a checkbox in [Owner actions and decisions](../owner-actions.md).
 
-- Do the `Symbols/alphanum` and `Symbols/geometric` subgroups stay in the Emoji Set? Excluding both takes it from 1,053 to 994. Decided in issue #23.
 - Which flagged emoji are excluded after the side-by-side render check? Issue #23.
-- Is three resends an hour the right limit? It is a starting value to tune, not a principle. As built (#82) it is one constant, `RESEND_LIMITS` in `packages/core/src/auth/resend-allowance.ts`, with an overridable parameter on the pure decision — so tuning it is a one-line change, and the sign-up link counts towards the three.
-- Should 🍑 and 🍆 stay claimable? Both were left in ([#18](https://github.com/joshstothard/3moji/issues/18)) on the grounds that context makes them rude. ADR-0007 makes Food & Drink a launch category, so they are now prominent rather than buried among a thousand.
 - Which order do later category drops go in, and what triggers one? ADR-0007 defers Objects and schedules nothing else.
-- Should the **canonical** word alias prefer a shorter unambiguous synonym where one exists? [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3 joins the `displayName` slugs, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` is accepted on input but names eight Handles.
-- Are 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 the right platform-owned Reserved Handles? They were chosen while implementing [#52](https://github.com/joshstothard/3moji/issues/52) and have never been confirmed as a product decision. 🧊🧊🧊 is deliberately not among them, because ADR-0004 decision 2 names it freely claimable.
+- Should the **canonical** word alias prefer a shorter unambiguous synonym where one exists? [ADR-0008](../adr/0008-handles-are-addressable-by-emoji-and-by-their-word-alias.md) decision 3 joins the `displayName` slugs, so 🍎🍎🍎 is `red-apple.red-apple.red-apple`. The shorter `apple.apple.apple` is accepted on input but names eight Handles. **Decided 2026-09-14, awaiting ADR:** the owner chose to prefer a shorter synonym where it matches only one Handle (Decision log). Until a new ADR partially supersedes decision 3, the display-name form stays canonical.
 - How is launch-day email volume handled? Resend's free plan caps email at 100 a day — one verification email per claim, plus resends and collision notices — so on launch day claimant 101 gets no email and their hold expires. The owner is undecided. **Recommendation:** launch quietly on Free, log the daily send count, and upgrade to Resend Pro ($20/month, 50,000 emails) together with Vercel Pro before any public announcement.
 - Where do nightly database backups live? Phase 8 needs a private, non-public destination, and planning must pick it.
 
@@ -427,6 +423,18 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — The production CSP smoke test runs in Chromium only. Decided by the repo owner.
 - 2026-09-14 — The production smoke test runs `next start`, not the Docker image's standalone server, because the site deploys to Vercel. Decided by the orchestrator.
 - 2026-09-14 — #233 (server-rendered Handle-route 404 without JavaScript) deferred as a Next.js limitation. Decided by the orchestrator, for owner review.
+- 2026-09-14 — Abuse reports go to a dedicated forwarding alias, not a personal inbox, and `REPORT_CONTACT_EMAIL` in Vercel points at it. Creating the alias stays an owner action. Accepted by the owner ([#244](https://github.com/joshstothard/3moji/issues/244)).
+- 2026-09-14 — Report response targets are a commitment: acknowledge every report within 48 hours, and act within 24 hours on the takedown runbook's "act now" row. A `mailto:` link is enough for launch, and no web form is needed before launch. Accepted by the owner (#244).
+- 2026-09-14 — The rate limits keep their current starting values for launch, and are tuned from logs afterwards. Accepted by the owner (#244).
+- 2026-09-14 — Password reset stays privacy-safe. The request page says a link is on its way whether or not the send succeeds. The email is sent in the background, and a failure is only logged. The set-new-password form gets no limit of its own. The code already behaves this way (#192, #216). Accepted by the owner (#244).
+- 2026-09-14 — A failed email no longer tells the person it failed, and they can ask again from the same page. Alerting on `auth_email_send_failed`, `claim_collision_email_failed` and `claim_verification_email_failed` waits for error tracking. Accepted by the owner (#244).
+- 2026-09-14 — The emoji picker's category and emoji buttons get the `slate-500` border that the builder's slots have, rather than relying on the label or the glyph. Implemented under its own issue. Accepted by the owner (#244).
+- 2026-09-14 — The `Symbols/alphanum` ("letters") and `Symbols/geometric` ("shapes") subgroups both stay in the Emoji Set. Accepted by the owner (#244).
+- 2026-09-14 — 🍑 and 🍆 stay claimable, and misuse is handled through reports. Accepted by the owner (#244).
+- 2026-09-14 — The canonical word address should prefer a shorter synonym where that synonym matches only one Handle. **Awaiting ADR:** this contradicts ADR-0008 decision 3, which is Accepted and immutable, so nothing changes until the owner runs `/adr` for a new ADR that partially supersedes it. Accepted by the owner (#244).
+- 2026-09-14 — 🎉🎉🎉, 🎫🎫🎫 and 🍕🍕🍕 are confirmed as the platform's Reserved Handles ([#52](https://github.com/joshstothard/3moji/issues/52)). Accepted by the owner (#244).
+- 2026-09-14 — A word address that matches several Handles, none of them claimed, shows a listing of the unclaimed candidates, each with a claim button (option 1 of [#121](https://github.com/joshstothard/3moji/issues/121)). **Awaiting ADR:** this fills a gap in ADR-0008 decision 4, so nothing changes until the owner runs `/adr` for a new ADR that partially supersedes it. Accepted by the owner (#244).
+- 2026-09-14 — Scoping axe to the open account menu (PR [#225](https://github.com/joshstothard/3moji/pull/225)) is confirmed. Accepted by the owner (#244).
 
 ## Changelog
 
@@ -522,3 +530,4 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-14 — #201 finished without an ADR: the owner declined resolving the spoken form in the path, the Phase 8 criterion is reworded to the Find a Handle lookup and ticked, and the branded 404 page now offers that lookup. #233 filed under epic #199: a `[handle]` 404 has no markup without JavaScript.
 - 2026-09-14 — CSP: nonce on every page (option 1). Decided by the repo owner.
 - 2026-09-14 — Synced after PR #235: #201, #203 and #205 done (PRs #234, #232, #235), the security-headers criterion ticked, #233 appended and deferred to Backlog, and four decisions logged (HSTS without `preload`, Chromium-only CSP smoke test, `next start` for the smoke test, #233 deferral). #206 and #207 stay blocked on #32; Phase 8 stays In progress.
+- 2026-09-14 — Recorded the owner's acceptance of the pre-launch recommendations ([#244](https://github.com/joshstothard/3moji/issues/244)): twelve Decision log lines, and the Open questions they settle removed (letters and shapes, three resends an hour, 🍑 and 🍆, the platform Reserved Handles). The shorter canonical word address stays listed, marked "awaiting ADR". The takedown runbook now states its response targets as a commitment.
