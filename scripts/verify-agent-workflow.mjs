@@ -690,20 +690,22 @@ assert.deepEqual(sharedMcp.mcpServers?.playwright, {
   command: "npx",
   args: ["-y", "@playwright/mcp@latest"],
 });
-// The built-in advisor is enabled by a committed setting and explained at length
-// in the README. Nothing tied the two together, so removing the setting and
-// leaving the documentation -- or vice versa -- kept the verifier green while the
-// README described a configuration the repo no longer had. Assert they agree,
-// without asserting which value is right: that is a policy choice, and either
-// state passes as long as both places say the same thing.
+// The built-in advisor is enabled by a committed setting and explained in the
+// developer setup guide (it lived in the README until #275). Nothing tied the two
+// together, so removing the setting and leaving the documentation -- or vice
+// versa -- kept the verifier green while the docs described a configuration the
+// repo no longer had. Assert they agree, without asserting which value is right:
+// that is a policy choice, and either state passes as long as both places say the
+// same thing.
+const advisorDoc = "docs/development/local-setup.md";
 const claudeSettings = JSON.parse(read(".claude/settings.json"));
-const documentedAdvisor = read("README.md").match(
+const documentedAdvisor = read(advisorDoc).match(
   /^\s*"advisorModel": "([^"]+)"$/m,
 )?.[1];
 assert.equal(
   claudeSettings.advisorModel,
   documentedAdvisor,
-  `.claude/settings.json advisorModel (${claudeSettings.advisorModel ?? "unset"}) must match the value documented in README.md (${documentedAdvisor ?? "none"}): whichever way this is decided, the setting and the documentation have to agree`,
+  `.claude/settings.json advisorModel (${claudeSettings.advisorModel ?? "unset"}) must match the value documented in ${advisorDoc} (${documentedAdvisor ?? "none"}): whichever way this is decided, the setting and the documentation have to agree`,
 );
 
 const codexConfig = read(".codex/config.toml");
