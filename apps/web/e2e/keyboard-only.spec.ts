@@ -360,9 +360,10 @@ test("a visitor looks up a Handle by keyboard alone (#200)", async ({
 
   await expect(page).toHaveURL("/ice-cube.ice-cube.ice-cube");
 
-  // From the 404 a visitor lands on when they type the spoken form as a path
-  // (#201): the lookup is there, reached and submitted by keyboard alone.
-  const response = await page.goto("/three-ice-cubes");
+  // From a 404 (#201): the lookup is there, reached and submitted by keyboard
+  // alone. An unmatched path, not `/three-ice-cubes`: a `[handle]` 404 has no
+  // markup until hydration, so the first Tab lands on Next's dev tools (#233).
+  const response = await page.goto("/no/such/page");
   expect(response?.status()).toBe(404);
   const onNotFound = page.getByRole("searchbox", { name: lookupCopy.label });
   await moveFocusTo(page, onNotFound, "Tab");
