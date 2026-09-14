@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { Navbar } from "../components/navbar";
 import { Footer } from "../components/footer";
 import "./globals.css";
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <div className="flex-1">{children}</div>
           <Footer />
         </div>
+        <Analytics />
       </body>
     </html>
   );
