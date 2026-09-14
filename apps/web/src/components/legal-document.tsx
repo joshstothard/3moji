@@ -59,7 +59,7 @@ function Contact({ address }: { readonly address: string | undefined }) {
 
   return (
     <a
-      className="font-semibold break-words text-indigo-700 underline hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      className="font-semibold break-words text-violet underline hover:text-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
       href={`mailto:${address}`}
     >
       {address}
@@ -106,7 +106,7 @@ function Paragraphs({
   return (
     <>
       {texts.map((text) => (
-        <p className="mt-3 text-base leading-7 text-slate-700" key={text}>
+        <p className="mt-3 text-base leading-7 text-body" key={text}>
           <FilledText contact={contact} text={text} />
         </p>
       ))}
@@ -123,25 +123,22 @@ export function LegalDocument({
 }: LegalDocumentProps) {
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <h1 className="text-3xl font-bold text-slate-900 mb-6 tracking-tight">
+      <h1 className="text-3xl font-bold text-ink mb-6 tracking-tight">
         {heading}
       </h1>
 
       <DraftMarker />
 
-      <p className="text-lg leading-8 text-slate-700">{intro}</p>
+      <p className="text-lg leading-8 text-body">{intro}</p>
 
       {Object.entries(sections).map(([id, section]) => (
         <section aria-labelledby={`legal-${id}`} className="mt-10" key={id}>
-          <h2
-            className="text-xl font-semibold text-slate-900"
-            id={`legal-${id}`}
-          >
+          <h2 className="text-xl font-semibold text-ink" id={`legal-${id}`}>
             {section.heading}
           </h2>
           <Paragraphs contact={contact} texts={section.paragraphs} />
           {section.items !== undefined && (
-            <ul className="mt-3 list-disc space-y-2 pl-6 text-base leading-7 text-slate-700">
+            <ul className="mt-3 list-disc space-y-2 pl-6 text-base leading-7 text-body">
               {section.items.map((item) => (
                 <li key={item}>
                   <FilledText contact={contact} text={item} />
@@ -157,7 +154,7 @@ export function LegalDocument({
 
       <p className="mt-12">
         <Link
-          className="inline-flex min-h-11 items-center text-base font-semibold text-indigo-700 underline hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="inline-flex min-h-11 items-center text-base font-semibold text-violet underline hover:text-violet-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
           href={related.href}
         >
           {related.label}
