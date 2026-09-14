@@ -37,6 +37,7 @@ Items are grouped by when they have to happen:
     - **Framework Preset:** Next.js.
     - **Build Command, Install Command and Output Directory:** leave the overrides off. `vercel.json` sets the first two, and the output is Next.js's default, `.next` in `apps/web`.
     - **Node.js Version:** 24.x, to match `engines` in the root `package.json`.
+    - **Don't set `NODE_ENV=production` or `NPM_CONFIG_PRODUCTION=true` as Vercel environment variables.** The build needs devDependencies (turbo and drizzle-kit), and without them it fails with an unhelpful "not found".
     - **Neon integration:** connected for Production and Preview, with a database branch per preview deployment turned on.
     - What a build does with them, and when it fails on purpose, is in [system-overview.md § The build](architecture/system-overview.md#the-build). A failed build's reason is in its build log, on a line starting `[vercel-migrate]`.
   - **Blocks:** [#32](https://github.com/joshstothard/3moji/issues/32), the first deploy. That in turn blocks every "on the live site" check, including dotted alias paths on Vercel's CDN, backups and uptime.

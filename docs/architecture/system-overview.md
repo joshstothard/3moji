@@ -354,7 +354,7 @@ Vercel on the Hobby plan, which forbids commercial use ([ADR-0006](../adr/0006-n
 
 `apps/web/vercel.json` is the project's build configuration, read from the Root Directory `apps/web` (the dashboard settings it needs are in [owner actions](../owner-actions.md)). Both commands run from the repository root:
 
-- **Install:** `npm ci`, for the whole workspace.
+- **Install:** `HUSKY=0 npm ci`, for the whole workspace, devDependencies included (turbo and drizzle-kit are devDependencies). `HUSKY=0` keeps a deployment from installing git hooks.
 - **Build:** `node scripts/vercel-migrate.mjs`, then `turbo run build --filter=@template/web`. The `&&` between them means a failed migration fails the deployment and nothing is built.
 
 **Migrations run before `next build`, and only on a Vercel build.** `scripts/vercel-migrate.mjs` decides from the environment alone, and `scripts/vercel-migrate.test.mjs` covers every rule without a database:
