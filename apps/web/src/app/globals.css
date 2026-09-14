@@ -91,6 +91,39 @@
    */
   --animate-rare-pop: rare-pop 800ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
   --animate-rare-hop: rare-hop 500ms ease-out both;
+  /*
+   * The second and third slots hop 120ms and 240ms after the first. The delay
+   * is part of the animation rather than an inline `style`, which the
+   * production Content Security Policy refuses in server-rendered HTML (#267).
+   */
+  --animate-rare-hop-2: rare-hop 500ms ease-out 120ms both;
+  --animate-rare-hop-3: rare-hop 500ms ease-out 240ms both;
+
+  /*
+   * The composer (#263): the phone's claim sheet slides up from the bottom,
+   * and step 2 settles into place when it unlocks. Both are `motion-safe:`
+   * only, run once, and move with `transform` alone, like the celebration.
+   */
+  --animate-sheet-up: sheet-up 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  --animate-step-unlock: step-unlock 320ms ease-out both;
+
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @keyframes step-unlock {
+    from {
+      transform: translateY(0.75rem);
+    }
+    to {
+      transform: none;
+    }
+  }
 
   @keyframes rare-pop {
     0% {

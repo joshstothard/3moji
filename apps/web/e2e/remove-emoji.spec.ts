@@ -104,6 +104,12 @@ async function moveFocusTo(
 }
 
 async function expectAxeClean(page: Page): Promise<void> {
+  // Picking scrolls the grid under the sticky slot row (#263), and axe cannot
+  // work out the colour behind text that overlaps other content, so the page
+  // is checked from the top. The slots are still there, in the row.
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
   const report = await checkPage(page);
   expect(report.violations, "axe violations").toEqual([]);
   expect(report.incomplete, "axe incomplete results").toEqual([]);

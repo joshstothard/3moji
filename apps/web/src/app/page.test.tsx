@@ -93,6 +93,34 @@ describe("Home", () => {
     expect(lookup).toHaveAttribute("method", "get");
   });
 
+  /**
+   * #263. The hero is the headline and the tagline alone, centred above the
+   * composer; Find a Handle leaves it and waits below the composer until the
+   * header search (#254) replaces it.
+   */
+  it("keeps Find a Handle out of the hero, below the composer", () => {
+    render(<Home />);
+
+    const heading = screen.getByRole("heading", { level: 1 });
+    const composer = screen.getByRole("region", {
+      name: en.HandleBuilder.builderHeading,
+    });
+    const lookup = screen.getByRole("search", {
+      name: en.HandleLookup.heading,
+    });
+
+    expect(heading.parentElement?.contains(lookup)).toBe(false);
+    expect(composer.contains(lookup)).toBe(false);
+    expect(
+      heading.compareDocumentPosition(composer) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      composer.compareDocumentPosition(lookup) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("mentions no OKR concepts", () => {
     const { container } = render(<Home />);
 

@@ -76,6 +76,35 @@ describe("the Handle builder, checked by axe", () => {
     );
   });
 
+  it("reports no violations with step 2 locked, waiting for three emoji (#263)", async () => {
+    const { container } = render(
+      <HandleBuilder checkAvailability={jest.fn()} claim={neverSettles} />,
+    );
+    // Without the locked step rendered, axe would be checking the builder
+    // exactly as the first case does.
+    expect(
+      container.querySelector('[data-claim-step="locked"]'),
+    ).not.toBeNull();
+
+    const report = await checkAccessibility(container);
+
+    expect(report.violations).toEqual([]);
+    expect(report.incomplete).toEqual([]);
+    expect(report.passed).toEqual(
+      expect.arrayContaining(["button-name", "aria-allowed-attr"]),
+    );
+  });
+
+  /*
+   * The phone's claim sheet is not checked here, and cannot be. With any
+   * `dialog[open]` in the document, axe decides whether it is modal by hit
+   * testing with `document.elementsFromPoint`, which jsdom does not implement,
+   * so every rule reports "Axe encountered an error" whatever the markup.
+   * Faking the hit test would be axe judging a page layout that does not
+   * exist. The open sheet is checked by axe in Chromium instead, in
+   * `e2e/composer.spec.ts`.
+   */
+
   /**
    * Each row also says what makes that state's DOM different — the claim form
    * for an available Handle, three swap suggestions for a refused one — and

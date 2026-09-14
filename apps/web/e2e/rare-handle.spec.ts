@@ -2,7 +2,11 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import en from "../../../packages/shared/messages/en.json";
 import { checkPage, PAGE_RULES } from "./support/axe";
 import { describeContrast, measureContrast } from "./support/contrast";
-import { categoryTabs, pickEmojiByName } from "./support/picker";
+import {
+  categoryTabs,
+  dismissClaimSheet,
+  pickEmojiByName,
+} from "./support/picker";
 
 /**
  * The rare three-of-a-kind celebration, in the real browser
@@ -63,6 +67,19 @@ async function buildTriple(
     await pickEmojiByName(page, name);
   }
   await expect(page.getByText(answer)).toBeVisible();
+  // On a phone an available Handle opens the claim sheet over the builder
+  // (#263); this spec is about the builder behind it, so close the sheet.
+  await dismissClaimSheet(page);
+}
+
+/**
+ * The celebration's own animations. Step 2's unlock (#263) moves once too when
+ * the Handle is available, and is not what this spec is about.
+ */
+function celebration(
+  animations: readonly AnimationReport[],
+): readonly AnimationReport[] {
+  return animations.filter((each) => each.name.startsWith("rare-"));
 }
 
 /**
@@ -105,7 +122,7 @@ test("an available three-of-a-kind plays a short celebration once and shows the 
   await expect(announcement(page)).toHaveText(copy.rareAnnouncement);
   await expect(announcement(page)).toHaveAttribute("aria-live", "polite");
 
-  const animations = await animationsIn(builder(page));
+  const animations = celebration(await animationsIn(builder(page)));
   console.log(`rare celebration animations: ${JSON.stringify(animations)}`);
   expect(animations.map((each) => each.name).sort()).toEqual([
     "rare-hop",

@@ -41,14 +41,16 @@ export function generateMetadata(): Metadata {
  * with no environment at all; the read is attempted only once a visitor has
  * filled three slots.
  *
- * **The composition is the brand's** (#251): the hero beside the builder's card
- * on a wide screen, stacked on a phone, and the picker across the full width
- * below. `HandleBuilder` renders its card, the claim form and the picker as
- * siblings, so they are this grid's own children: the first two take a column
- * each, and everything after them spans both. That is done with a child
- * selector here rather than by reaching into the builder, whose markup other
- * issues own. The lookup stays in the hero until the header search replaces it
+ * **The connected layout** ([#263](https://github.com/joshstothard/3moji/issues/263)):
+ * a centred hero, then the builder's composer, which holds the slots, the
+ * picker and the claim form in one card from `md` and runs edge to edge on a
+ * phone. **Find a Handle** sits below the composer rather than in the hero,
+ * until the header search replaces it
  * ([#254](https://github.com/joshstothard/3moji/issues/254)).
+ *
+ * `overflow-x-clip` lets the phone's Handle bar and tabs run the full width of
+ * the screen without the page scrolling sideways. It is `clip`, not `hidden`,
+ * because `hidden` makes a scroll container and would stop them sticking.
  *
  * **No radial glow.** The design has soft glows behind the hero. Drawn as an
  * `aria-hidden`, `pointer-events: none` element behind the builder's card, axe
@@ -59,16 +61,10 @@ export function generateMetadata(): Metadata {
  */
 export default function Home() {
   return (
-    <main>
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 pt-6 pb-16 sm:px-8 sm:pt-12 lg:grid-cols-2 lg:items-center lg:gap-x-16 lg:gap-y-12 lg:px-12 lg:pt-16 [&>*]:mt-0 lg:[&>*:nth-child(n+3)]:col-span-2">
-        <div className="flex flex-col gap-5 *:mt-0 sm:gap-7">
-          <p className="hidden min-h-[34px] items-center gap-2 self-start rounded-full border border-line bg-card px-3.5 text-sm text-body sm:inline-flex">
-            <span aria-hidden="true" className="text-base">
-              {copy.eyebrowEmoji}
-            </span>
-            {copy.eyebrow}
-          </p>
-          <h1 className="font-display text-[52px] leading-[0.94] font-extrabold tracking-[-0.05em] text-balance text-ink sm:text-7xl lg:text-[88px] lg:leading-[0.92] xl:text-[96px]">
+    <main className="overflow-x-clip">
+      <div className="mx-auto max-w-7xl px-4 pt-8 pb-16 sm:px-8 sm:pt-14 lg:px-12 lg:pt-14">
+        <div className="mx-auto flex max-w-4xl flex-col items-center gap-4 text-center">
+          <h1 className="font-display text-5xl leading-[0.94] font-extrabold tracking-[-0.05em] text-balance text-ink sm:text-7xl lg:text-[84px] lg:leading-[0.92]">
             <LinkedSentence
               links={{
                 accent: (
@@ -78,16 +74,19 @@ export default function Home() {
               text={copy.heading}
             />
           </h1>
-          <p className="max-w-[520px] text-[17px] leading-normal text-pretty text-body sm:text-[21px]">
+          <p className="max-w-[560px] text-[17px] leading-normal text-pretty text-body sm:text-xl">
             {copy.tagline}
           </p>
-          <HandleLookup />
         </div>
 
         <HandleBuilder
           checkAvailability={checkAvailability}
           claim={claimFormAction}
         />
+
+        <div className="mx-auto mt-4 max-w-xl">
+          <HandleLookup />
+        </div>
       </div>
     </main>
   );

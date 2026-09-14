@@ -34,9 +34,25 @@ const copy = en.HandleBuilder;
  * graphic and a control's edge (3:1) but not for text, so it draws only the X
  * and the border. The label is white on ink. Each mark is shown with `hidden`
  * and `flex`, never `opacity`, so an unhovered label takes up no space over the
- * text below it, and nothing animates: the rare three-of-a-kind hop is the
- * only motion here, and it is the builder's.
+ * text below it.
+ *
+ * **Sized for where it sits**
+ * ([#263](https://github.com/joshstothard/3moji/issues/263)). `bar` is the
+ * composer's slot row: 56px on a phone, where it rides in the sticky Handle
+ * bar, and a large square in the card from `md`. `sheet` is the phone's claim
+ * sheet. Only the size changes; the name, the marks and their gating are the
+ * same in every layout. **The empty slot the next pick fills** wears a violet
+ * edge and its number, drawn `aria-hidden` inside the one control, so the name
+ * still says "Slot 3: empty".
+ *
+ * **The rare three-of-a-kind hop** is the only motion here, and it is the
+ * builder's. Each position has its own animation, 120ms apart, rather than an
+ * inline `animation-delay`: the production Content Security Policy refuses a
+ * `style` attribute in server-rendered HTML
+ * ([#267](https://github.com/joshstothard/3moji/issues/267)).
  */
+type SlotSize = "large" | "bar" | "sheet";
+
 interface HandleSlotProps {
   /** The slot's place in the Handle, counting from 1. */
   readonly position: number;
@@ -46,8 +62,33 @@ interface HandleSlotProps {
   readonly rare: boolean;
   /** Called when a filled slot is activated. */
   readonly onClear: () => void;
+  /** How large to draw the slot for the layout it is in. `large` by default. */
+  readonly size?: SlotSize;
+  /** Whether this is the empty slot the next pick will fill. */
+  readonly next?: boolean;
   readonly ref?: Ref<HTMLButtonElement>;
 }
+
+/** Shape, fill and glyph size, per layout. */
+const SIZE: Readonly<Record<SlotSize, string>> = {
+  large: "rounded-slot bg-paper text-5xl sm:text-7xl",
+  bar: "rounded-2xl bg-card text-[34px] md:rounded-[26px] md:bg-paper md:text-6xl lg:text-7xl",
+  sheet: "rounded-[22px] bg-paper text-[52px]",
+};
+
+/** The next empty slot's number, sized to the slot. */
+const NUMBER: Readonly<Record<SlotSize, string>> = {
+  large: "text-2xl sm:text-3xl",
+  bar: "text-lg md:text-[26px]",
+  sheet: "text-2xl",
+};
+
+/** The hop for each position, the same motion 120ms apart (#267). */
+const HOP = [
+  "motion-safe:animate-rare-hop",
+  "motion-safe:animate-rare-hop-2",
+  "motion-safe:animate-rare-hop-3",
+] as const;
 
 /** The curated display name of an emoji, or the glyph if it has none. */
 function nameOf(emoji: string): string {
@@ -59,14 +100,28 @@ function classes(...names: readonly (string | false)[]): string | undefined {
   return joined === "" ? undefined : joined;
 }
 
+/** The edge that identifies the control, which differs by what it holds. */
+function edgeOf(filled: boolean, next: boolean): string {
+  if (filled) {
+    return "border border-control hover:border-coral can-hover:focus-visible:border-coral";
+  }
+  if (next) {
+    return "border-2 border-violet md:shadow-[0_0_0_5px_rgb(91_61_245/0.14)]";
+  }
+  return "border border-dashed border-control";
+}
+
 export function HandleSlot({
   position,
   emoji,
   rare,
   onClear,
+  size = "large",
+  next = false,
   ref,
 }: HandleSlotProps) {
   const name = emoji === undefined ? undefined : nameOf(emoji);
+  const numbered = name === undefined && next;
 
   return (
     <button
@@ -86,9 +141,9 @@ export function HandleSlot({
         }
       }}
       className={classes(
-        "group relative aspect-square w-full text-5xl sm:text-7xl leading-none flex items-center justify-center rounded-slot bg-paper border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet aria-disabled:border-dashed",
-        name !== undefined &&
-          "hover:border-coral can-hover:focus-visible:border-coral",
+        "group relative flex aspect-square w-full items-center justify-center leading-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet",
+        SIZE[size],
+        edgeOf(name !== undefined, next),
       )}
     >
       {/* Keyed on the rarity so the glyph, never the button, remounts: the hop
@@ -99,17 +154,14 @@ export function HandleSlot({
         data-slot-glyph=""
         aria-hidden="true"
         className={classes(
-          rare && "inline-block motion-safe:animate-rare-hop",
+          rare && "inline-block",
+          rare && (HOP[position - 1] ?? HOP[0]),
           name !== undefined &&
             "group-hover:opacity-35 group-hover:grayscale-40 can-hover:group-focus-visible:opacity-35 can-hover:group-focus-visible:grayscale-40",
+          numbered && `font-display font-bold text-muted ${NUMBER[size]}`,
         )}
-        style={
-          rare
-            ? { animationDelay: `${String((position - 1) * 120)}ms` }
-            : undefined
-        }
       >
-        {emoji ?? ""}
+        {emoji ?? (numbered ? String(position) : "")}
       </span>
 
       {name === undefined ? null : (
