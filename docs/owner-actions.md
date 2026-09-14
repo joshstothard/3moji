@@ -224,16 +224,6 @@ Items are grouped by when they have to happen:
   - **Blocks:** nothing.
   - **Detail:** [Authentication](architecture/auth.md#what-an-operator-sees-when-a-send-fails).
 
-- [ ] **Allow an instrumentation file that only logs request errors ([#203](https://github.com/joshstothard/3moji/issues/203), [#148](https://github.com/joshstothard/3moji/issues/148))**
-  - **What:** Add `apps/web/src/instrumentation.ts` exporting only Next's `onRequestError`, delegating to the handler already merged in `apps/web/src/lib/request-error.ts`. It has no `register()` and no tracing import. Today the file doesn't exist, because `scripts/tracing-guard.test.mjs` fails the build whenever it does, pending the tracing decision in #148.
-  - **Why it matters:** without it, a page that fails to render on the server writes no structured log line. The branded error page is shown, but nothing with a correlation id reaches the logs, so the failure can't be traced. `error.tsx` runs in the browser and can't do this job.
-  - **Options:**
-    1. **Allow it**, and tighten `scripts/tracing-guard.test.mjs` to forbid only `register()` and tracing imports. The guard's reason, that OpenTelemetry spans record drizzle's bound parameters, still holds, because neither is allowed.
-    2. **Wait for #148**, and leave server render errors unlogged until then.
-  - **Recommendation:** allow it. It's a three-line file plus a guard change, and it keeps the protection the guard exists for.
-  - **Blocks:** the last acceptance criterion of #203, which stays open until this is decided.
-  - **Detail:** [the #203 comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457), [system overview](architecture/system-overview.md) § Error tracking.
-
 - [ ] **Review: how axe checks the open account menu ([#225](https://github.com/joshstothard/3moji/pull/225))**
   - **What:** The orchestrator took this call overnight. When an open dropdown covers page text, axe checks only the open menu panel, and the whole page is still checked with the menu closed. It uses a new optional `include` on `checkPage` in `apps/web/e2e/support/axe.ts`, and every other caller is unchanged.
   - **Why it matters:** on Mobile Chrome the four-row account menu covers the Profile's own text, so axe can't judge that text's contrast while the menu is open. The scoped check still fails on violations and on anything axe can't decide.

@@ -27,7 +27,20 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev",
+    // The server's output is written to `e2e-server.log` (git-ignored by
+    // `*.log`), so `request-error-log.spec.ts` can assert on the structured
+    // lines the app writes (#203). The pipe sends it all to stdout, which
+    // Playwright discards, and **it must stay discarded**: `next dev` prints
+    // every request's URL, and `password-reset.spec.ts` opens a reset link whose
+    // token is in the path, which in this public repository's Actions log would
+    // be a live credential. For the same reason, never upload the file as an
+    // artifact.
+    //
+    // `--log-order=stream` is what makes the file current. On GitHub Actions,
+    // turbo's default groups a task's output until the task ends, and a
+    // persistent `dev` task never ends, so the file stayed empty of the app's
+    // lines while the specs ran.
+    command: "npm run dev -- --log-order=stream 2>&1 | tee e2e-server.log",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env["CI"],
   },

@@ -345,7 +345,7 @@ _Rare three-of-a-kind:_
 
 _Site hygiene:_
 
-- [x] Branded 404 and error pages. Merged in PR #228. [#203](https://github.com/joshstothard/3moji/issues/203) stays open for its own last criterion: a structured log line for a server-side render error. That waits on an owner decision about the tracing guard ([#148](https://github.com/joshstothard/3moji/issues/148); [#203 comment](https://github.com/joshstothard/3moji/issues/203#issuecomment-5657074457)).
+- [x] Branded 404 and error pages. Merged in PR #228. The last criterion of [#203](https://github.com/joshstothard/3moji/issues/203), a structured log line for a server-side render error, is wired through `onRequestError` in `apps/web/src/instrumentation.ts`, which the owner allowed with tracing still forbidden pending [#148](https://github.com/joshstothard/3moji/issues/148) (Decision log, 2026-09-14).
 - [x] A favicon.
 - [x] `robots.txt`, and a sitemap of the static pages (not every Profile).
 - [x] Home-page Open Graph metadata using the existing generic image.
@@ -421,6 +421,7 @@ Every decision and action only the repo owner can take, including the questions 
 - 2026-09-13 — Phase 7 is split: finding a Handle, the rare three-of-a-kind celebration, site hygiene and the operations minimum become Phase 8 — Findable, polished and operable, so Phase 7 holds only the launch-blocking owner return path and legal work. Decided by the repo owner when Phase 7 was planned.
 - 2026-09-14 — When an open dropdown covers page text, axe checks only the open menu panel, and the full page is still checked with the menu closed. On Mobile Chrome, the four-row account menu covered the Profile's own text, so axe could not judge that text's contrast. `checkPage` in `apps/web/e2e/support/axe.ts` gained an optional `include` selector, and every other caller is unchanged (PR [#225](https://github.com/joshstothard/3moji/pull/225)). Taken by the orchestrator overnight, for owner review.
 - 2026-09-14 — Resolving the spoken form in the path (e.g. `/three-ice-cubes`) was drafted as ADR-0011 and rejected by the repo owner as not needed for the MVP; spoken input is accepted by the Find a Handle lookup, offered on the home page and the 404 page. Revisit if post-launch logs show 404s on spoken-looking paths.
+- 2026-09-14 — Instrumentation allowed for onRequestError only; tracing still forbidden pending #148. Decided by the repo owner.
 
 ## Changelog
 
