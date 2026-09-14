@@ -227,7 +227,7 @@
             "We use three providers to run 3moji. They handle your data only to provide their service to us:"
           ],
           "items": [
-            "Vercel hosts the website and runs the application, so every request you make, including your IP address, passes through it.",
+            "Vercel hosts the website and runs the application, so every request you make, including your IP address, passes through it. Vercel also provides our page-view analytics, which does not use cookies. For each page view it records the page you visit, when, the site that referred you, your browser, operating system and type of device, and your approximate location. It tells visits apart by a hash of your request that resets every day, and what it records is not tied to you or to your IP address.",
             "Neon hosts the database where everything described on this page is stored.",
             "Resend sends our emails, so it receives your email address and the emails we send you."
           ],
