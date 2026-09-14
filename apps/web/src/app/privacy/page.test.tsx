@@ -99,6 +99,34 @@ describe("the privacy notice", () => {
     }
   });
 
+  it("says Vercel also records cookieless page-view analytics, and what it records", () => {
+    // Vercel Web Analytics was added at the owner's request on 2026-09-14.
+    // What it records, and how a visit is identified, is taken from Vercel's
+    // own docs (vercel.com/docs/analytics and /docs/analytics/privacy-policy),
+    // not from the copy restated.
+    render(<PrivacyPage />);
+    const vercel = within(sectionNamed(sections.processors.heading))
+      .getAllByRole("listitem")
+      .map((item) => item.textContent)
+      .find((text) => text.startsWith("Vercel"));
+
+    expect(vercel).toMatch(/page-view analytics/);
+    expect(vercel).toMatch(/does not use cookies/);
+    for (const recorded of [
+      /page you visit/,
+      /referr/,
+      /browser/,
+      /operating system/,
+      /type of device/,
+      /approximate location/,
+    ]) {
+      expect(vercel).toMatch(recorded);
+    }
+    expect(vercel).toMatch(/hash of your request/);
+    expect(vercel).toMatch(/resets every day/);
+    expect(vercel).toMatch(/not tied to you or to your IP address/);
+  });
+
   it("explains what deleting an account removes, and how to ask for it", () => {
     render(<PrivacyPage />);
 

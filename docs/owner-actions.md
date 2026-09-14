@@ -56,6 +56,14 @@ Items are grouped by when they have to happen:
   - **Blocks:** nothing.
   - **Detail:** PR [#122](https://github.com/joshstothard/3moji/pull/122), which added the `Format` job to `.github/workflows/ci.yml`.
 
+- [ ] **Enable Web Analytics in Vercel**
+  - **What:** In the Vercel project, open Analytics and select Enable. The `<Analytics />` component is already in the root layout, but Vercel records nothing until it is enabled there.
+  - **Why it matters:** without it, the page-view analytics the privacy notice describes never starts.
+  - **Options:** enable it, or leave it off (the component then does nothing).
+  - **Recommendation:** enable it with the first deploy.
+  - **Blocks:** nothing.
+  - **Detail:** PR [#238](https://github.com/joshstothard/3moji/pull/238), [Vercel Web Analytics quickstart](https://vercel.com/docs/analytics/quickstart).
+
 ## Decide before launch
 
 - [ ] **Launch-day email volume: stay on Resend Free, or pay for Pro**
@@ -118,7 +126,7 @@ Items are grouped by when they have to happen:
     3. **Lawful basis for each purpose:** as drafted, contract for the account and Profile, and legitimate interests for sessions, counters and logs.
     4. **`verification_dispatch` retention:** kept for the life of the account. Should it be pruned?
     5. **Log and backup retention:** how long Vercel logs and Neon backups keep data on your plans. The page says only "for a limited time".
-    6. **Cookies:** confirm that no analytics or other cookies are added before launch. Today there are only Better Auth's session cookies.
+    6. **Cookies:** confirm that no analytics or other cookies are added before launch. Today there are only Better Auth's session cookies. Vercel Web Analytics, added in PR [#238](https://github.com/joshstothard/3moji/pull/238), does not use cookies, so it does not change this.
     7. **Minimum age** for claiming a Handle (a placeholder in the terms).
     8. **Governing law:** England and Wales, Scotland or Northern Ireland. Also the "last updated" dates.
     9. **Limitation of liability wording**, ideally with legal advice.
@@ -271,3 +279,4 @@ Recorded in the Decision log on 2026-09-14:
 
 - **The spoken form isn't resolved in the path** ([#201](https://github.com/joshstothard/3moji/issues/201)). `/three-ice-cubes` stays a 404 and ADR-0008 stands. Spoken input works in the Find a Handle lookup, which the home page and the 404 page both offer. Revisit if post-launch logs show 404s on spoken-looking paths.
 - **The Content Security Policy is a per-request nonce on every page** (option 1 of [#205](https://github.com/joshstothard/3moji/issues/205#issuecomment-5656525123)). `/`, `/privacy`, `/terms` and the 404 render per request and lose CDN caching in exchange for a strict policy with no `unsafe-inline` script. See [Security headers](architecture/system-overview.md#security-headers).
+- **Vercel Web Analytics was added at your request** (PR [#238](https://github.com/joshstothard/3moji/pull/238)). It is cookieless, and the privacy notice's processors section was updated to say what it records, from Vercel's own docs. Its URL recording includes the set-new-password page, whose address holds a reset token; Vercel already receives that address as the host, so no new party sees it, but a `beforeSend` redaction could keep it out of the analytics data.

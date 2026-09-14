@@ -348,7 +348,7 @@ Both grammars share the one root route, dispatching on the received segment: `ca
 
 ## Deployment
 
-**Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): Vercel on the Hobby plan, which forbids commercial use. Postgres is Neon via the Vercel Marketplace; transactional email is Resend, sending from a subdomain of `3moji.me`.
+**Planned** ([ADR-0006](../adr/0006-nextjs-on-vercel-is-the-whole-application.md)): Vercel on the Hobby plan, which forbids commercial use. Postgres is Neon via the Vercel Marketplace; transactional email is Resend, sending from a subdomain of `3moji.me`. Page-view analytics is Vercel Web Analytics (`<Analytics />` in the root layout, PR #238): cookieless, loaded from and sent to the same origin under `/_vercel/insights`, so the Content Security Policy needs no new host.
 
 ### Error tracking
 
