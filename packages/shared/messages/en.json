@@ -62,7 +62,8 @@
     "stepLocked": "Opens when all three are picked and the Handle is free.",
     "sheetAvailable": "Available",
     "sheetClose": "Close",
-    "sheetReopen": "Make this Handle yours"
+    "sheetReopen": "Make this Handle yours",
+    "barClaim": "Claim"
   },
   "HandlePage": {
     "unclaimed": "Nobody has this Handle yet.",

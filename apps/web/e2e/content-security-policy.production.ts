@@ -54,7 +54,8 @@ test("/ is rendered per request, hydrates, runs the builder and passes axe, with
   await expectNoncedHtml(await page.goto("/"));
   await expectHydrated(page);
   // 🧊🧊🧊 is available (rare-handle.spec.ts), so the availability server
-  // action answers and the celebration sets its inline animation delay.
+  // action answers and the celebration plays. Its stagger is classes, not an
+  // inline animation delay (#267), so the policy has nothing to refuse.
   // The picker has no search box since #253: open the tab, press the emoji.
   for (let picked = 0; picked < 3; picked += 1) {
     await pickEmojiByName(page, "ice cube");

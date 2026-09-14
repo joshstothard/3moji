@@ -78,6 +78,44 @@ describe("the Open Graph image response", () => {
     expect(container.textContent).toBe(en.OpenGraph.siteName);
   });
 
+  describe("in the 3moji brand (#272)", () => {
+    /** jsdom reports an inline colour as `rgb(r, g, b)`. */
+    const PAPER = "rgb(251, 248, 244)";
+    const INK = "rgb(26, 21, 35)";
+    const VIOLET = "rgb(91, 61, 245)";
+    const MUTED = "rgb(115, 108, 126)";
+
+    function colours(input: OgImageInput): {
+      readonly backgrounds: readonly string[];
+      readonly text: readonly string[];
+    } {
+      const { container } = render(built(input).element);
+      const elements = Array.from(container.querySelectorAll("div"));
+      return {
+        backgrounds: elements
+          .map((element) => element.style.backgroundColor)
+          .filter((colour) => colour !== ""),
+        text: elements
+          .map((element) => element.style.color)
+          .filter((colour) => colour !== ""),
+      };
+    }
+
+    it("draws a Profile's card on paper, the name in ink and the site's name in violet", () => {
+      expect(colours(PROFILE_INPUT)).toEqual({
+        backgrounds: [PAPER],
+        text: [INK, VIOLET],
+      });
+    });
+
+    it("draws the generic card on paper, the site's name in violet and the tagline muted", () => {
+      expect(colours(GENERIC_IMAGE)).toEqual({
+        backgrounds: [PAPER],
+        text: [VIOLET, MUTED],
+      });
+    });
+  });
+
   it("draws the generic image from the site's own words and no glyph", () => {
     const { container } = render(built(GENERIC_IMAGE).element);
 

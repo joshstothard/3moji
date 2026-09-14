@@ -4,7 +4,6 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   curatedEmojiSet,
   findCuratedEmoji,
-  HANDLE_LENGTH,
   isReservedHandle,
   resolveAlias,
   spokenHandle,
@@ -573,16 +572,15 @@ test("a visitor fills, swaps and reaches the claim form by keyboard alone", asyn
     await expect(close).toBeFocused();
     await expectFocusShown(page);
 
-    // Escape gives focus back to the slot bar, and the sheet opens again from
-    // the keyboard.
+    // Escape gives focus to the Claim button in the sticky Handle bar (#272),
+    // and Enter opens the sheet again from there.
     await page.keyboard.press("Escape");
     await expect(sheet).toBeHidden();
-    await expect(slotButton(page, HANDLE_LENGTH - 1)).toBeFocused();
-    await moveFocusTo(
-      page,
-      page.getByRole("button", { name: builderCopy.sheetReopen }),
-      "Tab",
-    );
+    const barClaim = page
+      .locator("[data-composer-bar]")
+      .getByRole("button", { name: builderCopy.barClaim });
+    await expect(barClaim).toBeFocused();
+    await expectFocusShown(page);
     await page.keyboard.press("Enter");
     await expect(close).toBeFocused();
   } else {

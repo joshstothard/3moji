@@ -341,10 +341,13 @@ export function HandleBuilder({
    */
   const [dismissed, setDismissed] = useState<string | undefined>(undefined);
   /**
-   * The bar slot that takes focus when the sheet closes: the last one, unless
-   * an emoji was removed from the sheet, in which case the slot it was in.
+   * What takes focus when the sheet closes: the Claim button in the Handle bar
+   * (#272), which is on screen wherever the visitor has scrolled and opens the
+   * sheet again, unless an emoji was removed from the sheet, in which case the
+   * bar slot it was in.
    */
-  const returnFocusTo = useRef(HANDLE_LENGTH - 1);
+  const returnFocusTo = useRef<number | "claim">("claim");
+  const barClaimControl = useRef<HTMLButtonElement>(null);
   const sheetWasOpen = useRef(false);
 
   const claimable =
@@ -353,14 +356,28 @@ export function HandleBuilder({
     availability === "available";
   const sheetMode = phone && claim !== undefined;
   const sheetOpen = sheetMode && claimable && dismissed !== segment;
-  const offerReopen = sheetMode && claimable && !sheetOpen;
+  /**
+   * The bar's Claim button (#272). Its room is kept from the moment all three
+   * are picked, which is in the server's HTML for a Handle the page opened on,
+   * and the pill fills it only once the sheet has been dismissed.
+   */
+  const barClaimRoom = claim !== undefined && full;
+  const offerBarClaim = sheetMode && claimable && !sheetOpen;
 
   useEffect(() => {
     // After the sheet's own effect has closed the dialog and the card has lost
-    // `inert`, so the slot can take focus. Focus never falls to `<body>`.
+    // `inert`, so the control can take focus. Focus never falls to `<body>`:
+    // if the Claim button is not there (the screen widened past a phone's),
+    // the bar's last slot takes it.
     if (sheetWasOpen.current && !sheetOpen) {
-      slotControls.current.get(returnFocusTo.current)?.focus();
-      returnFocusTo.current = HANDLE_LENGTH - 1;
+      const target = returnFocusTo.current;
+      const control =
+        target === "claim"
+          ? (barClaimControl.current ??
+            slotControls.current.get(HANDLE_LENGTH - 1))
+          : slotControls.current.get(target);
+      control?.focus();
+      returnFocusTo.current = "claim";
     }
     sheetWasOpen.current = sheetOpen;
   }, [sheetOpen]);
@@ -495,8 +512,25 @@ export function HandleBuilder({
               <p className="hidden font-mono text-sm text-muted md:block">
                 {url}
               </p>
-              <p className="min-h-4 text-xs font-medium md:min-h-5 md:text-sm">
-                <span aria-live="polite" className="text-violet">
+              {/* The availability line. On a phone, while the bar keeps room
+                  for Claim, it runs on across that room (the column, the gap
+                  and the room) and is kept to one line, cut with an ellipsis
+                  if it must be, so "Checking whether this Handle is free…"
+                  becoming "This Handle is available." changes no height and
+                  moves nothing in the bar. The live region still announces
+                  every word. While the pill is there the line is visually
+                  hidden, and still announced (#272). */}
+              <p
+                className={`min-h-4 text-xs font-medium md:min-h-5 md:text-sm${
+                  barClaimRoom
+                    ? " max-md:w-[calc(100%+5.25rem)] max-md:truncate"
+                    : ""
+                }`}
+              >
+                <span
+                  aria-live="polite"
+                  className={`text-violet${offerBarClaim ? " max-md:sr-only" : ""}`}
+                >
                   {availability === undefined
                     ? ""
                     : AVAILABILITY_COPY[availability]}
@@ -506,16 +540,44 @@ export function HandleBuilder({
                 )}
               </p>
             </div>
+
+            {/* The phone's way back to the claim sheet (#272): a Claim pill at
+                the bar's right, on screen wherever the visitor has scrolled.
+                Its room is kept from the moment all three are picked, in the
+                server's HTML too, so neither the pill appearing nor hydration
+                moves anything; the bar is 56px tall either way. The pill shows
+                only while the Handle is available and the sheet is shut, and
+                never from `md`, where step 2 holds the form in the card. The
+                empty room takes no pointer events, so it is not in the way of
+                the availability line that runs across it. */}
+            {barClaimRoom ? (
+              <div
+                data-bar-claim=""
+                className="pointer-events-none flex h-11 w-18 shrink-0 items-center md:hidden"
+              >
+                {offerBarClaim ? (
+                  <button
+                    ref={barClaimControl}
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      setDismissed(undefined);
+                    }}
+                    className="pointer-events-auto inline-flex h-11 w-full items-center justify-center rounded-full bg-violet px-3 text-sm font-semibold text-white hover:bg-violet-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+                  >
+                    {copy.barClaim}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 
         {/* Below the bar, every focus target keeps clear of the sticky header
             and bars when the browser scrolls it into view (WCAG 2.4.11): the
             header, the bar and the phone's tabs come to about 13rem (14rem from
-            `sm`), and the header and the card's bar to under 20rem from `md`.
-            On a phone the reopen button is fixed at the bottom, so the bottom
-            keeps clear too. */}
-        <div className="**:scroll-mt-52 sm:**:scroll-mt-56 md:**:scroll-mt-80 max-md:**:scroll-mb-24">
+            `sm`), and the header and the card's bar to under 20rem from `md`. */}
+        <div className="**:scroll-mt-52 sm:**:scroll-mt-56 md:**:scroll-mt-80">
           {/* The rarity's one announcement. The region is permanent, because a
               live region inserted together with its text is not reliably read,
               and React leaves its text alone on any render that keeps the
@@ -571,33 +633,85 @@ export function HandleBuilder({
 
           <EmojiPicker onPick={fill} full={full} />
 
-          {/* Step 2. Offered only with a claim endpoint, and not on a phone
-              once the page has hydrated, where the claim sheet holds the form
-              instead: there is only ever one claim form on the page. */}
-          {claim === undefined || sheetMode ? null : claimable ? (
+          {/* Step 2. Offered only with a claim endpoint. There is only ever
+              one claim form on the page: on a phone, once the page has
+              hydrated, the claim sheet holds it. Step 2 still keeps its place
+              there (#272), so nothing below it moves when JavaScript takes
+              over, and `#claim` always has somewhere to land. */}
+          {claim === undefined ? null : claimable && !sheetMode ? (
+            // Keyed on the Handle, so a rejection said about one Handle is
+            // never left on screen under another, and the unlock plays for
+            // each Handle that opens the step.
             <div
+              key={segment}
               data-claim-step="open"
+              className={`mt-8 bg-card p-5 max-md:rounded-card max-md:border max-md:border-line md:mt-0 md:rounded-b-[36px] md:border-t md:border-line md:px-10 md:py-8${
+                // The unlock glows on this panel's edge and moves nothing, so
+                // the fields are usable the moment they appear (#272). It is
+                // on the panel itself, not on a layer of its own, which axe
+                // would report as overlapping the text. Not for the Handle
+                // the page opened on: `/[handle]` sends step 2 already open,
+                // before any script, so nothing unlocked.
+                segment ===
+                segmentOf(initialSlots(initialEmoji).filter(isFilled))
+                  ? ""
+                  : " motion-safe:animate-step-unlock"
+              }`}
+            >
+              <ClaimForm
+                claim={claim}
+                eyebrow={copy.stepLabel}
+                handle={segment}
+              />
+            </div>
+          ) : claimable ? (
+            <div
+              data-claim-step="sheet"
+              id="claim"
               className="mt-8 bg-card p-5 max-md:rounded-card max-md:border max-md:border-line md:mt-0 md:rounded-b-[36px] md:border-t md:border-line md:px-10 md:py-8"
             >
-              {/* Keyed on the Handle, so a rejection said about one Handle is
-                  never left on screen under another, and the unlock plays for
-                  each Handle that opens the step. Not for the Handle the page
-                  opened on: `/[handle]` sends step 2 already open, before any
-                  script, so nothing unlocked and nothing should move. */}
-              <div
-                key={segment}
-                className={
-                  segment ===
-                  segmentOf(initialSlots(initialEmoji).filter(isFilled))
-                    ? undefined
-                    : "motion-safe:animate-step-unlock"
-                }
-              >
-                <ClaimForm
-                  claim={claim}
-                  eyebrow={copy.stepLabel}
-                  handle={segment}
-                />
+              {/* The phone's step 2 once the Handle is available: where the
+                  form was, the control that opens the sheet holding it. It
+                  carries `#claim`, which the sheet's own form does not, so the
+                  unclaimed Handle's "Make it yours" link lands here after the
+                  sheet is dismissed, however often it is followed.
+
+                  **It takes the room the form took.** The server renders the
+                  form here, and hydration on a phone moves it into the sheet,
+                  so this panel repeats the form's header and draws the form's
+                  fields as dashed outlines of the same heights (a 24px label
+                  line and 8px under it, a 50px field, 8px and four 24px lines
+                  of the legal note at a phone's width, the 24px alert line,
+                  16px between each). A phone narrow enough to wrap the legal
+                  note onto a fifth line moves what is below by that line.
+                  Nothing below it moves when JavaScript takes over (#272). */}
+              <p className="mb-1.5 text-xs font-semibold tracking-[0.08em] text-muted uppercase">
+                {copy.stepLabel}
+              </p>
+              <h2 className="mb-2 font-display text-2xl leading-tight font-bold tracking-[-0.02em] text-ink">
+                {en.Claim.claimHeading}
+              </h2>
+              <p className="mb-5 text-[15px] text-body">{en.Claim.claimBody}</p>
+              <div className="flex flex-col gap-4">
+                <div aria-hidden="true" className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2 pt-8">
+                    <div className="h-[3.125rem] rounded-2xl border border-dashed border-control bg-card" />
+                    <div className="h-24" />
+                  </div>
+                  <div className="flex flex-col gap-2 pt-8">
+                    <div className="h-[3.125rem] rounded-2xl border border-dashed border-control bg-card" />
+                  </div>
+                  <div className="h-6" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDismissed(undefined);
+                  }}
+                  className="self-stretch rounded-full bg-violet px-5 py-3 text-base font-semibold text-white hover:bg-violet-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+                >
+                  {copy.sheetReopen}
+                </button>
               </div>
             </div>
           ) : (
@@ -628,20 +742,6 @@ export function HandleBuilder({
             </div>
           )}
         </div>
-
-        {offerReopen ? (
-          <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 md:hidden">
-            <button
-              type="button"
-              onClick={() => {
-                setDismissed(undefined);
-              }}
-              className="inline-flex min-h-13 w-full items-center justify-center rounded-full bg-violet px-6 text-base font-semibold text-white shadow-card hover:bg-violet-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
-            >
-              {copy.sheetReopen}
-            </button>
-          </div>
-        ) : null}
       </section>
 
       {sheetMode ? (
@@ -694,7 +794,13 @@ export function HandleBuilder({
           </div>
           <div aria-hidden="true" className="h-px bg-line" />
           {segment === undefined ? null : (
-            <ClaimForm key={segment} claim={claim} handle={segment} />
+            // No `#claim` here: step 2 in the page carries it (#272).
+            <ClaimForm
+              key={segment}
+              anchor={false}
+              claim={claim}
+              handle={segment}
+            />
           )}
         </ClaimSheet>
       ) : null}
