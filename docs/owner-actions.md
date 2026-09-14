@@ -67,6 +67,16 @@ Items are grouped by when they have to happen:
   - **Blocks:** nothing.
   - **Detail:** PR [#122](https://github.com/joshstothard/3moji/pull/122), which added the `Format` job to `.github/workflows/ci.yml`.
 
+- [ ] **Optional: register the sending domain with Google Postmaster Tools, and check Microsoft SNDS**
+  - **What:** The first live verification email landed in Outlook's Junk folder ([#240](https://github.com/joshstothard/3moji/issues/240)). Every email is now multipart text and HTML, which should help. To see how providers rate the domain:
+    - **Google Postmaster Tools:** add `mail.3moji.me` (or `3moji.me`) and verify it with the TXT record Google gives you, at GoDaddy. Nothing in the app changes.
+    - **Microsoft SNDS:** it registers sending IP addresses, not domains. Resend sends from shared IP addresses, so you may not be able to register anything. Check, and if not, note that here.
+  - **Why it matters:** junk filtering never shows in the app's logs, and Resend reports a junked email as delivered. These dashboards are the only view of the domain's reputation.
+  - **Options:** register now, so there is history when it is needed; register only if junking keeps happening; or skip it.
+  - **Recommendation:** register with Google Postmaster Tools now. It is free, takes one DNS record, and a new domain needs the history. Check SNDS once, and record whether it is usable with Resend.
+  - **Blocks:** nothing.
+  - **Detail:** [Email not arriving § 5d](runbooks/email-not-arriving.md#5d-landing-in-junk).
+
 ## Decide before launch
 
 - [ ] **Launch-day email volume: stay on Resend Free, or pay for Pro**

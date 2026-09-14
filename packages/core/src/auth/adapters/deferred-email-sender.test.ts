@@ -6,6 +6,7 @@ const email = (to: string): OutboundEmail => ({
   to,
   subject: "Verify your email to claim your 3moji handle",
   text: "Verify your email: https://3moji.me/verify?token=abc",
+  html: '<a href="https://3moji.me/verify?token=abc">Verify your email</a>',
 });
 
 describe("createDeferredEmailSender", () => {

@@ -1,5 +1,6 @@
 import { spokenHandle } from "../emoji/spoken-handle";
 import type { AccountDirectory } from "../ports/account-directory";
+import { EMAIL_COPY, fillCopy, renderEmail } from "./email-template";
 import type { EmailSender, OutboundEmail } from "./ports/email-sender";
 
 export interface ClaimCollisionEmailInput {
@@ -41,17 +42,22 @@ export function claimCollisionEmail(
   // string iterator, which yields code points. Every Emoji Set entry is a
   // single code point (ADR-0005 decision 1), so this is exactly three emoji.
   const spoken = spokenHandle(Array.from(input.handleKey));
-  const said = spoken === undefined ? "" : ` — ${spoken} —`;
+  const copy = EMAIL_COPY.claimCollision;
+  const owned =
+    spoken === undefined
+      ? fillCopy(copy.owned, { handle: input.handleKey })
+      : fillCopy(copy.ownedSpoken, { handle: input.handleKey, spoken });
 
-  return {
-    to: input.to,
-    subject: "Someone tried to sign up with your 3moji email",
-    text:
-      `Somebody just tried to claim a 3moji handle using this email address.\n\n` +
-      `Nothing changed. You already have an account here, and it owns ${input.handleKey}${said} so nobody else can take it.\n\n` +
-      `If that was you and you have forgotten your password, you can set a new one: ${input.resetRequestUrl}\n\n` +
-      `If it was not you, there is nothing to do.\n\nFrom ${input.from}`,
-  };
+  // Multipart text and HTML, copy from `en.json`, every value escaped in the
+  // HTML part by `renderEmail` (#240).
+  return renderEmail(input.to, {
+    subject: copy.subject,
+    heading: copy.heading,
+    before: [copy.intro, owned, copy.forgotten],
+    action: { label: copy.action, url: input.resetRequestUrl },
+    after: [copy.notYou],
+    from: input.from,
+  });
 }
 
 export interface ClaimCollisionInput {

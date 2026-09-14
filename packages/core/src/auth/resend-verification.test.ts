@@ -350,6 +350,7 @@ describe("resendVerification when the email provider is slow or failing (#216)",
           to: email,
           subject: "Verify your email to claim your 3moji handle",
           text: "Verify your email: https://3moji.me/claim/verify?token=token",
+          html: '<a href="https://3moji.me/claim/verify?token=token">Verify your email</a>',
         }),
     };
     const answer = async (account: AccountRecord | undefined) => {

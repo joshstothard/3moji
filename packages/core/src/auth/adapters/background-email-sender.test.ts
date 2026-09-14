@@ -10,6 +10,7 @@ const EMAIL: OutboundEmail = {
   to: "owner@example.com",
   subject: "Reset your 3moji password",
   text: "Reset your password: https://3moji.me/reset-password/token",
+  html: '<a href="https://3moji.me/reset-password/token">Reset your password</a>',
 };
 
 const STILL_WAITING = "still waiting on the provider";

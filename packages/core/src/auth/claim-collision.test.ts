@@ -1,3 +1,5 @@
+import en from "@template/shared/messages/en.json";
+
 import { toHandleKey } from "../db/handle-key";
 import type {
   AccountDirectory,
@@ -6,6 +8,7 @@ import type {
 } from "../ports/account-directory";
 import { createRecordingEmailSender } from "./adapters/recording-email-sender";
 import { claimCollisionEmail, notifyExistingOwner } from "./claim-collision";
+import { escapeHtml } from "./email-template";
 
 const ICE = "\u{1F9CA}\u{1F9CA}\u{1F9CA}";
 const KEY = toHandleKey(ICE);
@@ -86,6 +89,56 @@ describe("claimCollisionEmail", () => {
 
   it("goes to the existing owner, never to whoever submitted the form", () => {
     expect(email.to).toBe(OWNER.email);
+  });
+
+  it("is multipart: the Handle, its spoken form and the link are in both parts (#240)", () => {
+    expect(email.html).toContain('<html lang="en">');
+    for (const part of [email.text, email.html]) {
+      expect(part).toContain(ICE);
+      expect(part).toContain("three ice cubes");
+      expect(part).toContain(RESET_URL);
+    }
+    expect(email.html).toContain(`href="${RESET_URL}"`);
+  });
+
+  it("takes every word from the Email.claimCollision i18n keys (#240)", () => {
+    const copy = en.Email.claimCollision;
+    expect(email.subject).toBe(copy.subject);
+    const owned = copy.ownedSpoken
+      .replace("{handle}", ICE)
+      .replace("{spoken}", "three ice cubes");
+    for (const words of [
+      copy.heading,
+      copy.intro,
+      owned,
+      copy.forgotten,
+      copy.notYou,
+    ]) {
+      expect(email.text).toContain(words);
+      expect(email.html).toContain(escapeHtml(words));
+    }
+    expect(email.text).toContain(`${copy.action}: ${RESET_URL}`);
+  });
+
+  it('escapes a Handle and a link carrying <, " and & in the HTML part (#240)', () => {
+    const hostile = claimCollisionEmail({
+      to: OWNER.email,
+      handleKey: '<b>"&',
+      resetRequestUrl: 'https://example.com/reset-password?a=1&b="<c>"',
+      from: FROM,
+    });
+
+    expect(hostile.html).not.toContain('<b>"&');
+    expect(hostile.html).toContain("&lt;b&gt;&quot;&amp;");
+    expect(hostile.html).not.toContain('"<c>"');
+    expect(hostile.html).toContain(
+      "https://example.com/reset-password?a=1&amp;b=&quot;&lt;c&gt;&quot;",
+    );
+    expect(hostile.text).toContain('<b>"&');
+    // No spoken form exists for something that is not a Handle.
+    expect(hostile.text).toContain(
+      en.Email.claimCollision.owned.replace("{handle}", '<b>"&'),
+    );
   });
 });
 

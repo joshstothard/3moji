@@ -203,6 +203,7 @@ describe("createCoreServices sends email after the answer (#216)", () => {
     to: "owner@example.com",
     subject: "Someone tried to sign up with your 3moji email",
     text: "Somebody just tried to claim a 3moji handle using this email address.",
+    html: "<p>Somebody just tried to claim a 3moji handle using this email address.</p>",
   };
   const USER = {
     id: "user-1",
