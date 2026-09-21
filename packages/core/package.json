@@ -28,21 +28,21 @@
     "@template/jest-config": "*",
     "@template/tsconfig": "*",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.0.0",
+    "@types/node": "^24.13.5",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.8.1",
-    "fast-check": "^4.10.0",
+    "fast-check": "^4.10.1",
     "jest": "^30.0.0",
     "ts-jest": "^29.2.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@better-auth/drizzle-adapter": "^1.7.4",
+    "@better-auth/drizzle-adapter": "^1.7.5",
     "@template/shared": "*",
-    "better-auth": "^1.7.4",
+    "better-auth": "^1.7.5",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.23.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   }
 }
