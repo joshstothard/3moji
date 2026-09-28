@@ -49,12 +49,12 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.4",
-    "eslint": "^10.8.1",
+    "eslint": "^10.11.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
-    "prettier": "^3.9.5",
+    "prettier": "^3.9.9",
     "secretlint": "^13.0.4",
-    "turbo": "^2.10.11",
+    "turbo": "^2.11.4",
     "typescript": "^6.0.3"
   }
 }
