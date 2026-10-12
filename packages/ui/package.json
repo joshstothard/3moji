@@ -16,7 +16,7 @@
   "devDependencies": {
     "@template/eslint-config": "*",
     "@template/tsconfig": "*",
-    "eslint": "^10.8.1",
+    "eslint": "^10.12.0",
     "typescript": "^6.0.3"
   }
 }
